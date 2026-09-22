@@ -55,6 +55,22 @@ def test_default_output_path_creates_missing_genre_dir(tmp_path, capsys, monkeyp
     assert code == 0 and (tmp_path / "suspense-chase" / "suspense-chase_5.mod").exists()
 
 
+def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys):
+    code, stdout, err = run_cli(["--list-genres"], capsys)
+    assert code == 0 and err == ""
+    for p in cli.profiles.list_profiles():
+        assert p.id in stdout and p.description in stdout
+    assert "suspense-slow" in stdout and "suspense" in stdout  # alias も表示される
+    assert not (tmp_path / "nostalgic").exists()  # 生成は行われない
+
+
+def test_genre_listing_appears_in_help(capsys):
+    code, stdout, _ = run_cli(["--help"], capsys)
+    assert code == 0
+    for p in cli.profiles.list_profiles():
+        assert p.id in stdout and p.description in stdout
+
+
 def test_unknown_genre_exit_2(tmp_path, capsys):
     code, out, err = run_cli(["--genre", "bogus", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "unknown genre" in err and "nostalgic" in err and out == ""

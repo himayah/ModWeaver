@@ -82,7 +82,8 @@
 | 必須（旧仕様・依頼に由来） | `--genre` / `--seed` / `--output`、4 ジャンル、既存出力の不変、`register_profile` による追加、DSP・Writer の共通化 | Phase 1〜2 で実装 |
 | 品質保証（M5 として依頼済み） | 構造検査 `verify`（V01〜V16）、生成前の契約検査（`PlanError` 等） | Phase 1〜2 |
 | 実装上の堅牢化（外部仕様に影響なし） | 原子的書込（`os.replace`）、用途別乱数ストリーム、`--genre suspense` 別名（D2 で承認済み） | Phase 1〜2 |
-| **任意（要件外）** | `--list-genres`、`-v` / `-q`、`--no-verify`、INFO/DEBUG ログ | **Phase 3 でユーザー承認後にのみ実装**。未承認なら実装しない（その間のログは WARNING 以上のみ） |
+| 任意・実装済み（ユーザー承認済み） | `--list-genres`（全ジャンルの id・別名・説明を表示。`--help` の epilog にも同じ一覧を掲載） | 実装済み（§9） |
+| **任意（要件外・未承認）** | `-v` / `-q`、`--no-verify`、INFO/DEBUG ログ | **Phase 3 でユーザー承認後にのみ実装**。未承認なら実装しない（その間のログは WARNING 以上のみ） |
 
 ---
 
@@ -935,30 +936,32 @@ Pad/Flute のループを `K=6, L=190`（+0.49 cent）へ差し替えて音程�
 ## 9. CLI 仕様（`cli.py`）
 
 ```text
-python -m mod_weaver [--genre ID] [--seed N] [--output PATH]       # 必須機能（`python -m mod_weaver.cli` も同義）
-                        [--list-genres] [--no-verify] [-v | -q]   # 任意機能（§1.6。承認後に Phase 3 で実装）
-python modweaver.py [--genre ID] [--seed N] [--output PATH]        # トップレベル起動スクリプト。上記と同機能。
-                                                                    # `--genre` 省略時は nostalgic（旧 twilight_pad.py とバイト同一）
+python -m mod_weaver [--genre ID] [--seed N] [--output PATH] [--list-genres]   # 必須機能＋--list-genres（実装済み）
+                        [--no-verify] [-v | -q]                                # 任意機能（§1.6。未承認。Phase 3 で承認後に実装）
+python modweaver.py [--genre ID] [--seed N] [--output PATH] [--list-genres]    # トップレベル起動スクリプト。上記と同機能。
+                                                                                # `--genre` 省略時は nostalgic（旧 twilight_pad.py とバイト同一）
 ```
 
 | オプション | 既定 | 説明 |
 |:---|:---|:---|
-| `--genre`, `-g` | `nostalgic` | `nostalgic` / `suspense-slow` / `suspense-chase` / `march` / 別名 `suspense`（→`suspense-slow`、INFO ログで通知） |
+| `--genre`, `-g` | `nostalgic` | `nostalgic` / `suspense-slow` / `suspense-chase` / `march` / 別名 `suspense`（→`suspense-slow`、INFO ログで通知）。全ジャンルの一覧は `--list-genres` または `--help` の末尾（epilog）に表示 |
 | `--seed`, `-s` | 乱数（100000〜999999） | 任意の整数（旧実装と同様、負値も可） |
 | `--output`, `-o` | `<genre>/<genre>_<seed>.mod`（ジャンル別サブディレクトリへ自動整理。ディレクトリが無ければ作成） | 出力先（明示すればそのパスへ上書き。存在しない親ディレクトリは作成しない＝誤指定を検知） |
-| `--list-genres`（任意） | – | ID と説明を表示して終了（コード 0） |
-| `--no-verify`（任意） | 検査あり | 構造検査を省略（非推奨。デバッグ用） |
-| `-v` / `-q`（任意） | WARNING | `-v` で INFO+DEBUG、`-q` で ERROR のみ（stderr） |
+| `--list-genres` | – | 登録済み全ジャンルの id・別名・説明（`description`）を1行ずつ表示して終了（コード 0）。生成は行わない。**実装済み**（`--help` にも同じ一覧を epilog として掲載） |
+| `--no-verify`（任意・未実装） | 検査あり | 構造検査を省略（非推奨。デバッグ用）。ユーザー承認後に実装 |
+| `-v` / `-q`（任意・未実装） | WARNING | `-v` で INFO+DEBUG、`-q` で ERROR のみ（stderr）。ユーザー承認後に実装 |
 
 バナー（stdout）は旧形式を踏襲: 区切り線・ジャンル名・`Seed`・`Tempo`・`plan.summary` の各行・出力パス・再現コマンド（`python -m mod_weaver.cli --genre X --seed N`。`modweaver.py` 経由なら `python modweaver.py --genre X --seed N`）。
 
 コピペ用の例:
 
 ```bash
+python -m mod_weaver.cli --list-genres
 python -m mod_weaver.cli --genre march --seed 20260921 -o March.mod
 python -m mod_weaver.cli --genre suspense-chase
 python modweaver.py --seed 732501
 python modweaver.py --genre suspense-chase --seed 732501
+python modweaver.py --list-genres
 ```
 
 ---
@@ -1017,7 +1020,7 @@ ModGenError(Exception)
 | `harmony` | `voice()` の規則 1〜7（§6.6 の例 3 件を回帰値に）、全 12 主音 × 全 quality で bass/harmony/chord_tones の pc と音域が正しい、`arp` の値、`mode_by_quality` |
 | `composer` | 音域外の音が出ない、`dissonance_weight=0` なら強拍は常にコードトーン、`leap_recovery` で跳躍直後に逆行、同 seed で同一、cadence 解決、`NoteEvent.dur` が `lengths`／次の発音から導出される、`articulate` が OFF を「音価終端 < 次の発音 row」のときだけ置く（gate=1.0 は休符時のみ、gate<1 はスタッカート）、`ramp` の端点 |
 | `engine` | `apply_tempo`: ①空 ch があれば最小番号の空 ch に付与 ②空 ch が無く note のみの ch があればそこ（vol/effect 付きは不可）③どちらも無ければ `ChannelConflictError` ④`tempo_policy="profile"` では何もしない。`PlanError`（64 row 不一致・bpm ∉ tempo_choices・order 不正）、契約検査 |
-| `cli` | 終了コード（未登録 genre=2、`PlanError` 等=3、書込不可=4、想定外=1）、別名 `suspense`、負の seed、`python -m mod_weaver` と `python -m mod_weaver.cli` が同一出力。任意機能は承認後に追加 |
+| `cli` | 終了コード（未登録 genre=2、`PlanError` 等=3、書込不可=4、想定外=1）、別名 `suspense`、負の seed、`python -m mod_weaver` と `python -m mod_weaver.cli` が同一出力、`--list-genres`（全ジャンル id・説明を表示し終了、生成しない）。`-v/-q`・`--no-verify` は未承認のため未実装 |
 
 ### 11.3. プロファイル固有テスト
 
@@ -1058,7 +1061,7 @@ OpenMPT/MilkyTracker で各 genre × 3 seed を再生し確認: ①ループ境�
 | **2b suspense-slow**（＋共通） | suspense_common / suspense_slow | §11.3 グリーン、V15/V16 クリーン、官能評価 |
 | **2c suspense-chase** | suspense_chase | 同上 |
 | **2d march** | march | 同上 |
-| **3 統合・文書** | README/DESIGN 改訂（skil.md §7 の必須項目、AI コーディング明示、Apache-2.0）、第三者視点コードレビュー、要件整合性チェック。**任意機能（§1.6: `--list-genres`、`-v/-q`、`--no-verify`）はユーザー承認後にのみ実装** | 全テストグリーン、README のコマンド例を実行確認 |
+| **3 統合・文書** | README/DESIGN 改訂（skil.md §7 の必須項目、AI コーディング明示、Apache-2.0）、第三者視点コードレビュー、要件整合性チェック。**任意機能（§1.6）はユーザー承認後にのみ実装**: `--list-genres` はユーザー承認済み・実装済み。`-v/-q`・`--no-verify` は未承認のため未実装のまま | 全テストグリーン、README のコマンド例を実行確認 |
 
 - 本書の承認前は実装に着手しない。各 Phase 完了時に第三者視点レビュー（重大度付き）を行う
 - GitHub への push は Phase 3 完了後、**別途の確認**を経てから実施（配布対象: `mod_weaver/`、`modweaver.py`、`tests/`、各 md、LICENSE、`requirements-dev.txt`。`old/` は対象外）

@@ -41,15 +41,31 @@ def _configure_logging() -> None:
     log.propagate = False
 
 
+def genre_listing() -> str:
+    """全ジャンルの id・別名・説明を1行ずつ整形する（``--list-genres`` と ``--help`` の両方から使う）。"""
+    lines = []
+    for p in profiles.list_profiles():
+        alias = f" (alias: {', '.join(p.aliases)})" if p.aliases else ""
+        lines.append(f"  {p.id}{alias}\n      {p.description}")
+    return "\n".join(lines)
+
+
 def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     ids = ", ".join(p.id for p in profiles.list_profiles())
-    parser = argparse.ArgumentParser(prog=prog, description="ModWeaver: Procedural ProTracker MOD Generator")
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="ModWeaver: Procedural ProTracker MOD Generator",
+        epilog="genres:\n" + genre_listing() + "\n\nuse --list-genres to print this list alone and exit",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--genre", "-g", default=DEFAULT_GENRE,
-                        help=f"genre id (default: {DEFAULT_GENRE}). choices: {ids}")
+                        help=f"genre id (default: {DEFAULT_GENRE}). choices: {ids} (see genres below)")
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="random seed (any integer) for reproducibility")
     parser.add_argument("--output", "-o", type=str, default=None,
                         help="output .mod file path (default: <genre>/<genre>_<seed>.mod)")
+    parser.add_argument("--list-genres", action="store_true",
+                        help="print all genre ids, aliases and descriptions, then exit")
     return parser
 
 
@@ -82,6 +98,10 @@ def main(
         args = build_parser(prog).parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 2
+
+    if args.list_genres:
+        print(genre_listing())
+        return 0
 
     try:
         profile = profiles.get_profile(args.genre)

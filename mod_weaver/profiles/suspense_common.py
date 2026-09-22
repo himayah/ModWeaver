@@ -10,11 +10,10 @@ from __future__ import annotations
 import dataclasses
 import functools
 import math
-import random
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..core import dsp
+from ..core import dsp, synth, synth_presets
 from ..core.composer import MelodyGenerator, ScaleRules
 from ..core.harmony import Registers, voice
 from ..core.model import (
@@ -29,7 +28,7 @@ from ..core.model import (
     RngStreams,
     SampleSpec,
 )
-from ..core.pitch import MODES, Scale, hz, lowest_note_with_pc
+from ..core.pitch import MODES, Scale, lowest_note_with_pc
 from .base import GenreProfile
 
 # ============================================================
@@ -80,99 +79,63 @@ ANVIL_RING_SEC = 0.6    # anvil の余韻としてこの秒数は Ch1 の心拍�
 
 
 # ============================================================
-# 音色合成（§8.2.2）
+# 音色合成（§8.2.2）。全音色 core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
 # ============================================================
 
-def _normalized(xs: list[float], peak: float = 0.95) -> list[float]:
-    m = max((abs(x) for x in xs), default=0.0)
-    return [x * peak / m for x in xs] if m > 0 else xs
-
-
-def _click(rng: random.Random, i: int, rate: float, ms: float, amp: float) -> float:
-    """先頭 ``ms`` ミリ秒のノイズクリック（線形に減衰）。"""
-    n = int(ms / 1000.0 * rate)
-    return amp * rng.uniform(-1.0, 1.0) * (1.0 - i / n) if i < n else 0.0
-
-
 def synth_heart() -> SampleSpec:
-    """SubHeartbeat: 38Hz へ落ちるサブキック（絶対 Hz。unpitched）。"""
-    rate = dsp.sample_rate(24)
-    n = int(0.40 * rate)
-    xs = []
-    for i in range(n):
-        t = i / rate
-        phase = 2 * math.pi * (38.0 * t + (26.0 / 45.0) * (1.0 - math.exp(-45.0 * t)))
-        env = min(1.0, t / 0.004) * math.exp(-8.0 * t)
-        xs.append(math.tanh(1.4 * math.sin(phase) * env))
-    return SampleSpec("SubHeartbeat", dsp.to_pcm(xs), 62, rate_note=24, pitched=False)
+    """SubHeartbeat: 38Hz へ落ちるサブキック（絶対 Hz。unpitched）。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``SUB_HEARTBEAT``）。
+    """
+    return synth.render(synth_presets.SUB_HEARTBEAT)
 
 
 def synth_anvil() -> SampleSpec:
-    """MetalAnvil: 非整合部分音の金属打撃。高域を含むため rate_note=B-3（15.7kHz）で生成。"""
-    rate = dsp.sample_rate(35)
-    n = int(0.9 * rate)
-    parts = [(920, 1.0, 5.5), (1430, 0.8, 7.5), (2150, 0.6, 10.0), (3370, 0.35, 14.0), (5210, 0.2, 20.0)]
-    rng = random.Random(2)
-    raw = []
-    for i in range(n):
-        t = i / rate
-        v = sum(w * math.sin(2 * math.pi * f * t) * math.exp(-a * t) for f, w, a in parts)
-        raw.append(v + _click(rng, i, rate, 3.0, 0.6))
-    xs = [math.tanh(1.2 * x) for x in _normalized(raw, 1.0)]
-    return SampleSpec("MetalAnvil", dsp.to_pcm(xs), 64, rate_note=35, pitched=False)
+    """MetalAnvil: 非整合部分音の金属打撃。高域を含むため rate_note=B-3（15.7kHz）で生成。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``METAL_ANVIL``）。
+    """
+    return synth.render(synth_presets.METAL_ANVIL)
 
 
 def synth_swoosh() -> SampleSpec:
-    """NoiseSwoosh: フィルタが開く向き（a: 0.65→0.15）で立ち上がるノイズ。末尾 8 sample で急減衰。"""
-    rate = dsp.sample_rate(24)
-    n = int(SWOOSH_SEC * rate)
-    noise = dsp.noise_lp(random.Random(3), n, 0.65, 0.15)
-    xs = [noise[i] * (i / n) ** 2.2 for i in range(n)]
-    for k in range(8):
-        xs[n - 1 - k] *= k / 8.0
-    return SampleSpec("NoiseSwoosh", dsp.to_pcm(_normalized(xs)), 44, rate_note=24, pitched=False)
+    """NoiseSwoosh: フィルタが開く向き（a: 0.65→0.15）で立ち上がるノイズ。末尾 8 sample で急減衰。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``NOISE_SWOOSH``）。
+    """
+    return synth.render(synth_presets.NOISE_SWOOSH)
 
 
 def synth_drone() -> SampleSpec:
-    """LowDroneBass: K=6, L=760（126.7 spc）、shift −24（65.41Hz 基準）。奇数倍音＋サブ。"""
-    terms = [(6 * h, 1.0 / h) for h in (1, 3, 5, 7)] + [(3, 0.6)]
-    body = dsp.seamless_terms(760, terms)
-    body = dsp.circular(lambda d: dsp.one_pole_lp(d, 0.35), body)
-    body = [math.tanh(1.1 * x) for x in _normalized(body, 1.0)]
-    data = dsp.to_pcm(dsp.with_attack(body, 60))
-    return SampleSpec("LowDroneBass", data, 60, loop=(30, 380), rate_note=24, shift=-24)
+    """LowDroneBass: K=6, L=760（126.7 spc）、shift −24（65.41Hz 基準）。奇数倍音＋サブ。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``LOW_DRONE_BASS``）。
+    """
+    return synth.render(synth_presets.LOW_DRONE_BASS)
 
 
 def synth_pizz() -> SampleSpec:
-    """PizzStab: 基音の時定数 τ=0.08s の減衰倍音（261.63Hz 基準）。"""
-    rate = dsp.sample_rate(24)
-    n = int(0.40 * rate)
-    f0 = hz(24)
-    mults, weights, alphas = (1, 2, 3, 4), (1.0, 0.6, 0.35, 0.2), (12.5, 18.0, 26.0, 38.0)
-    rng = random.Random(5)
-    raw = []
-    for i in range(n):
-        t = i / rate
-        v = sum(w * math.sin(2 * math.pi * f0 * m * t) * math.exp(-a * t)
-                for m, w, a in zip(mults, weights, alphas))
-        raw.append(v + _click(rng, i, rate, 2.0, 0.3))
-    return SampleSpec("PizzStab", dsp.to_pcm(_normalized(raw)), 56, rate_note=24, shift=0)
+    """PizzStab: 基音の時定数 τ=0.08s の減衰倍音（261.63Hz 基準）。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``PIZZ_STAB``）。
+    """
+    return synth.render(synth_presets.PIZZ_STAB)
 
 
 def synth_strings() -> SampleSpec:
-    """TensionStrings: 同音デチューン対 2 組（130/131 と 138/139 cycle）。131−130=1 cycle → 基準音で 2.0Hz のうなり。"""
-    base = [(130, 1.0), (131, 1.0), (138, 0.8), (139, 0.8)]
-    terms = list(base) + [(2 * k, 0.35 * w) for k, w in base] + [(3 * k, 0.15 * w) for k, w in base]
-    body = _normalized(dsp.seamless_terms(4144, terms), 0.95)
-    data = dsp.to_pcm(dsp.with_attack(body, 200))
-    return SampleSpec("TensionStrings", data, 40, loop=(100, 2072), rate_note=24, shift=0)
+    """TensionStrings: 同音デチューン対 2 組（130/131 と 138/139 cycle）。131−130=1 cycle → 基準音で 2.0Hz のうなり。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``TENSION_STRINGS``）。
+    """
+    return synth.render(synth_presets.TENSION_STRINGS)
 
 
 def synth_lead() -> SampleSpec:
-    """ScreamingLead: K=12, L=190（15.83 spc）、shift +12。倍音 1..7、重み 1/h^0.8。"""
-    body = _normalized(dsp.seamless_terms(190, [(12 * h, 1.0 / h ** 0.8) for h in range(1, 8)]), 0.95)
-    data = dsp.to_pcm(dsp.with_attack(body, 80))
-    return SampleSpec("ScreamingLead", data, 46, loop=(40, 95), rate_note=24, shift=12)
+    """ScreamingLead: K=12, L=190（15.83 spc）、shift +12。倍音 1..7、重み 1/h^0.8。
+
+    core/synth.py の Patch 方式へ移行済み（core/synth_presets.py の ``SCREAMING_LEAD``）。
+    """
+    return synth.render(synth_presets.SCREAMING_LEAD)
 
 
 @functools.lru_cache(maxsize=1)

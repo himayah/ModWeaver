@@ -44,6 +44,14 @@ def test_hz():
     assert pitch.hz(24) == pytest.approx(261.6256, rel=1e-6)
 
 
+def test_note_for_hz_is_approximate_inverse_of_hz():
+    for n in range(-24, 60):
+        assert pitch.note_for_hz(pitch.hz(n)) == n
+    assert pitch.note_for_hz(65.4064) == 0
+    assert pitch.note_for_hz(261.6256) == 24
+    assert pitch.note_for_hz(130.0) == 12          # 最寄りの半音へ丸める
+
+
 @pytest.mark.parametrize("lo,hi", [(0, 11), (17, 28), (24, 43), (3, 20)])
 def test_fold_into_range_invariants(lo, hi):
     for n in range(-30, 80):

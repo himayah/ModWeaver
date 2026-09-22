@@ -1,7 +1,9 @@
 """Nostalgic プロファイル: 旧 ``twilight_pad.py`` のロジックの等価移植（設計書 §8.1）。
 
-出力は旧実装とバイト単位で同一でなければならない（回帰テスト CP2〜CP5）。
-そのため次の旧挙動（Quirk）を意図的に保存している:
+作曲ロジック（plan・pattern の Cell 配置）は旧実装とバイト単位で同一（回帰テスト CP3〜CP4）。
+サンプル合成は core/synth.py の Patch 方式へ移行済みのため、波形バイトの完全一致はもはや
+目標ではない（CP2・CP5 は構造的な近さのみ確認する。core/synth_presets.py 参照）。
+作曲ロジック側では次の旧挙動（Quirk）を意図的に保存している:
 
 - Q1 アウトロ pattern の row 0 はフェード用キックで上書きされ、テンポセルが存在しない
 - Q2 イントロは row 0 ch0 に「音なし＋F bpm」、それ以外は「キック(smp1)＋F bpm」
@@ -189,17 +191,15 @@ class NostalgicProfile(GenreProfile):
     strict_buffers = False
 
     def build_samples(self) -> dict[str, SampleSpec]:
-        kick, snare, hihat = smp.gen_kick(), smp.gen_snare(), smp.gen_hihat()
-        bass, musicbox = smp.gen_bass(), smp.gen_musicbox()
-        pad, flute = smp.gen_pad(), smp.gen_flute()
+        # gen_* は core/synth.py の Patch 方式へ移行済み（core/synth_presets.py）。完成した SampleSpec を返す。
         return {
-            "kick": SampleSpec("LoFiKick", kick, 56),
-            "snare": SampleSpec("SoftSnare", snare, 50),
-            "hihat": SampleSpec("ClosedHH", hihat, 42),
-            "bass": SampleSpec("WarmBass", bass, 60),
-            "musicbox": SampleSpec("MusicBox", musicbox, 60),
-            "pad": SampleSpec("TwilightPad", pad, 46, loop=(0, len(pad) // 2)),
-            "flute": SampleSpec("MellowFlute", flute, 52, loop=(0, len(flute) // 2)),
+            "kick": smp.gen_kick(),
+            "snare": smp.gen_snare(),
+            "hihat": smp.gen_hihat(),
+            "bass": smp.gen_bass(),
+            "musicbox": smp.gen_musicbox(),
+            "pad": smp.gen_pad(),
+            "flute": smp.gen_flute(),
         }
 
     # --- 計画 ---

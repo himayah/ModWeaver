@@ -1,5 +1,12 @@
 # マルチジャンル対応・手続き型MOD生成エンジン 拡張仕様検討書
 
+> **本書の位置づけ**: 本書は最初期の拡張構想（検討書）であり、[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) が
+> 設計具体化版として本書を置き換えている（両者が食い違う場合は EXTENSION_DESIGN.md を正とする。同書 §13
+> に訂正一覧）。クラス名・ディレクトリ構成（`DspToolkit` 等）は検討段階のものであり実装とは異なる。
+> 実装は完了済み（nostalgic / suspense-slow / suspense-chase / march の4ジャンル）。現在の構成は
+> [README.md](README.md) の「ファイル構成」、サンプル合成基盤は
+> [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8 を参照。
+
 ## 1. 概要と目的
 
 ### 1.1. 本書の目的

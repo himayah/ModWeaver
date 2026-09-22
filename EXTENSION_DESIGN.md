@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `twilight_pad.py` の拡張（Nostalgic / Suspense-Slow / Suspense-Chase / March） |
 | 要件の原典 | [EXTENSION_SPEC.md](EXTENSION_SPEC.md)（拡張仕様検討書）。本書は原典の**設計具体化版**であり、両者が食い違う箇所は**本書を正**とする（§13 に訂正一覧） |
-| ステータス | 設計フェーズ（**未実装**）。承認後に §12 のロードマップで実装する |
+| ステータス | **実装完了**（Phase 0〜3、march 含む全ジャンル）。ただし D11（サンプル合成の bit-exact 要件）は v1.3 で撤回済み（下記改訂履歴・§2 D15） |
 | 実行環境 | Python 3.10+（標準ライブラリのみ。全テストは 3.10、スモークは 3.11 で実施）、Windows / WSL2 / Linux |
 | 開発時のみ | pytest（`requirements-dev.txt`）。実行時依存は無し |
 
@@ -15,6 +15,7 @@
 | v1.0 | 2026-09-21 | 初版（旧仕様の H1–H6 / M1–M8 / L1–L4 を反映。§14 の R1–R12 を自己レビューで反映） |
 | v1.1 | 2026-09-22 | 第三者レビュー T1–T16 を反映（§14.2）。主な変更: 和音の具体化 `voice`（§6.6）、サンプル内容周波数の規則（§5.1）、アルペジオ音域制約と `HARMONY_REG`、持続音色の「アタック＋ループ」と OFF 規約（D12）、優先度の自動導出（D13）、Python 3.10+（D6）、Phase 1 の分割と CP1–CP5、要件区分（§1.6） |
 | v1.2 | 2026-09-22 | 第三者レビュー T17–T25 を反映（§14.3）。主な変更: `strings+arp` と `vol` の排他矛盾解消（H-1/T17）、`RngStreams` クラス定義とフック引数型の明確化（M-1/T18）、V10 の全ジャンル一律検査化（M-2/T19）、`MeasureBuffer.put` の同一セル冪等性と空セル判定定義（M-3/T20）、`PatternCtx` の dataclass 構文修正（M-4/T21）、`Instrument.cell` の休符・効果セル規約（M-5/T22）、音域・除算ガード・ロール順序の注記（L-1〜L-3/T23–T25） |
+| v1.3 | 2026-09-22 | 実装完了後の改訂。**D11 を撤回**（D15、§2）: 全ジャンルのサンプル合成を `core/synth.py` の Patch 方式（直交レイヤー合成）へ移行し、ジャンルごとのベタ書き DSP コードを廃止。数式・定数は同一値を使用したため音響特性はほぼ同一（ピーク振幅は全音色で一致、長さは丸め方式の差で数サンプル程度）だが、**バイト単位の完全一致はもはや要件ではない**（ユーザー承認）。回帰テスト CP2・CP5 は「旧実装との構造的な近さ」の確認に緩和、CP3・CP4（作曲ロジック）は無変更のためバイト一致を維持。詳細は `core/synth.py` の docstring、`core/synth_presets.py`、[CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8 を参照 |
 
 ---
 
@@ -38,7 +39,7 @@
 |:---|:---|:---|
 | FR-1 | `--genre` で `nostalgic` / `suspense-slow` / `suspense-chase` / `march` を選択して .mod を生成する | SPEC §7 Phase 3 |
 | FR-2 | 同一 genre + 同一 seed は常に同一バイナリを出力する（再現性） | README |
-| FR-3 | トップレベル起動スクリプト（`modweaver.py`）は `--genre` 省略時、既存 `python twilight_pad.py [--seed N] [--output P]` と**バイト単位で同一**の出力（nostalgic）を返す | SPEC §7 Phase 1 |
+| FR-3 | トップレベル起動スクリプト（`modweaver.py`）は `--genre` 省略時、既存 `python twilight_pad.py [--seed N] [--output P]` と同等の出力（nostalgic）を返す（~~バイト単位で同一~~ は D15 で撤回。作曲ロジックはバイト単位で同一、サンプル波形は構造的に近い） | SPEC §7 Phase 1 |
 | FR-4 | ジャンル追加は Profile クラス1つ＋レジストリ登録のみで完結する（core 無改造） | SPEC §1.2 |
 | FR-5 | 生成物を自己検査（構造検査）し、規格違反があれば出力しない | 品質要件（新規） |
 | FR-6 | Suspense は「無音→突発アクセント」「固執反復＋クレッシェンド」、March は「Oom-Pah・スネアロール・ファンファーレ」の文法を持つ | SPEC §5 |
@@ -91,7 +92,7 @@
 
 | ID | 決定 | 理由 |
 |:---|:---|:---|
-| D1 | **Pad の −17.7 cent 音程ズレは移植時は現状維持**（bit-exact）。修正は別変更 F1（§8.1.5） | リファクタと動作変更を分離し、差異の原因を切り分けるため |
+| D1 | **Pad の −17.7 cent 音程ズレは移植時は現状維持**（K=32, L=1024 を不変のまま D15 でも保持。この値自体を修正するのは別変更 F1、§8.1.5） | リファクタと動作変更を分離し、差異の原因を切り分けるため |
 | D2 | Suspense は **`suspense-slow`（BPM 64–72）と `suspense-chase`（BPM 138–148）の2プロファイル**に分割。`--genre suspense` は `suspense-slow` の別名 | 2モードは文法（ドラム・リズム）が根本的に異なる |
 | D3 | 和音感を出す**アルペジオ（`0xy`）は新ジャンルのみ**で使用。Nostalgic は使わない | Nostalgic の出力を変えないため |
 | D4 | March は **6ユニークパターン・順序10エントリ（約80秒）**の曲構成 | 1パターン=8秒では曲にならない |
@@ -101,10 +102,11 @@
 | D8 | Profile は `compose_measure()` 1メソッド＋フック（§7）。4トラック別メソッドは廃止 | 乱数消費順の保存と、チャンネル間協調（競合解決）のため |
 | D9 | 乱数: **Nostalgic は従来の単一 `rng` 消費順を厳守**。新ジャンルは用途別サブストリーム（§7.2） | bit-exact 再現と、パート改修が他パートを変えない性質の両立 |
 | D10 | 回帰基準は「基準 mod のハッシュ」ではなく、**凍結した旧実装 `tests/reference/twilight_pad_v1.py` との多seed比較**（§11.4） | 既存 `old/TwilightPad.mod` の生成 seed が不明で、ハッシュ基準が成立しないため |
-| D11 | Nostalgic のサンプル合成関数は**式を書き換えず**そのまま移設（新 DSP プリミティブに置換しない） | 浮動小数の演算順序が変わると bit-exact が崩れる |
+| D11 | ~~Nostalgic のサンプル合成関数は式を書き換えずそのまま移設（新 DSP プリミティブに置換しない）~~ **→ D15 で撤回済み** | 浮動小数の演算順序が変わると bit-exact が崩れる |
 | D12 | 持続（ループ）音色は**「アタック部＋ループ本体」構造**（`loop_start>0`）とし、音の切り方は **`Instrument.off()`（vol 0 のセル）** と `articulate()` で規定する | ループ音色はエンベロープを持たず、休符でも鳴り続けクリックも出るため（T4） |
 | D13 | チャンネル衝突の優先度は **`ChannelPlan` から自動導出**（`put()` に priority 引数は無い）。意図的上書きは `replace()` | 二重定義と、同値衝突規則との矛盾を解消（T5） |
 | D14 | 和音の具体化は **`core/harmony.voice()`** に集約。各プロファイルは音域 `Registers` を宣言する。アルペジオ使用ch の基音は `t ≤ 35 − max(X,Y)` に収める | 新ジャンル3つの入口が未定義だった（T1）／アルペジオの音域超過（T3） |
+| D15 | **実装完了後の改訂。D11 を撤回**: 全ジャンル（Nostalgic 含む）のサンプル合成を `core/synth.py` の `Patch`/`Layer`/`Finish` 方式に統一し、`profiles/*.py` のベタ書き DSP コードを廃止。**バイト単位の完全一致は要件から外す**。D1（Pad −17.7 cent）・D9（Nostalgic の乱数消費順）は作曲ロジックの話であり本改訂で無変更。D10（回帰基準）は CP2・CP5 のみ「構造的近さ」比較に緩和（CP3・CP4 はバイト一致を維持） | ジャンル追加のたびに音色合成コードが core 周辺で重複増殖する問題を解消するため。詳細は `core/synth.py` docstring・[CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8 |
 
 ---
 
@@ -228,7 +230,9 @@ sequenceDiagram
 │   │   ├── pitch.py              # 半音index・Period表・Scale・音域補助
 │   │   ├── harmony.py            # ChordSpec→ChordDef の具体化（voice）・arp 導出（§6.6）
 │   │   ├── model.py              # Cell / Pattern / MeasureBuffer / SampleSpec / Song / Plan 系
-│   │   ├── dsp.py                # 波形・フィルタ・整数周期ループ・レート算出
+│   │   ├── dsp.py                # 波形・フィルタ・整数周期ループ・レート算出のプリミティブ
+│   │   ├── synth.py              # Patch/Layer/Finish → SampleSpec のレンダラ（D15。CORE_EXTENSION_DESIGN.md §8）
+│   │   ├── synth_presets.py      # 動作確認済み Patch のプリセット・ライブラリ（D15）
 │   │   ├── composer.py           # MelodyGenerator / RhythmMotif / フェード・配置ヘルパ
 │   │   ├── writer.py             # M.K. シリアライザ・原子的書込
 │   │   └── verify.py             # 独立パーサ + 構造検査（旧 verify_mod.py の代替）
@@ -246,11 +250,11 @@ sequenceDiagram
 ├── modweaver.py                   # トップレベル起動スクリプト（`--genre` 対応。省略時は nostalgic で従来と同一出力）
 ├── requirements-dev.txt          # pytest, pytest-cov
 ├── pytest.ini
-├── EXTENSION_SPEC.md / EXTENSION_DESIGN.md / DESIGN.md / README.md / LICENSE
+├── EXTENSION_SPEC.md / EXTENSION_DESIGN.md / DESIGN.md / CORE_EXTENSION_DESIGN.md / README.md / LICENSE
 └── old/                          # 旧版バックアップ（配布対象外）
 ```
 
-依存規則（違反は循環 import になるため禁止）: `profiles → core`、`engine → profiles.base / core`、`cli → engine / registry`。`core` は `profiles` を import しない。`core` 内は `pitch`（依存なし）← `dsp`・`model` ← `harmony` ← `composer`、`writer` / `verify` は `model`・`pitch` のみ参照。
+依存規則（違反は循環 import になるため禁止）: `profiles → core`、`engine → profiles.base / core`、`cli → engine / registry`。`core` は `profiles` を import しない。`core` 内は `pitch`（依存なし）← `dsp` ← `synth`（D15）← `synth_presets`、`model` ← `harmony` ← `composer`、`writer` / `verify` は `model`・`pitch` のみ参照。
 
 ---
 
@@ -484,7 +488,7 @@ def clamp(x: float) -> int                        # [-128,127] へ丸め（旧 c
 def pad_even(b: bytes) -> bytes                   # 旧 pad_even
 def to_pcm(values: Iterable[float], gain=127.0) -> bytes   # clamp(v*gain) & 0xFF → pad_even
 
-# 波形・エンベロープ（新ジャンル用。Nostalgic は使わない: D11）
+# 波形・エンベロープ（core/synth.py の Patch レンダラが内部で使用。全ジャンル共通。D15 でこの区分は撤廃）
 def additive(f0, t, partials) -> float            # partials=[(mult, weight)]。f0*mult が Nyquist 超の項は自動除外（エイリアス防止）
 def partials_saw(n) / partials_square(n) / partials_triangle(n) -> list[tuple[float, float]]
     # 旧 SPEC の osc_saw / osc_pulse / osc_tri の代替。saw: h=1..n の 1/h、square: 奇数 h の 1/h、triangle: 奇数 h の (−1)^((h−1)/2)/h²
@@ -725,7 +729,7 @@ plan(rng)
 | `PAL_AMIGA_CLOCK, SR, clamp, pad_even` | `core/dsp.py`（同名・同式） |
 | `PERIODS`（36音） | `core/pitch.PERIODS`（index 並び）＋ `NOTE_NAMES` |
 | `make_cell / cell` | `Cell.serialize()` ＋ `nostalgic._legacy_cell()`（下記 clamp 参照） |
-| `gen_kick … gen_flute` | `profiles/nostalgic_samples.py`（**式・定数を一切変更せず移設**、D11） |
+| `gen_kick … gen_flute` | `profiles/nostalgic_samples.py`（当初は式・定数を一切変更せず移設。D15 で `core/synth.py` の Patch 方式へ再移行。数式は同一値を保持） |
 | `CHORD_DEFS / PROGRESSION_PRESETS / RHYTHM_MOTIFS / SCALE_NOTES` | `nostalgic.py` の定数（`ChordDef(explicit=True)` に変換。音名→index は `pitch.parse`） |
 | `generate_melody_bar` | `nostalgic._melody_bar`（ロジック同一。`SCALE_NOTES.index` は index 演算に置換し結果同一を保証） |
 | `build_procedural_pattern` | `begin_pattern`（motif_a/b・has_ghost）＋`compose_measure`＋`finalize_pattern`（アウトロのフェード） |
@@ -1004,7 +1008,7 @@ ModGenError(Exception)
 | 単体 `tests/unit/` | pitch / dsp / model / writer / verify / composer / registry | 下表 |
 | プロファイル `tests/profiles/` | 各 Profile | 文法・音域・ChannelPlan・決定性 |
 | 結合 `tests/integration/` | engine + cli | 全 genre × 5 seed で生成→verify クリーン、終了コード |
-| 回帰 `tests/regression/` | Nostalgic | 旧実装との多 seed 完全一致 |
+| 回帰 `tests/regression/` | Nostalgic | 作曲ロジック（Cell配置）は旧実装と多 seed 完全一致。サンプル波形は D15 により構造的近さのみ |
 
 カバレッジ: core ≥ 90%、profiles ≥ 85%（`pytest --cov=mod_weaver`。pytest-cov は開発用）。実行: `python -m pytest -q`。 Python は、全テストを 3.10、回帰（CP5）とスモークを 3.11 で実行する。
 
@@ -1037,10 +1041,10 @@ ModGenError(Exception)
 | CP | 対象 | 方法 |
 |:---|:---|:---|
 | CP1 | writer / Cell / pitch / verify | 旧実装の出力 mod（20 seed）を `parse_mod` で Song 相当へ復元 → 新 `serialize` → 元のバイト列と完全一致。旧 `make_cell` と `Cell` が境界値の直積＋乱数で一致。`verify` が旧出力を ERROR 0 で受理 |
-| CP2 | Nostalgic サンプル | `nostalgic_samples` の各サンプルの bytes が旧 `gen_*` と一致（単体） |
-| CP3 | `plan()` | 20 seed で返る進行名・BPM が、テスト内で旧手順（`randrange(5)` → `randint(1,4)` → `choice`）を再現した値と一致 |
-| CP4 | pattern | 20 seed × 4 pattern の各 1024 byte が旧 `build_procedural_pattern` と一致（Q1〜Q7 を含む） |
-| CP5 | 全体 | 出力ファイル全体が旧実装と一致（20 seed）。`modweaver.py`（`--genre` 省略＝nostalgic）の子プロセス実行が 3 seed で一致。同 seed 2 回で同一 |
+| CP2 | Nostalgic サンプル | ~~`nostalgic_samples` の各サンプルの bytes が旧 `gen_*` と一致（単体）~~ **D15 で緩和**: 長さ・ピーク振幅が旧 `gen_*` と近いこと（バイト完全一致は求めない） |
+| CP3 | `plan()` | 20 seed で返る進行名・BPM が、テスト内で旧手順（`randrange(5)` → `randint(1,4)` → `choice`）を再現した値と一致（D15 後も無変更） |
+| CP4 | pattern | 20 seed × 4 pattern の各 1024 byte が旧 `build_procedural_pattern` と一致（Q1〜Q7 を含む）（D15 後も無変更。サンプル波形ではなく Cell 配置のみを見るため） |
+| CP5 | 全体 | ~~出力ファイル全体が旧実装と一致（20 seed）~~ **D15 で緩和**: ファイルサイズが旧実装に近く、`verify()` がエラー無しで受理すること。`modweaver.py`（`--genre` 省略＝nostalgic）の子プロセス実行が有効なファイルを生成すること。同 seed 2 回で同一（決定性は維持） |
 
 libm 差による別環境でのハッシュ変動は、**同一環境内での旧/新比較**であるため影響しない（固定ハッシュの golden は持たない）。
 
@@ -1051,6 +1055,8 @@ OpenMPT/MilkyTracker で各 genre × 3 seed を再生し確認: ①ループ境�
 ---
 
 ## 12. 実装ロードマップ
+
+**全 Phase 完了済み**（march 含む）。以下は実装時のロードマップの記録（完了条件は当時の定義。CP2/CP5 の意味は D15 で変更済み、§11.4）。
 
 | Phase | 内容 | 完了条件 |
 |:---|:---|:---|

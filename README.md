@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-ProTracker%20MOD%20(4ch)-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式トラッカー音楽ファイル（`.mod`）を波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）など複数ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式トラッカー音楽ファイル（`.mod`）を波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）や行進曲（`march`）など複数ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -77,6 +77,7 @@ python modweaver.py --output MyTwilightSong.mod
 ```bash
 python modweaver.py --genre suspense-chase
 python modweaver.py --genre suspense-slow --seed 1
+python modweaver.py --genre march
 ```
 
 #### 指定できるジャンル一覧を確認する:
@@ -103,6 +104,7 @@ python modweaver.py --list-genres
 | `nostalgic` | – | 夕暮れの郷愁を誘う Lo-Fi ビートとオルゴール（従来の TwilightPad） |
 | `suspense-slow` | `suspense` | 低速・重苦しい緊張。心拍と無音、突発の金属音 |
 | `suspense-chase` | – | 緊急脱出・追走。毎拍の心拍と8分連打、無音からの衝撃 |
+| `march` | – | 行進曲。Oom-Pah とスネアロール、ファンファーレ、トリオへの転調 |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
@@ -152,14 +154,18 @@ Amigaのステレオ定位特性（1:左, 2:右, 3:右, 4:左）に合わせ、�
 ```text
 .
 ├── modweaver.py       # トップレベル起動スクリプト（`--genre` 対応。省略時は nostalgic）
-├── mod_weaver/        # パッケージ本体（core / profiles）。`python -m mod_weaver` でも起動可
+├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
+│   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・writer/verify
+│   └── profiles/      # 可変層: ジャンルごとの GenreProfile（nostalgic / suspense-* / march）
 ├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
-├── DESIGN.md          # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書
-├── EXTENSION_DESIGN.md # マルチジャンル対応エンジン全体の設計書
+├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
+├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
+├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン全体の設計書（実装済み）
+├── CORE_EXTENSION_DESIGN.md # 次期 core 拡張の構想・音源合成基盤（Patch方式）の設計記録
 └── README.md          # 本ドキュメント
 ```
 
-より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。
+より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。実装の詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8 をご参照ください。
 
 ---
 

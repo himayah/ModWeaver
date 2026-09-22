@@ -1,8 +1,7 @@
 """波形・フィルタ・レート算出（設計書 §6.1）。
 
-``clamp`` / ``pad_even`` は旧実装と同名・同挙動（Nostalgic のバイト同一性のため）。
-後半の合成プリミティブ（additive / noise_lp / seamless_* など）は新ジャンル専用で、
-Nostalgic のサンプル合成は旧式を無改変で使う（D11）。
+``clamp`` / ``pad_even`` は旧実装と同名・同挙動。全ジャンル（nostalgic 含む）のサンプル合成は
+core/synth.py の Patch 方式を経由し、本モジュールの各プリミティブを内部で利用する。
 """
 from __future__ import annotations
 
@@ -40,7 +39,7 @@ def to_pcm(values: Iterable[float], gain: float = 127.0) -> bytes:
 
 
 # ============================================================
-# 新ジャンル用の波形・エンベロープ・フィルタ（Nostalgic は使わない: D11）
+# 波形・エンベロープ・フィルタのプリミティブ（core/synth.py の Patch レンダラが内部で利用する）
 # ============================================================
 TWO_PI = 2.0 * math.pi
 Partials = Sequence[tuple[float, float]]   # [(倍率 mult, 重み weight)]

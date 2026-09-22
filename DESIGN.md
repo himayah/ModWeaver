@@ -1,5 +1,12 @@
 # システム設計書：TwilightPad MOD Generator
 
+> **現在の実装との関係**: 本書は `twilight_pad.py`（単体スクリプト時代）を対象にした原初の設計書であり、
+> §3〜4 の音響工学的分析・音楽理論的解決策（サンプル音源の狙い、コード進行、手続き型作曲の考え方）は
+> 現在も nostalgic ジャンルの設計根拠として有効。ただし実装は以後2段階で移設されている:
+> `mod_weaver/profiles/nostalgic.py`＋`nostalgic_samples.py`（[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) Phase 1b）、
+> さらにサンプル合成本体は `core/synth.py` の Patch 方式へ（[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) D15、
+> [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8）。§3.2 の合成式は数式としては現行実装と同一値を保っている。
+
 ## 1. 概要
 
 本ドキュメントは、Python標準ライブラリのみを用いてProTracker形式の4チャンネル・トラッカー音楽ファイル（`.mod`）をプログラマティックに合成・生成するシステム「**TwilightPad MOD Generator** (`twilight_pad.py`)」の設計仕様書である。

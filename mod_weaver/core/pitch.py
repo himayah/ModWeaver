@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Collection, Sequence
 
@@ -57,6 +58,15 @@ def period_to_index(period: int) -> int:
 def hz(n: int) -> float:
     """logical note index の周波数（Hz）。hz(0)=65.4064。"""
     return _C1_HZ * 2.0 ** (n / 12.0)
+
+
+def note_for_hz(target_hz: float) -> int:
+    """``target_hz`` に最も近い logical note（半音・丸め）。``hz()`` の近似逆関数。
+
+    機械的な単位変換のみを行う（美的判断を含まない）。ある音色を「概ね target_hz で鳴らしたい」
+    ときの ``shift = note_for_hz(target_hz) - rate_note`` の計算に使う。
+    """
+    return round(12.0 * math.log2(target_hz / _C1_HZ))
 
 
 def fold_into_range(n: int, lo: int, hi: int) -> int:

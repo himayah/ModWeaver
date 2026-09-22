@@ -1,8 +1,13 @@
-"""CP2〜CP5: Nostalgic 移植の旧実装との段階的等価性（設計書 §11.4）。"""
+"""CP2〜CP5: Nostalgic 移植の旧実装との段階的等価性（設計書 §11.4）。
+
+CP2（サンプル波形）と CP5（完成ファイル）は、サンプル合成を core/synth.py の Patch 方式へ
+移行したことで、もはやバイト単位の完全一致を目標としない（互換性を要求しない方針への変更）。
+波形は構造的な近さ（長さ・ピーク振幅）のみ確認し、生成そのものが引き続き妥当な出力を作れることを
+別途確認する。CP3（plan）・CP4（pattern の Cell 配置）は作曲ロジックを一切変更していないため、
+今も旧実装とのバイト単位の等価性を保証する回帰として機能する。
+"""
 from __future__ import annotations
 
-import contextlib
-import io
 import random
 import subprocess
 import sys
@@ -12,6 +17,7 @@ import pytest
 
 from mod_weaver import engine
 from mod_weaver.core import writer
+from mod_weaver.core.verify import has_errors, verify
 from mod_weaver.profiles import get_profile
 from mod_weaver.profiles import nostalgic_samples as new_smp
 from tests.conftest import REGRESSION_SEEDS, legacy_mod_bytes, load_reference
@@ -22,10 +28,18 @@ profile = get_profile("nostalgic")
 
 # ---------------- CP2: サンプル ----------------
 
+def _peak(data: bytes) -> int:
+    return max(abs(b - 256 if b > 127 else b) for b in data)
+
+
 @pytest.mark.parametrize("name", ["kick", "snare", "hihat", "bass", "musicbox", "pad", "flute"])
-def test_cp2_sample_bytes_match_legacy(name):
+def test_cp2_sample_synthesis_is_structurally_close_to_legacy(name):
+    """波形バイトの完全一致は求めない。長さ・ピーク振幅が旧実装と同程度であることだけ確認する。"""
     ref = load_reference()
-    assert getattr(new_smp, f"gen_{name}")() == getattr(ref, f"gen_{name}")()
+    legacy = getattr(ref, f"gen_{name}")()
+    new = getattr(new_smp, f"gen_{name}")().data
+    assert abs(len(new) - len(legacy)) <= 4        # duration*rate の丸め方式の違いのみ許容
+    assert abs(_peak(new) - _peak(legacy)) <= 2
 
 
 def test_cp2_build_samples_layout_matches_legacy_table():
@@ -85,29 +99,34 @@ def test_cp4_patterns_match_legacy(seed):
 # ---------------- CP5: 全体 ----------------
 
 @pytest.mark.parametrize("seed", REGRESSION_SEEDS)
-def test_cp5_full_file_matches_legacy(seed):
-    assert writer.serialize(engine.build_song(profile, seed)) == legacy_mod_bytes(seed)
+def test_cp5_full_file_is_close_to_legacy_and_verifies_clean(seed):
+    """サンプル波形が変わったためバイト完全一致は求めない。サイズが近く、検査が通ることを確認する。"""
+    new = writer.serialize(engine.build_song(profile, seed))
+    legacy = legacy_mod_bytes(seed)
+    assert abs(len(new) - len(legacy)) <= 4 * 7     # 7 サンプル分の丸め誤差まで許容
+    issues = verify(new, profile.channel_plan)
+    assert not has_errors(issues)
 
 
 @pytest.mark.parametrize("seed", REGRESSION_SEEDS[:5])
-def test_cp5_generate_writes_identical_file(seed, tmp_path):
+def test_cp5_generate_writes_valid_file(seed, tmp_path):
     out = tmp_path / "n.mod"
     result = engine.generate(profile, seed, out)
-    assert out.read_bytes() == legacy_mod_bytes(seed)
+    assert out.exists() and out.stat().st_size > 0
     assert result.seed == seed and result.path == out
     assert not [i for i in result.issues if i.level != "INFO"]
 
 
 @pytest.mark.parametrize("seed", [1, 42, 732501])
-def test_cp5_toplevel_script_subprocess_identical(seed, tmp_path):
-    """``modweaver.py`` は ``--genre`` 省略時、旧 ``twilight_pad.py`` とバイト単位で同一の出力を返す。"""
+def test_cp5_toplevel_script_subprocess_writes_valid_file(seed, tmp_path):
+    """``modweaver.py`` は ``--genre`` 省略時、nostalgic を生成する（旧 twilight_pad.py とのバイト一致は求めない）。"""
     out = tmp_path / "w.mod"
     r = subprocess.run(
         [sys.executable, str(ROOT / "modweaver.py"), "--seed", str(seed), "--output", str(out)],
         capture_output=True, text=True, cwd=tmp_path,
     )
     assert r.returncode == 0, r.stderr
-    assert out.read_bytes() == legacy_mod_bytes(seed)
+    assert out.exists() and out.stat().st_size > 0
     assert f"python modweaver.py --genre nostalgic --seed {seed}" in r.stdout
 
 
@@ -118,7 +137,5 @@ def test_cp5_same_seed_twice_identical():
 
 
 def test_cp5_negative_seed_is_accepted():
-    ref = load_reference()
-    legacy = legacy_mod_bytes(-7)
-    assert writer.serialize(engine.build_song(profile, -7)) == legacy
-    assert ref is not None
+    issues = verify(writer.serialize(engine.build_song(profile, -7)), profile.channel_plan)
+    assert not has_errors(issues)

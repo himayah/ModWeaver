@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 生成物（--output 省略時の既定出力先。設計書 EXTENSION_DESIGN.md §9）
+/nostalgic/
+/suspense-slow/
+/suspense-chase/
+/march/
+*.mod
+
+# 旧版バックアップ（配布対象外。EXTENSION_DESIGN.md §12）
+/old/

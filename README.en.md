@@ -50,9 +50,11 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
 
 Running `python modweaver.py` with no arguments prints the usage (the same as `--help`) and exits. To make a song, give options as shown below.
 
+**The usage, genre list and results are shown in Japanese by default. Add `-e` (`--english`) to get them in English**, as the examples below do.
+
 #### Generate a new random song (different every run):
 ```bash
-python modweaver.py --genre nostalgic
+python modweaver.py -e --genre nostalgic
 ```
 Example output:
 ```text
@@ -66,71 +68,79 @@ Tempo       : BPM 90
 Theme A     : Step-Down (Nostalgic Descent) -> Fmaj7 - Em7 - Dm7 - Cmaj7
 Theme B     : Journey (Memories & Depart) -> Am7 - Fmaj7 - Cmaj7 - G7
 --------------------------------------------------
-Output File : nostalgic/nostalgic_732501.mod
+Output File : output/nostalgic_732501.mod
 Success! To reproduce this exact song, run:
   python modweaver.py --genre nostalgic --seed 732501
 ==================================================
 ```
 
-If you omit the output path, files are sorted into a subfolder per genre as `<genre>/<genre>_<seed>.mod` (e.g. `nostalgic/nostalgic_732501.mod`); the folder is created if needed.
+If you omit the output path, the file is written to the `output` folder in the current directory as `<genre>_<seed>.mod` (e.g. `output/nostalgic_732501.mod`); the folder is created if needed.
 
 #### Regenerate a favourite song from its seed (`--genre` defaults to `nostalgic`):
 ```bash
-python modweaver.py --seed 732501
+python modweaver.py -e --seed 732501
 ```
 
-#### Choose the output file name (with `--output` the file is written to that exact path, without the per-genre folder):
+#### Choose the output file name (with `--output` the file is written to that exact path instead of the `output` folder):
 ```bash
-python modweaver.py --output MyTwilightSong.mod
+python modweaver.py -e --output MyTwilightSong.mod
 ```
 
 #### Generate other genres (`--genre` / `-g`):
 ```bash
-python modweaver.py --genre suspense-chase
-python modweaver.py --genre suspense-slow --seed 1
-python modweaver.py --genre march
-python modweaver.py --genre swing-jazz
-python modweaver.py --genre prog-rock
-python modweaver.py --genre trap
-python modweaver.py --genre future-bass
-python modweaver.py --genre maqam
-python modweaver.py --genre free-jazz
-python modweaver.py --genre minimalism
-python modweaver.py --genre orchestral   # 8 channels; 8CHN format with the default mod
+python modweaver.py -e --genre suspense-chase
+python modweaver.py -e --genre suspense-slow --seed 1
+python modweaver.py -e --genre march
+python modweaver.py -e --genre swing-jazz
+python modweaver.py -e --genre prog-rock
+python modweaver.py -e --genre trap
+python modweaver.py -e --genre future-bass
+python modweaver.py -e --genre maqam
+python modweaver.py -e --genre free-jazz
+python modweaver.py -e --genre minimalism
+python modweaver.py -e --genre orchestral   # 8 channels; 8CHN format with the default mod
 ```
 
 #### Pick a genre at random (`--genre random` / `-g r`):
 ```bash
-python modweaver.py --genre random
-python modweaver.py -g r --tempo 120     # picks among genres that can play at 120 BPM
+python modweaver.py -e --genre random
+python modweaver.py -e -g r --tempo 120     # picks among genres that can play at 120 BPM
 ```
-The chosen genre is shown in the banner as `Genre       : trap (random)`, and the reproduce command names it (e.g. `--genre trap`). The genre choice does not depend on `--seed` and is random every time (use the reproduce command to make the same song again).
+The chosen genre is shown in the banner as `Genre       : trap (random)` (with `-e`), and the reproduce command names it (e.g. `--genre trap`). The genre choice does not depend on `--seed` and is random every time (use the reproduce command to make the same song again).
 
 #### Choose the output format (`--format` / `-f`; defaults to `mod`):
 ```bash
-python modweaver.py --format xm          # FastTracker II
-python modweaver.py --format s3m         # Scream Tracker 3
-python modweaver.py --format it          # Impulse Tracker
-python modweaver.py --format midi        # General MIDI (extension .mid)
-python modweaver.py --format mp3         # MP3 (needs ffmpeg; see Requirements)
+python modweaver.py -e --format xm          # FastTracker II
+python modweaver.py -e --format s3m         # Scream Tracker 3
+python modweaver.py -e --format it          # Impulse Tracker
+python modweaver.py -e --format midi        # General MIDI (extension .mid)
+python modweaver.py -e --format mp3         # MP3 (needs ffmpeg; see Requirements)
 ```
-When the output path is omitted, the extension follows the format (e.g. `nostalgic/nostalgic_732501.it`).
+When the output path is omitted, the extension follows the format (e.g. `output/nostalgic_732501.it`).
 
 #### Set the tempo (`--tempo` / `-t`; chosen per genre if omitted):
 ```bash
-python modweaver.py --tempo 120          # generate at 120 BPM
-python modweaver.py --tempo 80-100       # pick a random BPM from 80 to 100
+python modweaver.py -e --tempo 120          # generate at 120 BPM
+python modweaver.py -e --tempo 80-100       # pick a random BPM from 80 to 100
 ```
 With a range, the BPM actually chosen is shown on the banner's `Tempo` line, and the reproduce command contains the resolved value (e.g. `--tempo 92`).
 
 #### List the available genres:
 ```bash
-python modweaver.py --list-genres
+python modweaver.py -e --list-genres
 ```
+
+#### Show everything in English (`-e` / `--english`):
+```bash
+python modweaver.py -e                   # English usage
+python modweaver.py -e --list-genres     # genre descriptions in English
+python modweaver.py -e --genre trap      # English result banner
+```
+The usage, the genre descriptions and the result banner switch to English. `-e` does not change the generated song. The summary lines a genre adds to the banner (chord progression names etc.) and error/warning messages (stderr) are in English either way.
 
 #### Show the version:
 ```bash
-python modweaver.py --version
+python modweaver.py -e --version
 ```
 ```text
 ModWeaver 1.1.0
@@ -147,8 +157,9 @@ https://github.com/himayah/ModWeaver
 | `--seed` | `-s` | random (100000–999999) | Seed for reproducibility (any integer, negative values allowed). The same genre + seed (+ format + tempo) always produces an identical file |
 | `--format` | `-f` | `mod` | Output format: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3` (see the table below) |
 | `--tempo` | `-t` | chosen per genre | A BPM (`120`) or a range (`80-100`, random within it), 32–255. A range the genre cannot play is an error (exit code 2); a range only partly outside is clipped to the supported range with a warning |
-| `--output` | `-o` | `<genre>/<genre>_<seed>.<ext>` (e.g. `nostalgic/nostalgic_732501.mod`); the folder is created if needed | Output path. When given, the file is written to exactly that path without per-genre folders (a missing parent folder is an error) |
+| `--output` | `-o` | `output/<genre>_<seed>.<ext>` (e.g. `output/nostalgic_732501.mod`); the folder is created if needed | Output path. When given, the file is written to exactly that path (a missing parent folder is an error) |
 | `--list-genres` | – | – | Print the id, aliases and description of every available genre, then exit (code 0). Nothing is generated |
+| `--english` | `-e` | – | Show the usage, genre descriptions and results in English (Japanese by default) |
 | `--version` | `-v` | – | Print the version and the GitHub repository URL, then exit (code 0) |
 | `--help` | `-h` | – | Print the usage and the option list (including the genre list), then exit (code 0) |
 
@@ -184,9 +195,9 @@ https://github.com/himayah/ModWeaver
 | `minimalism` | – | Minimal / phase music: four parts with 16/12/8/6-row cycles drift apart and realign |
 | `orchestral` | – | Full orchestra / film score: 8-channel, six-voice strings + woodwinds + brass + timpani |
 
-You can also check the current list with `python modweaver.py --list-genres` or `python modweaver.py --help` (if genres are added, that output is always authoritative). The descriptions printed by the program are in Japanese.
+You can also check the current list with `python modweaver.py -e --list-genres` or `python modweaver.py -e --help` (if genres are added, that output is always authoritative). Without `-e` the descriptions are printed in Japanese.
 
-Genres are loaded automatically on every start from the modules in `mod_weaver/genres/` (one file = one genre). To add a genre, just put a `.py` file in that directory defining a `GenreProfile` subclass decorated with `@register_profile` (with an `id` and a one-line `description`). See [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3 (in Japanese) for details.
+Genres are loaded automatically on every start from the modules in `mod_weaver/genres/` (one file = one genre). To add a genre, just put a `.py` file in that directory defining a `GenreProfile` subclass decorated with `@register_profile` (with an `id` and one-line descriptions: `description` in Japanese and `description_en` in English). See [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3 (in Japanese) for details.
 
 #### Exit codes
 
@@ -246,7 +257,7 @@ sections (ChannelPlan / instrument kit) of [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.
 │   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there)
 │                       #   (nostalgic / suspense-* / march / swing-jazz / prog-rock /
 │                       #   trap / future-bass / maqam / free-jazz / minimalism / orchestral)
-├── nostalgic/         # Generated MOD files (default output folder, e.g. nostalgic_732501.mod)
+├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md               # Original detailed design of the nostalgic genre: rework points, acoustics, music theory
 ├── EXTENSION_SPEC.md       # Earliest multi-genre concept (superseded by EXTENSION_DESIGN.md)
 ├── EXTENSION_DESIGN.md     # Multi-genre engine, first stage (Phases 1–3, four genres; implemented)

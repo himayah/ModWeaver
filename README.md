@@ -48,7 +48,7 @@
 
 ### 1. 実行方法
 
-引数を何も付けずに `python modweaver.py` と実行すると、使い方（`--help` と同じ内容）を表示して終了します。曲を作るときは下のようにオプションを指定してください。
+引数を何も付けずに `python modweaver.py` と実行すると、使い方（`--help` と同じ内容）を表示して終了します。曲を作るときは下のようにオプションを指定してください。使い方・ジャンル一覧・実行結果の表示は日本語です（`-e` を付けると英語になります）。
 
 #### 新しい曲をランダム生成する（実行するたびに変化）:
 ```bash
@@ -59,27 +59,27 @@ python modweaver.py --genre nostalgic
 ==================================================
   ModWeaver: TwilightPad Procedural
 ==================================================
-Genre       : nostalgic
-Format      : mod
-Seed        : 732501
-Tempo       : BPM 90
+ジャンル    : nostalgic
+出力形式    : mod
+シード      : 732501
+テンポ      : BPM 90
 Theme A     : Step-Down (Nostalgic Descent) -> Fmaj7 - Em7 - Dm7 - Cmaj7
 Theme B     : Journey (Memories & Depart) -> Am7 - Fmaj7 - Cmaj7 - G7
 --------------------------------------------------
-Output File : nostalgic/nostalgic_732501.mod
-Success! To reproduce this exact song, run:
+出力ファイル: output/nostalgic_732501.mod
+生成に成功しました。同じ曲を再現するには次を実行してください:
   python modweaver.py --genre nostalgic --seed 732501
 ==================================================
 ```
 
-出力先を省略すると、`<ジャンル名>/<ジャンル名>_<シード>.mod`（例: `nostalgic/nostalgic_732501.mod`）にジャンルごとのサブフォルダへ自動整理されます（フォルダが無ければ作成）。
+出力先を省略すると、カレントディレクトリの `output` フォルダに `<ジャンル名>_<シード>.mod`（例: `output/nostalgic_732501.mod`）として出力されます（フォルダが無ければ作成）。
 
 #### お気に入りの曲をシード指定で再生成する（`--genre` を省略すると既定の `nostalgic`）:
 ```bash
 python modweaver.py --seed 732501
 ```
 
-#### 出力ファイル名を指定する（`--output` を指定すると自動整理は行わず、指定パスへそのまま出力）:
+#### 出力ファイル名を指定する（`--output` を指定すると `output` フォルダは使わず、指定パスへそのまま出力）:
 ```bash
 python modweaver.py --output MyTwilightSong.mod
 ```
@@ -104,7 +104,7 @@ python modweaver.py --genre orchestral   # 8ch。既定の mod では 8CHN 形�
 python modweaver.py --genre random
 python modweaver.py -g r --tempo 120     # テンポ 120 に対応できるジャンルの中から選ぶ
 ```
-選ばれたジャンルはバナーに `Genre       : trap (random)` のように表示され、再現コマンドには選ばれたジャンル名（例: `--genre trap`）が出ます。ジャンルの選択は `--seed` とは無関係に毎回ランダムです（同じ曲をもう一度作るときは再現コマンドを使ってください）。
+選ばれたジャンルはバナーに `ジャンル    : trap (ランダム)` のように表示され、再現コマンドには選ばれたジャンル名（例: `--genre trap`）が出ます。ジャンルの選択は `--seed` とは無関係に毎回ランダムです（同じ曲をもう一度作るときは再現コマンドを使ってください）。
 
 #### 出力形式を選ぶ（`--format` / `-f`。省略時は `mod`）:
 ```bash
@@ -114,19 +114,27 @@ python modweaver.py --format it          # Impulse Tracker
 python modweaver.py --format midi        # General MIDI（拡張子は .mid）
 python modweaver.py --format mp3         # MP3（ffmpeg が必要。動作要件を参照）
 ```
-出力先を省略した場合の拡張子は形式に合わせて変わります（例: `nostalgic/nostalgic_732501.it`）。
+出力先を省略した場合の拡張子は形式に合わせて変わります（例: `output/nostalgic_732501.it`）。
 
 #### テンポを指定する（`--tempo` / `-t`。省略時はジャンルごとに自動）:
 ```bash
 python modweaver.py --tempo 120          # BPM 120 で生成
 python modweaver.py --tempo 80-100       # 80〜100 の範囲からランダムに決める
 ```
-範囲指定のとき、実際に選ばれた BPM はバナーの `Tempo` 行に表示され、再現コマンドには確定した値（例: `--tempo 92`）が出ます。
+範囲指定のとき、実際に選ばれた BPM はバナーの `テンポ` 行に表示され、再現コマンドには確定した値（例: `--tempo 92`）が出ます。
 
 #### 指定できるジャンル一覧を確認する:
 ```bash
 python modweaver.py --list-genres
 ```
+
+#### 英語で表示する（`-e` / `--english`）:
+```bash
+python modweaver.py -e                   # 英語の使い方
+python modweaver.py -e --list-genres     # ジャンルの説明を英語で
+python modweaver.py -e --genre trap      # 実行結果のバナーを英語で
+```
+使い方・ジャンル一覧の説明・実行結果のバナーが英語になります。生成される曲は `-e` の有無で変わりません。バナーのうちジャンルが出す要約行（コード進行名など）と、エラー・警告のメッセージ（標準エラー出力）は、どちらの場合も英語です。
 
 #### バージョンを確認する:
 ```bash
@@ -147,8 +155,9 @@ https://github.com/himayah/ModWeaver
 | `--seed` | `-s` | 乱数（100000〜999999） | 再現性のためのシード値（任意の整数、負値も可）。同じ genre + seed（+ format + tempo）は常に同一バイナリを出力する |
 | `--format` | `-f` | `mod` | 出力形式: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3`（下表参照） |
 | `--tempo` | `-t` | ジャンルごとに自動 | BPM（`120`）または範囲（`80-100`、範囲内からランダム）。32〜255。ジャンルが対応できない範囲だとエラー終了（コード 2）、一部だけ外れていれば対応範囲に切り詰めて警告 |
-| `--output` | `-o` | `<ジャンル名>/<ジャンル名>_<シード>.<拡張子>`（例: `nostalgic/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力し、自動整理は行わない（存在しない親フォルダがあればエラー終了） |
+| `--output` | `-o` | `output/<ジャンル名>_<シード>.<拡張子>`（例: `output/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力する（存在しない親フォルダがあればエラー終了） |
 | `--list-genres` | – | – | 指定できる全ジャンルの id・別名・説明を一覧表示して終了（コード 0）。生成は行わない |
+| `--english` | `-e` | – | 使い方・ジャンル一覧の説明・実行結果の表示を英語にする（既定は日本語） |
 | `--version` | `-v` | – | バージョンと GitHub リポジトリの URL を表示して終了（コード 0） |
 | `--help` | `-h` | – | 使い方とオプション一覧（ジャンル一覧を含む）を表示して終了（コード 0） |
 
@@ -165,7 +174,7 @@ https://github.com/himayah/ModWeaver
 
 #### テンポ（BPM）の意味
 
-`--tempo` とバナーの `Tempo` は **4分音符の BPM** です（トラッカーの `Fxx` の値と同じ）。例外として `trap` は 32分音符の細かい格子で書かれたハーフタイムのジャンルなので、表示 BPM は trap の慣習どおりの数え方（例: 150 → ハーフタイムで 75 に感じる）です。`free-jazz` はテンポが連続的に揺れ動くジャンルで、`--tempo` は開始時の BPM を決めます（以降のテンポ変化は同じ比率で拡大縮小。指定できるのは 44〜163）。
+`--tempo` とバナーの `テンポ` は **4分音符の BPM** です（トラッカーの `Fxx` の値と同じ）。例外として `trap` は 32分音符の細かい格子で書かれたハーフタイムのジャンルなので、表示 BPM は trap の慣習どおりの数え方（例: 150 → ハーフタイムで 75 に感じる）です。`free-jazz` はテンポが連続的に揺れ動くジャンルで、`--tempo` は開始時の BPM を決めます（以降のテンポ変化は同じ比率で拡大縮小。指定できるのは 44〜163）。
 
 #### 指定できるジャンル
 
@@ -186,7 +195,7 @@ https://github.com/himayah/ModWeaver
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
-ジャンルは `mod_weaver/genres/` に置いたモジュール（1ファイル＝1ジャンル）から起動のたびに自動で読み込まれます。新しいジャンルは、このディレクトリに `@register_profile` 付きの `GenreProfile` サブクラス（`id` と1行の `description` を持つ）を定義した `.py` を置くだけで追加できます（詳細は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3）。
+ジャンルは `mod_weaver/genres/` に置いたモジュール（1ファイル＝1ジャンル）から起動のたびに自動で読み込まれます。新しいジャンルは、このディレクトリに `@register_profile` 付きの `GenreProfile` サブクラス（`id` と、1行の説明 `description`（日本語）・`description_en`（英語）を持つ）を定義した `.py` を置くだけで追加できます（詳細は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3）。
 
 #### 終了コード
 
@@ -246,7 +255,7 @@ https://github.com/himayah/ModWeaver
 │   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録）
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
 │                       #        trap / future-bass / maqam / free-jazz / minimalism / orchestral）
-├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
+├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
 ├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
 ├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）

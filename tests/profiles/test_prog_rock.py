@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import prog_rock as pr
+from mod_weaver.genres import prog_rock as pr
 
 profile = get_profile("prog-rock")
 SEEDS = list(range(1, 41))

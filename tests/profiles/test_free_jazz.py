@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import free_jazz as fj
+from mod_weaver.genres import free_jazz as fj
 
 profile = get_profile("free-jazz")
 SEEDS = list(range(1, 41))

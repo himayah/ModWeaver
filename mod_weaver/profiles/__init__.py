@@ -1,12 +1,9 @@
-"""可変層: ジャンル別プロファイル。import すると登録される。"""
+"""ジャンルの仕組み（基底・登録簿・補助）。ジャンルそのものは ``mod_weaver/genres/`` にあり、import 時に自動登録される。"""
 from __future__ import annotations
 
 from .base import GenreProfile
-from .registry import get_profile, list_profiles, register_profile, resolve_id
+from .registry import discover, get_profile, list_profiles, register_profile, resolve_id
 
-from . import (  # noqa: F401  (登録のための import)
-    free_jazz, future_bass, maqam, march, minimalism, nostalgic, orchestral, prog_rock,
-    suspense_chase, suspense_slow, swing_jazz, trap,
-)
+discover()
 
-__all__ = ["GenreProfile", "get_profile", "list_profiles", "register_profile", "resolve_id"]
+__all__ = ["GenreProfile", "discover", "get_profile", "list_profiles", "register_profile", "resolve_id"]

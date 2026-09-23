@@ -29,8 +29,8 @@ from ..core.model import (
 )
 from ..core.pitch import MicroScale, parse, resolve_micronote
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音律（GENRE_DESIGN_V2.md §5.1）

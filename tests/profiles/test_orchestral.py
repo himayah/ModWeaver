@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import parse_xm, verify_xm
 from mod_weaver.core.writer import serialize_xm
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import orchestral as orch
+from mod_weaver.genres import orchestral as orch
 
 profile = get_profile("orchestral")
 SEEDS = list(range(1, 41))

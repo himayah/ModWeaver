@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules, articulate, ramp
 from ..core.model import Cell, MeasureBuffer, MeasureCtx, Pattern, PatternCtx, PatternPlan, RngStreams, SongPlan
-from .registry import register_profile
-from .suspense_common import (
+from ..profiles.registry import register_profile
+from ..profiles.suspense_common import (
     CH_FX, CH_LEAD, CH_LOW, CH_TEX, KEY_PC, SHOCK_GUARD_ROWS,
     PatternState, anvil_clear_row, SuspenseBase, heartbeat, pizz_ostinato, progression_summary, put_oneshot_off,
     silence_run, strings_chord, swoosh_start_row, voice_progression,

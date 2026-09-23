@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import trap as tp
+from mod_weaver.genres import trap as tp
 
 profile = get_profile("trap")
 SEEDS = list(range(1, 41))

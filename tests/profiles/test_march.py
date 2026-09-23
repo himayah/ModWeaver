@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import march as mp
+from mod_weaver.genres import march as mp
 from tests.helpers import iter_cells
 
 profile = get_profile("march")

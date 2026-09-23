@@ -35,10 +35,10 @@ from ..core.model import (
     SampleSpec,
     SongPlan,
 )
-from . import nostalgic_samples as smp
+from ..profiles import nostalgic_samples as smp
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # sample 番号（build_samples の挿入順と一致させる）
 KICK, SNARE, HIHAT, BASS, MUSICBOX, PAD, FLUTE = 1, 2, 3, 4, 5, 6, 7

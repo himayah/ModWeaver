@@ -8,7 +8,8 @@ from mod_weaver.core import pitch
 from mod_weaver.core.model import Cell
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
-from mod_weaver.profiles import get_profile, nostalgic
+from mod_weaver.genres import nostalgic
+from mod_weaver.profiles import get_profile
 
 profile = get_profile("nostalgic")
 SEEDS = [1, 42, 100000, 732501, 999999]

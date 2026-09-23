@@ -30,8 +30,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, Scale, lowest_note_with_pc
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・6声・進行（GENRE_DESIGN_V2.md §3.3）

@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import minimalism as mn
+from mod_weaver.genres import minimalism as mn
 
 profile = get_profile("minimalism")
 SEEDS = list(range(1, 41))

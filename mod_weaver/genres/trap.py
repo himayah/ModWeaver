@@ -34,8 +34,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, PERIODS, Scale, fold_into_range
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（GENRE_DESIGN_V2.md §4.3）

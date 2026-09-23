@@ -128,3 +128,57 @@ CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット
     "m7": (0, 3, 7, 10),
     "dom7": (0, 4, 7, 10),
 }
+
+
+# ============================================================
+# マイクロチューニング（CORE_EXTENSION_DESIGN §4.3、EXT-3）
+# ============================================================
+
+FINETUNE_CENTS = 100.0 / 12.8   # 1 finetune ステップ ≈ 7.8125 セント（-8..+7 の等間隔仕様。ProTracker規格）
+
+
+@dataclass(frozen=True)
+class MicroScale:
+    """cents 単位（tonic からの相対）で定義する音律。度数ごとに 12-ET から外れてよい。
+    具体的な音律定義（maqam rast 等）は各ジャンルモジュール側に置く（本クラスはデータ構造のみ）。"""
+
+    tonic_pc: int
+    degrees_cents: tuple[float, ...]   # 度数0=主音(0.0)から始まる、主音からの相対セント列
+
+    def degree_cents(self, degree: int, octave: int = 0) -> float:
+        """``degree``（0始まり、スケール外は自動でオクターブ折返し）の、tonic からの相対セント。"""
+        return self.degrees_cents[degree % len(self.degrees_cents)] + 1200.0 * (
+            octave + degree // len(self.degrees_cents)
+        )
+
+    def absolute_cents(self, degree: int, tonic_note: int, octave: int = 0) -> float:
+        """``degree`` の、logical note 0（C-1）からの絶対セント（``resolve_micronote()`` へそのまま渡せる）。
+
+        ``tonic_note``: この音律を実際に鳴らす主音の logical note（例: qarar を G2 に置くなら
+        ``pitch.parse("G-2")`` 等で求めた値）。``tonic_pc`` は音律の「相対的な形」を表すだけで、
+        実際にどのオクターブへ主音を置くかは呼出し側（プロファイル）が決める。
+        """
+        return tonic_note * 100.0 + self.degree_cents(degree, octave)
+
+
+def resolve_micronote(cents_from_c0: float) -> tuple[int, int]:
+    """logical note 0（C-1）からの絶対セント量 → (tracker/logical note t, finetune)。
+
+    t = round(cents/100) の 12-ET 最近傍。残差 = cents - t*100 を finetune ステップに量子化
+    （round(残差 / FINETUNE_CENTS)、-8..7 にクランプ）。t は呼出し側で NOTE_MIN..NOTE_MAX を検査する
+    （既存 PitchRangeError を流用。本関数はクランプしない＝機械的単位変換のみ）。
+    """
+    t = round(cents_from_c0 / 100.0)
+    residual = cents_from_c0 - t * 100.0
+    ft = max(-8, min(7, round(residual / FINETUNE_CENTS)))
+    return t, ft
+
+
+def fine_portamento_param(period: int, cents: float) -> int:
+    """現在の period に対し、目標セント差 ``cents`` に最も近づく E1x/E2x の param（0..15）を返す。
+    符号は呼出し側（0x1=up/0x2=down）が選ぶ。1単位の効果は period 依存で非一様なため、
+    目標 period（隣接 Period 表エントリからの線形補間）との差を都度計算する。
+    """
+    target_period = period * (2.0 ** (-cents / 1200.0))
+    delta = abs(period - target_period)
+    return max(0, min(15, round(delta)))   # PERIODS の隣接差は概ね数〜十数なので実用上 0..15 に収まる

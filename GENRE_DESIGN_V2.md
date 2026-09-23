@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `CORE_EXTENSION_DESIGN.md` §2 の8ジャンル（`swing-jazz`/`prog-rock`/`orchestral`/`trap`/`maqam`/`minimalism`/`future-bass`/`free-jazz`）の具体的なプロファイル設計 |
 | 前提ドキュメント | [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)（EXT-1〜6 の core 仕様）、[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) §7〜8（Profile 契約・既存4ジャンルの設計。本書は同じ様式で書く） |
-| ステータス | **§1 `swing-jazz`・§2 `prog-rock`・§4 `trap`・§7 `future-bass` は実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,future_bass}.py`。全て300 seed で検査クリーンを確認済み）。§3・§5・§6・§8（`orchestral`/`maqam`/`minimalism`/`free-jazz`）は詳細設計のみで未実装。各節は march.py と同じ粒度（音色の DSP 構成、`ChordSpec` 進行、`ChannelPlan`、曲構成、文法）で「実装すればそのまま動く」レベルまで具体化している。試聴による微調整が前提の値には §10 に一覧化した上で明示している。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md §4.1①・§4.5②末尾を参照。**§3〜§8 の再レビュー（2026-09-23、実装前）で見つけた設計不整合を修正済み**: `Finish=Loop` の禁止パターン（`attack_ms`/`post_filter`/`NoiseLayer` 混在、比率でのデチューン指定が非整数 K になる問題。§3 `ORCH_VIOLIN`/`ORCH_CELLO`、§5 `MAQAM_NAY`、§7 `FB_SUPERSAW`（実装時に隣接整数 K で確認済み）、§8 `FREE_ARCO_BASS`）、orchestral の6声データ受け渡し方法（§3.3 で `begin_pattern`/`state` 方式に修正）、maqam の `MicroScale` 相対セント→絶対セント変換の欠落（`MicroScale.absolute_cents()` を core 側に追加）。**trap 実装時に判明した追加修正**: 進行を4和音から2和音ループへ簡略化（§4.3。`rows_per_measure=32` では4和音が64rowに収まらないため）、`PERIODS` の添字は tracker note であり logical note をそのまま渡さない（§4.5）。**future-bass 実装時に判明した追加修正**: kick/clap のチャンネル優先度共有によりサイドチェインのトリガが半分しか検出できない問題を、両方をトリガに登録して解決（§7.6） |
+| ステータス | **§1 `swing-jazz`・§2 `prog-rock`・§4 `trap`・§5 `maqam`・§7 `future-bass`・§8 `free-jazz` は実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,maqam,future_bass,free_jazz}.py`。全て300 seed で検査クリーンを確認済み）。§3・§6（`orchestral`/`minimalism`）は詳細設計のみで未実装。各節は march.py と同じ粒度（音色の DSP 構成、`ChordSpec` 進行、`ChannelPlan`、曲構成、文法）で「実装すればそのまま動く」レベルまで具体化している。試聴による微調整が前提の値には §10 に一覧化した上で明示している。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md の各版の改訂履歴を参照。**§3〜§8 の再レビュー（2026-09-23、実装前）で見つけた設計不整合を修正済み**: `Finish=Loop` の禁止パターン（`attack_ms`/`post_filter`/`NoiseLayer` 混在、比率でのデチューン指定が非整数 K になる問題。§3 `ORCH_VIOLIN`/`ORCH_CELLO`、§5 `MAQAM_NAY`（実装時に隣接整数 K で確認済み）、§7 `FB_SUPERSAW`（同）、§8 `FREE_ARCO_BASS`（同））、orchestral の6声データ受け渡し方法（§3.3 で `begin_pattern`/`state` 方式に修正）、maqam の `MicroScale` 相対セント→絶対セント変換の欠落（`MicroScale.absolute_cents()` を core 側に追加）。**trap 実装時に判明した追加修正**: 進行を4和音から2和音ループへ簡略化（§4.3）、`PERIODS` の添字は tracker note（§4.5）。**future-bass 実装時に判明した追加修正**: kick/clap のチャンネル優先度共有問題（§7.6）。**maqam 実装時に判明した追加修正**: なし（§5 の設計はそのまま実装できた。EXT-3 設計時に見つけた `absolute_cents()` の欠落は core 側で先に解決済みだったため）。**free-jazz 実装時に判明した追加修正**: `ChordDef.chord_tones` を全楽器で共有すると shift の違いで無効な音域になる楽器が出るため、`chord.bass`（単一音、arco_bass 専用）と `chord.chord_tones`（共有音域、shift=0 の楽器専用）を役割分担させた（§8.2） |
 | 読み方 | 各節は EXTENSION_DESIGN.md §8.5（march）と同一の構成: ①音色キット ②ChannelPlan ③進行 ④曲構成 ⑤文法 ⑥使用する core 拡張とその設定値。`core/synth.py` の `Patch`/`Layer` 語彙、`core/composer.py` の `MelodyGenerator`/`RhythmMotif`/`articulate` 語彙、`core/harmony.py` の `Registers`/`voice()` 語彙は既存4ジャンルと共通のまま使う（新規 core 追加は行わない。追加が要る箇所は個別に明記） |
 
 ---
@@ -255,10 +255,11 @@ QARAR_NOTE = pitch.parse("G-2")   # qarar を実際に置くオクターブ（lo
 
 | 名前 | 構成 | 備考 |
 |:---|:---|:---|
-| `MAQAM_OUD` | `ToneLayer(h=1..6, weight 1/h)` + 小さい `PitchSweepLayer`（撥弦アタックの微小ピッチドロップ）。`Finish=OneShot(0.6s)` | 主旋律／タクシーム用。中立音程は `finetune` 派生スロット（`MAQAM_OUD_NEUTRAL3`, `MAQAM_OUD_NEUTRAL7`）を同一 Patch から `dataclasses.replace(finetune=...)` で複製 |
-| `MAQAM_NAY` | `ToneLayer(奇数次優勢)` を2層、片方の `mult` を隣接整数（`K, K±1`。比率指定ではなく整数サイクル数の差で表す＝`fb_supersaw` と同じ技法）にずらして息の揺らぎをビートで近似。`Finish=Loop` | 通奏低音（qarar ドローン）や長音の旋律に使用。**`NoiseLayer`（息音）は使わない**（`core/synth.py` の `Patch.__post_init__` 制約: `Finish=Loop` は `ToneLayer` のみ許可。既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「持続音のノイズ感はデチューンのうなりで代替する」流儀に合わせた） |
-| `MAQAM_QANUN` | `ToneLayer(h=1..4 減衰速め)`。`Finish=OneShot(0.35s)` | 分散和音的伴奏（アルペジオ） |
-| `MAQAM_DAF` | `ToneLayer(低次倍音,decay_alpha=中)`（DUM=低音打）＋別途 `NoiseLayer(filter=hp,decay_alpha=大)`（TEK=高音打）を**2つの独立 Patch**として用意（1つのフレームドラムでも「DUM」と「TEK」は別サンプル） | `MAQAM_DAF_DUM`, `MAQAM_DAF_TEK` |
+| `MAQAM_OUD` | `ToneLayer(h=1..6, weight 1/h, 各 decay_alpha=8+h)` + `PitchSweepLayer(340→270Hz, weight 0.15)`（撥弦アタックの微小ピッチドロップ）。`Finish=OneShot(0.6s)` | 主旋律／タクシーム用。中立音程は `finetune` 派生スロット（`oud_n3`, `oud_n7`。`build_samples()` で `dataclasses.replace(oud, finetune=...)` して追加登録、新規 Patch は作らない）。実装済み（`synth_presets.MAQAM_OUD`）の値と一致 |
+| `MAQAM_NAY` | `ToneLayer(K=120*h, h=1,3,5, weight 1/h)` を中心に `K+1` の2層目（`weight 0.8/h`）を重ねる（比率指定ではなく整数サイクル数の差で表す＝`fb_supersaw` と同じ技法。`L=3800`）。`Finish=Loop(3800,0)` | 通奏低音（qarar ドローン）に使用。**`NoiseLayer`（息音）は使わない**（`Finish=Loop` は `ToneLayer` のみ許可という `core/synth.py` 制約）。実装済みの値と一致 |
+| `MAQAM_QANUN` | `ToneLayer(h=1..4, weight 1/h, 各 decay_alpha=14+3h)`。`Finish=OneShot(0.35s)` | 分散和音的伴奏（アルペジオ）。実装済みの値と一致 |
+| `MAQAM_DAF_DUM` | `ToneLayer((1.0,1.0,16.0),(2.0,0.3,22.0))`。`Finish=OneShot(0.32s)`、`pitched=False` | フレームドラムの低音打 DUM |
+| `MAQAM_DAF_TEK` | `NoiseLayer(filter=hp,decay_alpha=55)`。`Finish=OneShot(0.12s)`、`pitched=False` | フレームドラムの高音打 TEK |
 
 ### 5.3. リズム（usul）と ChannelPlan
 
@@ -277,7 +278,7 @@ CHANNEL_PLAN = (
 
 ### 5.4. 曲構成
 
-`taqsim`（自由リズム風イントロ、打楽器なし、oud 単独のフレーズ。実際のテンポは一定だが`RhythmMotif`の粗密で自由リズム感を演出＝EXT-5は使わない、既存の枠内）→`ostinato_a`（usul 主体、qanun アルペジオ＋nay ドローン）→`ostinato_b`（intensity up、oud が旋律を取る）→`taqsim2`（短い間奏）→`ostinato_a` 再現→`coda`。
+`taqsim`（自由リズム風イントロ、打楽器なし、oud 単独のフレーズ。実際のテンポは一定だが row の粗密で自由リズム感を演出＝EXT-5は使わない、既存の枠内）→`ostinato_a`（usul 主体、qanun アルペジオ＋nay ドローン）→`ostinato_b`（intensity up、oud が旋律を取る）→`taqsim`（間奏として再利用。`order=[0,1,2,0,1,3]` で同一 `PatternPlan` を指す。march/swing-jazz と同じ「同じ pattern を order で使い回す」流儀）→`ostinato_a` 再現→`coda`。4つの `PatternPlan`（`taqsim`/`ostinato_a`/`ostinato_b`/`coda`）で6区間を構成する。
 
 ### 5.5. 文法
 
@@ -408,22 +409,35 @@ post_processors = (lambda song, plan: mixer.apply_sidechain(song, SIDECHAIN_RULE
 
 | 名前 | 構成 | 備考 |
 |:---|:---|:---|
-| `FREE_PIANO_CLUSTER` | `ToneLayer` 5層、`mult` を近接した無理数比（例 1.0, 1.06, 1.13, 1.19, 1.26＝ほぼ半音刻み）で密集させたトーンクラスター。`Finish=OneShot(0.6s)` | 通常のコード（3度堆積）ではなく隣接音の密集 |
-| `FREE_ARCO_BASS` | `ToneLayer(基音+隣接整数 mult でデチューンした2層目)`。`Finish=Loop` | 持続的なアルコ（弓弾き）表現。**擦弦ノイズは `NoiseLayer` ではなくデチューンのうなりで近似**（`Finish=Loop` は `ToneLayer` のみ許可、かつ `mult` は整数サイクル数固定という `core/synth.py` 制約のため。`MAQAM_NAY`・`ORCH_VIOLIN`・`fb_supersaw`（実装済み）と同じ流儀） |
-| `FREE_SAX_SCREECH` | `ToneLayer(高次倍音優勢, h=3..12 不均一)` + `NoiseLayer(filter=hp,weight大)`。`Finish=OneShot(0.5s)` | アルティッシモの絶叫的音色 |
-| `FREE_CYMBAL_SWELL` | `orchestral` の `ORCH_CYMBAL_SWELL` を `dataclasses.replace()` で流用（新規合成不要） | |
+| `FREE_PIANO_CLUSTER` | `ToneLayer` 5層、`mult` を近接した比（1.0, 1.06, 1.13, 1.19, 1.26＝ほぼ半音刻み、各 decay_alpha 10〜20）で密集させたトーンクラスター。`Finish=OneShot(0.6s)` | 通常のコード（3度堆積）ではなく隣接音の密集。OneShot のため `mult` は整数サイクル数制約を受けない（Loop との違い）。実装済み（`synth_presets.FREE_PIANO_CLUSTER`）の値と一致 |
+| `FREE_ARCO_BASS` | `ToneLayer(K=60,weight1.0)` + `ToneLayer(K=61,weight0.8)`（隣接整数デチューン、`L=3800`）。`Finish=Loop(3800,0)`、`shift=-12` | 持続的なアルコ（弓弾き）表現。**擦弦ノイズは `NoiseLayer` ではなくデチューンのうなりで近似**（`Finish=Loop` は `ToneLayer` のみ許可、かつ `mult` は整数サイクル数固定という `core/synth.py` 制約のため。`MAQAM_NAY`・`fb_supersaw` と同じ流儀）。実装済みの値と一致 |
+| `FREE_SAX_SCREECH` | `ToneLayer(高次倍音, h=3..12, weight 1/h, 各 decay_alpha=6+h)` + `NoiseLayer(filter=hp,decay_alpha=10,weight=0.5)`。`Finish=OneShot(0.5s)` | アルティッシモの絶叫的音色。実装済みの値と一致 |
+| `FREE_CYMBAL_SWELL` | `NoiseLayer(filter=hp, rise_power=1.5)`。`Finish=OneShot(2.0s)` | 立ち上がりクレッシェンドのスウェル。**実装時の修正**: 当初案の「`orchestral` の `ORCH_CYMBAL_SWELL` を流用」は、`orchestral` が Phase 4e 時点でまだ未実装のため実現できず、直接新規プリセットとして実装した（`orchestral` 実装時に同一内容を `ORCH_CYMBAL_SWELL` として登録すれば実質的な重複になるため、その時点で `FREE_CYMBAL_SWELL` を参照する形に整理するか検討する） |
 
-### 8.2. 和声（手組み `ChordDef`。`CHORD_QUALITIES` は不使用）
+### 8.2. 和声（手組み `ChordDef`。`CHORD_QUALITIES` は不使用。実装済み・`profiles/free_jazz.py` と一致）
 
 ```python
+BASS_REG = (0, 11)      # arco_bass（shift=-12 → t=12..23）
+CLUSTER_REG = (12, 35)  # piano_cluster／sax_screech（ともに shift=0。共有音域）
+
 def _cluster_chord(root_pc: int, label: str, rng: random.Random) -> ChordDef:
-    """root_pc を中心に隣接半音を2〜4個ランダムに選び、密集クラスターを作る（explicit=True 相当）。"""
+    """root_pc を中心に隣接半音を2〜4個ランダムに選び、密集クラスターを作る（explicit=True 相当）。
+    chord_tones は piano/sax 共有の CLUSTER_REG、bass は別途 BASS_REG に折り返す。
+    """
     offsets = rng.sample((0, 1, 2, -1, -2, 6, 7), k=rng.randint(2, 4))
-    tones = sorted({fold_into_range(root_pc + o + 12 * 4, *MELODY_REG) for o in offsets})
-    return ChordDef(label=label, bass=root_pc + 12 * 1, harmony=root_pc + 12 * 2,
+    tones = sorted({fold_into_range(root_pc + o + 12 * 2, *CLUSTER_REG) for o in offsets})
+    bass_note = fold_into_range(root_pc, *BASS_REG)
+    return ChordDef(label=label, bass=bass_note, harmony=bass_note,
                      chord_tones=tuple(tones), scale_tones=tuple(tones), arp=None, explicit=True)
 ```
-`plan()` の中で `rng.plan` を使い、pattern ごとに 4〜6 個の `_cluster_chord` を生成して `ChordSlot` に積む（march の `voice_march_progression` に相当する自作の進行生成関数）。
+**設計レビューで修正**: 当初案は `chord_tones` を1つの `MELODY_REG` で全楽器共有していたが、`arco_bass`
+（`shift=-12`）と `piano_cluster`／`sax_screech`（`shift=0`）は有効な `n` の範囲が異なるため、同じ音域の
+音を共有できない（`arco_bass` に `CLUSTER_REG` の音を渡すと `t=n+12` が範囲外になりうる）。
+`chord.bass`（単一音、`BASS_REG` に折返し済み）を `arco_bass` 専用、`chord.chord_tones`
+（`CLUSTER_REG` で共有）を `piano_cluster`／`sax_screech` 専用、と役割分担させて解決した。
+
+`plan()` の中で `rng.plan` を使い、pattern ごとに4個の `_cluster_chord` を生成して `ChordSlot`
+（各 `measures=1`）に積む（march の `voice_march_progression` に相当する自作の進行生成関数）。
 
 ### 8.3. ChannelPlan
 
@@ -442,15 +456,24 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 - 各楽器は「確率的に発音するかしないか」を `mctx.pattern.intensity` に応じた確率でその row ごとに判定する（`rng.drums`/`rng.bass`/`rng.melody` をそれぞれ独立に使用、既存 `RngStreams` の4系統をそのまま活用）。密なコンポジションルールではなく**確率密度でテクスチャを作る**設計（フリージャズの非拍節的性格を、既存の row 格子の上で「疎密」として表現する）。
 - `FREE_ARCO_BASS`/`FREE_PIANO_CLUSTER` はループ/持続音色として長く伸ばし、`climax` でのみ `FREE_SAX_SCREECH` の短い絶叫的フレーズを密集させる。
 
-### 8.6. 使用する core 拡張
+### 8.6. 使用する core 拡張（実装済み。`profiles/free_jazz.py` の値と一致）
 
-`tempo_policy="profile"`。`plan()` で選んだ最初の BPM を、`order[0]` の pattern の `finalize_pattern(pctx, pattern, state, rng)` 内で `pattern.insert_command(0, 0x0F, start_bpm)`（§4.0.1 の `CellGrid.insert_command`。`finalize_pattern` は元々 `Pattern` を直接受け取るフックのため、profile がこれを呼んでも既存の層構造を壊さない）により明示する。各 pattern の `finalize_pattern` で `automation.TempoCurve` を1〜2本適用し、pattern 間で `start_bpm`＝直前 pattern の `end_bpm` として連続的に BPM を変化させ続ける（`movement_a`: 96→82 `ease_out`、`movement_b`: 82→126 `ease_in`、`climax`: 126→150→126 の2本、`movement_c`: 126→70 `linear`）。
+`tempo_policy="profile"`。各 pattern の `finalize_pattern(pctx, pattern, state, rng)` で
+`automation.TempoCurve` を1〜2本 `automation.render_tempo_curve()` に渡して適用し、pattern 間で
+`start_bpm`＝直前 pattern の `end_bpm` として連続的に BPM を変化させ続ける（`movement_a`: 96→82
+`ease_out`、`movement_b`: 82→126 `ease_in`、`climax`: 126→150→126 の2本、`movement_c`: 126→70
+`linear`）。**実装時の簡略化**: 当初案は「最初の BPM を `pattern.insert_command(0, 0x0F, start_bpm)`
+で別途明示する」としていたが、`render_tempo_curve()` は `start_row` 自身を含む range で走査し、
+ループ先頭の `prev_bpm=None` により最初の row で必ず挿入を試みるため、`TempoCurve(96, 82, 0, 63, ...)`
+を呼ぶだけで row 0 の初期 BPM 挿入も兼ねる（別呼び出しは不要と判明）。`SongPlan.bpm` は
+`tempo_choices=(96,)` という単一値の宣言的な初期値（`validate_plan` の契約を満たすためのみに使い、
+実際のテンポ推移には使わない）。
 
 ---
 
 ## 9. 新規 `synth_presets.py` エントリ一覧（実装時にそのまま追加する）
 
-各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**`SWING_*`（5）／`PROG_*`（5）／`TRAP_*`（5）／`FB_*`（5）は実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計41）。残り4ジャンル（orchestral/maqam/minimalism/free-jazz）で1ジャンルあたり平均5音色×4ジャンル＝**約20プリセット**が追加見込み（実装後の合計は61程度）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
+各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**`SWING_*`（5）／`PROG_*`（5）／`TRAP_*`（5）／`MAQAM_*`（5）／`FB_*`（5）／`FREE_*`（4）は実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計50）。残り2ジャンル（orchestral/minimalism）で1ジャンルあたり平均5音色×2ジャンル＝**約10プリセット**が追加見込み（実装後の合計は60程度）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
 
 ---
 
@@ -460,8 +483,8 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 - ~~prog-rock: 主リフの実音~~ → **実装済み**（`profiles/prog_rock.py`。ビブラート付与は簡略化のため未実装のまま。§2.1 `PROG_LEAD_GTR` 参照）。
 - ~~trap: ハイハットロールの発生確率・密度、808グライドの正確な speed 値~~ → **実装済み**（ロール確率0.6、`portamento_param(rows=1)`。`profiles/trap.py`）。値は試聴による再調整の余地あり。
 - ~~future-bass: `duck_ratio`/`release_rows` の初期値~~ → **実装済み**（`duck_ratio=0.25`(bass)/`0.35`(chord)、`release_rows=3`/`4`。`profiles/future_bass.py` の `SIDECHAIN_RULES`）。値は試聴による再調整の余地あり。
-- maqam: `RAST_ON_G` 以外の maqam（Bayati 等）を追加するかどうか。今回は Rast 1種のみを設計対象とした。
+- maqam: `RAST_ON_G` 以外の maqam（Bayati 等）を追加するかどうかは**未実装のまま**（今回は Rast 1種のみを実装対象とした。`profiles/maqam.py` に他 maqam を追加する拡張は将来課題）。`_maqam_phrase()` の跳躍確率0.15等は試聴による再調整の余地あり。
 - minimalism: フェーズ段階数（暫定16）と各チャンネルの固定音型（"Piano Phase" 的な具体的音符列）。
-- free-jazz: クラスター和音の音程選択肢（暫定 `(0,1,2,-1,-2,6,7)`）、密度確率の具体的な数値テーブル。
+- ~~free-jazz: クラスター和音の音程選択肢、密度確率の具体的な数値テーブル~~ → **実装済み**（`(0,1,2,-1,-2,6,7)`、`DENSITY={"bass":0.18,"piano":0.25,"perc":0.08}`、`SAX_DENSITY_CLIMAX=0.12`。`profiles/free_jazz.py`）。値は試聴による再調整の余地あり。
 
 いずれも `CORE_EXTENSION_DESIGN.md` §11 の「実装時の要検証事項」と同じ性質（設計としては完結しており、実装→試聴→微調整のサイクルで詰める値）であり、実装開始のブロッカーではない。

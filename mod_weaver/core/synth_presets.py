@@ -633,3 +633,136 @@ TRAP_LEAD_PLUCK = register(
     "ダークなメロディック・パーカッシブ・リード。基音+2/4倍音、LPで丸め、各倍音が異なる速さで減衰。"
     "trap の lead_pluck 由来。",
 )
+
+# ------------------------------------------------------------
+# maqam（GENRE_DESIGN_V2.md §5。EXT-3 マイクロチューニングの実証ジャンル）
+# ------------------------------------------------------------
+
+MAQAM_OUD = register(
+    "maqam_oud",
+    Patch(
+        "MaqamOud",
+        (
+            WeightedLayer(ToneLayer(tuple((float(h), 1.0 / h, 8.0 + h) for h in range(1, 7)))),
+            WeightedLayer(PitchSweepLayer(freq_start=340.0, freq_end=270.0, pitch_decay=60.0, decay_alpha=30.0),
+                          weight=0.15),
+        ),
+        OneShot(0.6),
+        pitched=True, saturate=1.15, rate_note=24, shift=0, volume=50, noise_seed=601,
+    ),
+    "撥弦のウード。基音+5倍音（各異なる速さで減衰）+ 微小なピッチドロップ（撥弦アタック）。shift=0 のため"
+    "resolve_micronote() の tracker note をそのまま logical note として使える。maqam の oud 由来。"
+    "中立音程は finetune 分散スロット（maqam_oud_n3／maqam_oud_n7。build_samples() で dataclasses.replace"
+    "して追加登録する）。",
+)
+
+MAQAM_NAY = register(
+    "maqam_nay",
+    Patch(
+        "MaqamNay",
+        (
+            WeightedLayer(ToneLayer(tuple((120.0 * h, 1.0 / h, None) for h in (1, 3, 5)))),
+            WeightedLayer(ToneLayer(tuple((120.0 * h + 1, 0.8 / h, None) for h in (1, 3, 5))), weight=0.8),
+        ),
+        Loop(3800, 0),
+        pitched=True, rate_note=24, shift=0, volume=46,
+    ),
+    "通奏低音ドローンの葦笛。奇数次倍音（h=1,3,5）を中心・隣接整数(K,K+1)デチューンした2層で息の"
+    "揺らぎを近似（fb_supersaw と同じ技法。Finish=Loop は NoiseLayer 不可・整数サイクル数のみのため）。"
+    "K=120*h, L=3800。maqam の nay 由来。",
+)
+
+MAQAM_QANUN = register(
+    "maqam_qanun",
+    Patch(
+        "MaqamQanun",
+        (WeightedLayer(ToneLayer(tuple((float(h), 1.0 / h, 14.0 + 3.0 * h) for h in range(1, 5)))),),
+        OneShot(0.35),
+        pitched=True, saturate=1.1, rate_note=24, shift=0, volume=48, noise_seed=602,
+    ),
+    "分散和音的伴奏のカーヌーン。基音+3倍音、速めの減衰（各倍音で速さを変える）。maqam の qanun 由来。",
+)
+
+MAQAM_DAF_DUM = register(
+    "maqam_daf_dum",
+    Patch(
+        "MaqamDafDum",
+        (WeightedLayer(ToneLayer(((1.0, 1.0, 16.0), (2.0, 0.3, 22.0)))),),
+        OneShot(0.32),
+        pitched=False, saturate=1.2, rate_note=24, volume=56, noise_seed=603,
+    ),
+    "フレームドラム（ダフ）の低音打 DUM。基音+2倍音の低い減衰音。maqam の daf_dum 由来。",
+)
+
+MAQAM_DAF_TEK = register(
+    "maqam_daf_tek",
+    Patch(
+        "MaqamDafTek",
+        (WeightedLayer(NoiseLayer(decay_alpha=55.0, filter=FilterSpec("hp"))),),
+        OneShot(0.12),
+        pitched=False, saturate=1.2, rate_note=24, volume=46, noise_seed=604,
+    ),
+    "フレームドラム（ダフ）の高音打 TEK。HPノイズの短い減衰。maqam の daf_tek 由来。",
+)
+
+# ------------------------------------------------------------
+# free-jazz（GENRE_DESIGN_V2.md §8。EXT-5① テンポカーブの実証ジャンル）
+# ------------------------------------------------------------
+
+FREE_PIANO_CLUSTER = register(
+    "free_piano_cluster",
+    Patch(
+        "FreePianoCluster",
+        (WeightedLayer(ToneLayer((
+            (1.0, 0.8, 10.0), (1.06, 0.7, 12.0), (1.13, 0.65, 14.0), (1.19, 0.6, 16.0), (1.26, 0.55, 20.0),
+        ))),),
+        OneShot(0.6),
+        pitched=True, saturate=1.1, rate_note=24, shift=0, volume=48, noise_seed=701,
+    ),
+    "隣接半音を密集させたトーンクラスター（通常の3度堆積和音ではない）。5層、比率デチューン"
+    "（OneShot のため mult は整数サイクル数制約を受けない）、各層が異なる速さで減衰。"
+    "free-jazz の piano_cluster 由来。",
+)
+
+FREE_ARCO_BASS = register(
+    "free_arco_bass",
+    Patch(
+        "FreeArcoBass",
+        (
+            WeightedLayer(ToneLayer(((60.0, 1.0, None),))),
+            WeightedLayer(ToneLayer(((61.0, 0.8, None),)), weight=0.8),
+        ),
+        Loop(3800, 0),
+        pitched=True, rate_note=24, shift=-12, volume=44,
+    ),
+    "持続的なアルコ（弓弾き）ベース。K=60/61（隣接整数デチューン。fb_supersaw と同じ技法）、"
+    "L=3800（130.8Hz基準、shift=-12）。擦弦ノイズは NoiseLayer ではなくデチューンのうなりで近似"
+    "（Finish=Loop は ToneLayer のみ許可という core/synth.py 制約のため）。free-jazz の arco_bass 由来。",
+)
+
+FREE_SAX_SCREECH = register(
+    "free_sax_screech",
+    Patch(
+        "FreeSaxScreech",
+        (
+            WeightedLayer(ToneLayer(tuple((float(h), 1.0 / h, 6.0 + h) for h in range(3, 13)))),
+            WeightedLayer(NoiseLayer(decay_alpha=10.0, filter=FilterSpec("hp")), weight=0.5),
+        ),
+        OneShot(0.5),
+        pitched=True, saturate=1.6, rate_note=24, shift=0, volume=50, noise_seed=702,
+    ),
+    "アルティッシモの絶叫的サックス。高次倍音優勢（h=3..12、不均一な減衰）+ HPノイズ。"
+    "free-jazz の sax_screech 由来。",
+)
+
+FREE_CYMBAL_SWELL = register(
+    "free_cymbal_swell",
+    Patch(
+        "FreeCymbalSwell",
+        (WeightedLayer(NoiseLayer(rise_power=1.5, filter=FilterSpec("hp"))),),
+        OneShot(2.0),
+        pitched=False, saturate=1.1, rate_note=24, volume=46, noise_seed=703,
+    ),
+    "立ち上がりクレッシェンドのシンバル・スウェル。個々の打点ではなく持続的な高揚に使う。"
+    "free-jazz の cymbal_swell 由来。",
+)

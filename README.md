@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-ProTracker%20MOD%20(4ch)-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式トラッカー音楽ファイル（`.mod`）を波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）など複数ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式トラッカー音楽ファイル（`.mod`）を波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）など複数ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -80,6 +80,8 @@ python modweaver.py --genre swing-jazz
 python modweaver.py --genre prog-rock
 python modweaver.py --genre trap
 python modweaver.py --genre future-bass
+python modweaver.py --genre maqam
+python modweaver.py --genre free-jazz
 ```
 
 #### 指定できるジャンル一覧を確認する:
@@ -111,6 +113,8 @@ python modweaver.py --list-genres
 | `prog-rock` | – | 変拍子プログレ／マスロック。7/8+7/8+5/8 のリフ、4/4 のコーラスとの対比 |
 | `trap` | – | トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ |
 | `future-bass` | – | フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV |
+| `maqam` | – | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
+| `free-jazz` | – | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
@@ -168,14 +172,14 @@ python modweaver.py --list-genres
 │   │                   #        可変小節(EXT-2)・writer/verify
 │   └── profiles/      # 可変層: ジャンルごとの GenreProfile
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
-│                       #        trap / future-bass）
+│                       #        trap / future-bass / maqam / free-jazz）
 ├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
 ├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
 ├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）
 ├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a（EXT-1/EXT-2）実装済み、
 │                             # Phase 4b以降は設計のみ
-├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。swing-jazz/prog-rock/trap/future-bassは実装済み、他4ジャンルは設計のみ
+├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。6ジャンル実装済み、orchestral/minimalismは設計のみ
 └── README.md          # 本ドキュメント
 ```
 

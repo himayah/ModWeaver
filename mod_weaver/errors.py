@@ -53,3 +53,7 @@ class VerificationError(ModGenError):
 
 class OutputError(ModGenError):
     """I/O 失敗（OSError をラップ）。"""
+
+
+class ExternalToolError(ModGenError):
+    """必要な外部ツール（mp3 出力の ffmpeg）が無い・機能不足・実行失敗。"""

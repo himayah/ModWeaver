@@ -191,3 +191,33 @@ def test_tempo_invalid_syntax_exit_2(tmp_path, capsys, bad):
 def test_tempo_outside_genre_range_exit_2(tmp_path, capsys):
     code, _, err = run_cli(["-g", "free-jazz", "-t", "250", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "free-jazz" in err and not (tmp_path / "x.mod").exists()
+
+
+# ---------------- --format（FORMAT_TEMPO_DESIGN §2・§5） ----------------
+
+@pytest.mark.parametrize("fmt, magic", [
+    ("mod", lambda b: b[1080:1084] == b"M.K."), ("xm", lambda b: b[:17] == b"Extended Module: "),
+    ("s3m", lambda b: b[44:48] == b"SCRM"), ("it", lambda b: b[:4] == b"IMPM"), ("midi", lambda b: b[:4] == b"MThd"),
+])
+def test_each_tracker_and_midi_format(tmp_path, capsys, monkeypatch, fmt, magic):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, err = run_cli(["-g", "nostalgic", "-s", "3", "-f", fmt], capsys)
+    ext = {"midi": ".mid"}.get(fmt, f".{fmt}")
+    out = tmp_path / "nostalgic" / f"nostalgic_3{ext}"
+    assert code == 0 and err == "" and magic(out.read_bytes())
+    assert f"Format      : {fmt}" in stdout
+
+
+def test_mp3_without_ffmpeg_exits_5(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("MODWEAVER_FFMPEG", str(tmp_path / "no-such-ffmpeg"))
+    code, _, err = run_cli(["-f", "mp3", "-s", "1", "-o", str(tmp_path / "x.mp3")], capsys)
+    assert code == 5 and "ffmpeg" in err and not (tmp_path / "x.mp3").exists()
+
+
+def test_mp3_with_ffmpeg_lacking_libopenmpt_exits_5(tmp_path, capsys, monkeypatch):
+    fake = tmp_path / "ffmpeg"
+    fake.write_text("#!/bin/sh\necho ' D  mp3  MP3'\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("MODWEAVER_FFMPEG", str(fake))
+    code, _, err = run_cli(["-f", "mp3", "-s", "1", "-o", str(tmp_path / "x.mp3")], capsys)
+    assert code == 5 and "libopenmpt" in err and "libmp3lame" in err

@@ -1,6 +1,7 @@
 """コマンドライン入口（設計書 §9、§10）。
 
-終了コード: 0=成功 / 2=引数エラー・未登録 genre・ジャンルが対応しないテンポ / 3=生成・検査エラー / 4=I/O エラー / 1=想定外例外。
+終了コード: 0=成功 / 2=引数エラー・未登録 genre・ジャンルが対応しないテンポ / 3=生成・検査エラー / 4=I/O エラー /
+5=外部ツール（mp3 出力の ffmpeg）が無い・機能不足 / 1=想定外例外。
 ログは stderr（WARNING 以上）、バナーは stdout。
 """
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Optional, Sequence
 from . import profiles
 from .core import formats
 from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
-from .errors import ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
+from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
 
 DEFAULT_GENRE = "nostalgic"
 LINE = "=" * 50
@@ -89,7 +90,7 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
 
 def print_banner(profile, result: Result, repro: str) -> None:
     print(LINE)
-    print(f"  {profile.display_name} MOD Generator")
+    print(f"  ModWeaver: {profile.display_name}")
     print(LINE)
     print(f"Genre       : {profile.id}")
     print(f"Format      : {result.fmt}")
@@ -143,6 +144,9 @@ def main(
     except OutputError as e:
         print(f"error: {e}", file=sys.stderr)
         return 4
+    except ExternalToolError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 5
     except ModGenError as e:
         print(f"error: {e}", file=sys.stderr)
         return 3

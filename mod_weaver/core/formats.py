@@ -82,7 +82,7 @@ def sample_has_default_pan(spec: SampleSpec) -> bool:
 
 def _registry() -> dict[str, OutputFormat]:
     # 各形式モジュールは formats を import するため、循環を避けて遅延 import する。
-    from . import it, midi, s3m, verify, writer
+    from . import it, midi, render, s3m, verify, writer
 
     formats = [
         OutputFormat("mod", ".mod", writer.MOD_MAX_CHANNELS, writer.serialize_with_options, verify.verify,
@@ -93,6 +93,8 @@ def _registry() -> dict[str, OutputFormat]:
         OutputFormat("it", ".it", it.MAX_CHANNELS, it.serialize_it, it.verify_it, "Impulse Tracker"),
         OutputFormat("midi", ".mid", midi.MAX_CHANNELS, midi.serialize_midi, midi.verify_midi,
                      "Standard MIDI File (General MIDI)"),
+        OutputFormat("mp3", ".mp3", render.MAX_CHANNELS, render.render_mp3, None,
+                     "MP3 audio (requires ffmpeg with libopenmpt and libmp3lame)"),
     ]
     return {f.name: f for f in formats}
 

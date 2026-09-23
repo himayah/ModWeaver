@@ -70,7 +70,7 @@ class ScaleRules:
     strong_nearest_prob: float = 0.75               # 強拍で「直前音に最も近いコードトーン」を選ぶ確率
 
 
-BEAT_ROWS = 4          # 1 拍 = 4 row（16 分格子）
+BEAT_ROWS = 4          # 1 拍 = 4 row（16 分格子。既定の timebase）
 LEAP_THRESHOLD = 5     # 跳躍枝で選ばれた移動、またはこの半音数以上の移動を「跳躍」とみなす（leap_recovery の判定）
 
 
@@ -84,12 +84,14 @@ class MelodyGenerator:
         scale: Scale,
         rng: random.Random,
         base_vol: int = 50,
+        beat_rows: int = BEAT_ROWS,
     ) -> None:
         self.rules = rules
         self.register = register
         self.scale = scale
         self.rng = rng
         self.base_vol = base_vol
+        self.beat_rows = beat_rows   # 1 拍の row 数（EXT-1: 1拍=2row の swing timebase 等で上書きする）
         self._recover: Optional[int] = None    # 跳躍直後の次の弱拍で進むべき向き（+1/−1）
 
     # --- 内部 ---
@@ -162,7 +164,7 @@ class MelodyGenerator:
         current = prev
         last_idx = len(motif.rows) - 1
         for i, (row, dur) in enumerate(zip(motif.rows, durs)):
-            strong = row % BEAT_ROWS == 0
+            strong = row % self.beat_rows == 0
             leaped = False
             if cadence and i == last_idx:
                 target = cadence_target if cadence_target is not None else chord.chord_tones[0]

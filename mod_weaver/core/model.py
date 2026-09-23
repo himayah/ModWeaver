@@ -6,7 +6,9 @@
 - 計画系（``ChordSpec`` … ``RngStreams``）: プロファイルとエンジンの間で受け渡す純粋データ。
 
 行数・チャンネル数は定数 ``ROWS_PER_PATTERN`` / ``NUM_CHANNELS`` を既定値とするだけで、
-``CellGrid`` は任意の値を受け付ける（将来の可変小節・多チャンネル拡張の足場。CORE_EXTENSION_DESIGN 参照）。
+``CellGrid`` は任意の値を受け付ける（可変小節拡張（EXT-2。``ChordSlot.rows``／``MeasureCtx.measure_rows``
+経由で使用中）の足場として機能済み。多チャンネル拡張（EXT-6）はまだこの足場を使っていない。
+CORE_EXTENSION_DESIGN 参照）。
 """
 from __future__ import annotations
 
@@ -183,6 +185,28 @@ class CellGrid:
         self._check_allowed(row, ch, cell)
         self._cells[row][ch] = cell
 
+    def insert_command(self, row: int, effect: int, param: int) -> None:
+        """row の空きチャンネルへ ``(effect, param)`` を書き込む（``vol`` は使わない）。
+
+        探索順序（CORE_EXTENSION_DESIGN §4.0.1）:
+          ① is_empty なチャンネルのうち最小番号
+          ② なければ、note を持つが vol も effect も持たないチャンネル
+             （そのチャンネルの note/sample はそのまま残し、サンプル既定音量で鳴り続ける）
+        いずれも無ければ ChannelConflictError。``engine.apply_tempo`` や EXT-1/EXT-5（スウィング・
+        テンポカーブ）の row 単位コマンド挿入が共用する（`Song`/プロファイルに依存しないため
+        `CellGrid` のメソッドとして持つ。§4.0.1 参照）。
+        """
+        for ch in range(self.channels):
+            if self.get(row, ch).is_empty:
+                self.replace(row, ch, Cell(None, 0, effect, param))
+                return
+        for ch in range(self.channels):
+            c = self.get(row, ch)
+            if c.note is not None and c.vol is None and not c.has_effect:
+                self.replace(row, ch, Cell(c.note, c.sample, effect, param))
+                return
+        raise ChannelConflictError(f"no channel available for row command at row {row}")
+
     def get(self, row: int, ch: int) -> Cell:
         self._check_pos(row, ch)
         return self._cells[row][ch]
@@ -352,6 +376,8 @@ class ChordDef:                    # 具体化済み（調・音域適用後）
 class ChordSlot:
     chord: ChordDef
     measures: int = 1              # 何 measure この和音が続くか
+    rows: Optional[int] = None     # この slot の1 measureあたりの row 数。None=profile.rows_per_measure
+                                    # （EXT-2 可変小節。variable_meter=False のプロファイルは常に None）
 
 
 @dataclass
@@ -393,6 +419,7 @@ class MeasureCtx:
     chord_measure_offset: int      # 現和音内での位置
     is_last: bool                  # pattern 最終 measure
     instruments: Mapping[str, Instrument]
+    measure_rows: int = 16         # 現在の measure の実際の row 数（= buf.rows と同値。EXT-2）
 
 
 @dataclass(frozen=True)

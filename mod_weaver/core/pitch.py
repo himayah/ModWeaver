@@ -116,6 +116,8 @@ MODES: dict[str, tuple[int, ...]] = {
     "aeolian": (0, 2, 3, 5, 7, 8, 10),
     "phrygian": (0, 1, 3, 5, 7, 8, 10),
     "dim_wh": (0, 2, 3, 5, 6, 8, 9, 11),
+    "dorian": (0, 2, 3, 5, 7, 9, 10),
+    "mixolydian": (0, 2, 4, 5, 7, 9, 10),
 }
 
 CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット

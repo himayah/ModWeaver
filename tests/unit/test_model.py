@@ -170,6 +170,31 @@ def test_grid_is_generic_in_rows_and_channels():
         MeasureBuffer(0)
 
 
+# ---------------- CellGrid.insert_command (CORE_EXTENSION_DESIGN §4.0.1) ----------------
+
+def test_insert_command_uses_lowest_empty_channel():
+    pat = Pattern(None, channels=4)
+    pat.replace(0, 0, Cell(24, 1, vol=30))
+    pat.insert_command(0, 0x0F, 6)
+    assert pat.get(0, 1) == Cell(None, 0, 0x0F, 6)
+    assert pat.get(0, 0) == Cell(24, 1, vol=30)
+
+
+def test_insert_command_falls_back_to_note_only_channel():
+    pat = Pattern(None, channels=2)
+    pat.replace(0, 0, Cell(24, 1, vol=30))
+    pat.replace(0, 1, Cell(20, 2))          # note あり・vol/effect なし
+    pat.insert_command(0, 0x0F, 6)
+    assert pat.get(0, 1) == Cell(20, 2, 0x0F, 6)
+
+
+def test_insert_command_raises_when_no_slot():
+    pat = Pattern(None, channels=1)
+    pat.replace(0, 0, Cell(20, 2, vol=30))
+    with pytest.raises(ChannelConflictError):
+        pat.insert_command(0, 0x0F, 6)
+
+
 # ---------------- SampleSpec / Instrument ----------------
 
 def _spec(**kw):

@@ -18,6 +18,8 @@ ORDER_TABLE_SIZE = 128
 TITLE_SIZE = 20
 MAGIC = b"M.K."
 
+XM_MAX_CHANNELS = 32   # EXT-6（未実装）: target_format != "mod" のプロファイルが宣言できる channel_plan の上限
+
 
 def _ascii_bytes(text: str, limit: int, what: str) -> bytes:
     if len(text) > limit or not text.isascii():

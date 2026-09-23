@@ -25,7 +25,12 @@ class ChannelConflictError(ModGenError):
 
 
 class SampleConstraintError(ModGenError):
-    """奇数長・loop 範囲外・整数周期違反・ASCII 違反・長さ超過。"""
+    """奇数長・loop 範囲外・整数周期違反・ASCII 違反・長さ超過。
+
+    より広くは、``core/synth.py`` の ``Patch``/``Layer`` や ``core/groove.py`` の ``SwingConfig`` 等、
+    構築時に自身のフィールド範囲を検査する設定用データクラス・ヘルパー関数の「宣言が構築不能」
+    エラー全般に使う（Cell 単体の矛盾は ``CellConflictError``、pattern/plan 全体の構造不整合は
+    ``PlanError`` と使い分ける）。"""
 
 
 class PlanError(ModGenError):

@@ -187,7 +187,7 @@ def _extra_voices(chord: ChordDef) -> tuple[int, int, int, int]:
 
 ### 3.5. 使用する core 拡張
 
-`target_format="xm"`、`channel_plan` は8要素。`engine.validate_profile` の分岐（§4.6②）によりチェックされる。`SampleSpec.pan` を上表の通り設定。**EXT-6 の他要素（エンベロープ、複数サンプルキーマップ）は使わない**（§4.6 のスコープ通り）。climax（全8ch同時強奏）は `verify_xm` の V15（パン加重した左右合計音量が上限超過）を WARN で報告する（300 seed 全てで発生。ERROR ではなく、実際のオーケストラのトゥッティ強奏を正確に反映した結果であり許容する）。
+`target_format="xm"`、`channel_plan` は8要素。`engine.validate_profile` の分岐（§4.6②）によりチェックされる。`SampleSpec.pan` を上表の通り設定。**EXT-6 の他要素（エンベロープ、複数サンプルキーマップ）は使わない**（§4.6 のスコープ通り）。climax（全8ch同時強奏）は `verify_xm` の V15（パン加重した左右合計音量が上限超過）を WARN で報告する（300 seed 全てで発生。ERROR ではなく、実際のオーケストラのトゥッティ強奏を正確に反映した結果であり許容する）。**2026-09-24 追記**: 既定形式が MOD（`8CHN`）になった後も、MOD の V15（片側4chの単純合計）で全 seed が WARN を出し、CLI 実行のたびに警告が表示されていた。libopenmpt で実際に再生して測ると音割れは無い（最大振幅 MOD −5.1 dBFS／XM −1.9 dBFS／IT −2.3 dBFS。他ジャンルの MOD は −3.5〜−4.8 dBFS）。V15 はチャンネル音量の単純合計による目安で、再生エンジンのミキシング（チャンネル数に応じたヘッドルーム、サンプル波形の振幅）を考えないため、多チャンネルの全合奏では割れなくても超える。そこで `GenreProfile.allow_volume_sum_over`（既定 False）を追加し、orchestral だけが True を宣言して V15 を検査しないようにした（生成結果は不変）。代わりに `tests/realplayer/test_clipping.py` が全ジャンル×MOD/XM/S3M/IT×2 seed を実再生して最大振幅 < 0 dBFS を検査する（振幅最大の矩形波に差し替えると 0 dBFS を超えて失敗することも確認済み）。
 
 ---
 

@@ -297,6 +297,8 @@ def generate(
     issues: list[verify_mod.Issue] = []
     if verify and output.verify is not None:
         issues = output.verify(data, profile.channel_plan)
+        if profile.allow_volume_sum_over:           # 目安の V15 は実プレイヤーの音割れ検査で代替（GenreProfile 参照）
+            issues = [i for i in issues if i.code != "V15"]
         for i in issues:
             if i.level == "WARN":
                 log.warning("%s %s", i.code, i.message)

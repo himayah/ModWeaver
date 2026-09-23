@@ -248,6 +248,36 @@ def test_generate_logs_warnings(tmp_path, caplog, monkeypatch):
     assert any("V15" in r.message for r in caplog.records)
 
 
+def test_allow_volume_sum_over_still_fails_on_errors(tmp_path, caplog, monkeypatch):
+    import logging
+    monkeypatch.setattr(logging.getLogger("mod_weaver"), "propagate", True)
+
+    def post(song, plan):
+        for r in range(5):
+            song.patterns[0].replace(r + 30, 0, Cell(24, 1, vol=64))
+            song.patterns[0].replace(r + 30, 3, Cell(24, 2, vol=64))    # 左 128 → V15
+        song.patterns[0].replace(20, 1, Cell(29, 2, 0, 0x47))           # V16（ERROR）は免除されない
+
+    with caplog.at_level(logging.WARNING, logger="mod_weaver"):
+        with pytest.raises(VerificationError):
+            engine.generate(make_profile(post_processors=(post,), allow_volume_sum_over=True), 1, tmp_path / "x.mod")
+    assert not any("V15" in r.message for r in caplog.records)
+
+
+def test_allow_volume_sum_over_hides_v15(tmp_path, caplog, monkeypatch):
+    import logging
+    monkeypatch.setattr(logging.getLogger("mod_weaver"), "propagate", True)
+
+    def post(song, plan):
+        for r in range(5):
+            song.patterns[0].replace(r + 30, 0, Cell(24, 1, vol=64))
+            song.patterns[0].replace(r + 30, 3, Cell(24, 2, vol=64))
+
+    with caplog.at_level(logging.WARNING, logger="mod_weaver"):
+        res = engine.generate(make_profile(post_processors=(post,), allow_volume_sum_over=True), 1, tmp_path / "x.mod")
+    assert not any(i.code == "V15" for i in res.issues) and caplog.text == ""
+
+
 def test_generate_output_error(tmp_path):
     with pytest.raises(OutputError):
         engine.generate(make_profile(), 1, tmp_path / "nodir" / "x.mod")

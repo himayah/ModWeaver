@@ -82,7 +82,7 @@ def sample_has_default_pan(spec: SampleSpec) -> bool:
 
 def _registry() -> dict[str, OutputFormat]:
     # 各形式モジュールは formats を import するため、循環を避けて遅延 import する。
-    from . import s3m, verify, writer
+    from . import it, s3m, verify, writer
 
     formats = [
         OutputFormat("mod", ".mod", writer.MOD_MAX_CHANNELS, writer.serialize_with_options, verify.verify,
@@ -90,6 +90,7 @@ def _registry() -> dict[str, OutputFormat]:
         OutputFormat("xm", ".xm", writer.XM_MAX_CHANNELS, writer.serialize_xm_with_options, verify.verify_xm,
                      "FastTracker II Extended Module"),
         OutputFormat("s3m", ".s3m", s3m.MAX_CHANNELS, s3m.serialize_s3m, s3m.verify_s3m, "Scream Tracker 3"),
+        OutputFormat("it", ".it", it.MAX_CHANNELS, it.serialize_it, it.verify_it, "Impulse Tracker"),
     ]
     return {f.name: f for f in formats}
 

@@ -193,9 +193,7 @@ https://github.com/himayah/ModWeaver
 | `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
 | `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ |
 
-最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
-
-ジャンルは `mod_weaver/genres/` に置いたモジュール（1ファイル＝1ジャンル）から起動のたびに自動で読み込まれます。新しいジャンルは、このディレクトリに `@register_profile` 付きの `GenreProfile` サブクラス（`id` と、1行の説明 `description`（日本語）・`description_en`（英語）を持つ）を定義した `.py` を置くだけで追加できます（詳細は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3）。
+最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。`-e` を付けると説明が英語で表示されます。
 
 #### 終了コード
 

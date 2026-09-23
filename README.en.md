@@ -197,8 +197,6 @@ https://github.com/himayah/ModWeaver
 
 You can also check the current list with `python modweaver.py -e --list-genres` or `python modweaver.py -e --help` (if genres are added, that output is always authoritative). Without `-e` the descriptions are printed in Japanese.
 
-Genres are loaded automatically on every start from the modules in `mod_weaver/genres/` (one file = one genre). To add a genre, just put a `.py` file in that directory defining a `GenreProfile` subclass decorated with `@register_profile` (with an `id` and one-line descriptions: `description` in Japanese and `description_en` in English). See [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3 (in Japanese) for details.
-
 #### Exit codes
 
 | Code | Meaning |

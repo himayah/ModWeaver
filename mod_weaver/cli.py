@@ -14,7 +14,7 @@ import traceback
 from pathlib import Path
 from typing import Optional, Sequence
 
-from . import profiles
+from . import __url__, __version__, profiles
 from .core import formats
 from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
 from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
@@ -100,6 +100,8 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
                              "picks a random BPM within it (default: chosen by the genre)")
     parser.add_argument("--list-genres", action="store_true",
                         help="print all genre ids, aliases and descriptions, then exit")
+    parser.add_argument("--version", "-v", action="version", version=f"ModWeaver {__version__}\n{__url__}",
+                        help="print the version and the GitHub repository URL, then exit")
     return parser
 
 

@@ -161,6 +161,20 @@ def test_random_names_match_registry_reserved_names():
     assert set(cli.RANDOM_GENRE) == registry.RESERVED_NAMES
 
 
+@pytest.mark.parametrize("flag", ["--version", "-v"])
+def test_version_prints_version_and_url(capsys, flag):
+    import mod_weaver
+    code, stdout, err = run_cli([flag], capsys)
+    assert code == 0 and err == ""
+    assert stdout == f"ModWeaver {mod_weaver.__version__}\nhttps://github.com/himayah/ModWeaver\n"
+
+
+def test_version_wins_over_other_arguments(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = run_cli(["-g", "nostalgic", "-s", "1", "-v"], capsys)
+    assert code == 0 and stdout.startswith("ModWeaver ") and list(tmp_path.iterdir()) == []
+
+
 def test_unknown_genre_exit_2(tmp_path, capsys):
     code, out, err = run_cli(["--genre", "bogus", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "unknown genre" in err and "nostalgic" in err and out == ""

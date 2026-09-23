@@ -87,6 +87,23 @@ def decode(data: bytes, ext: str, *, demuxer: str | None = "libopenmpt", stereo:
     return Decoded(a, err)
 
 
+def peak(data: bytes, ext: str) -> float:
+    """実プレイヤーで再生した最大振幅（1.0 = 0 dBFS）。float のまま・リサンプリングなしで読むので、
+    1.0 以上なら整数 PCM に変換した時点で音割れする。"""
+    exe = ffmpeg_with_openmpt()
+    assert exe, "ffmpeg with libopenmpt required"
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, f"song{ext}")
+        with open(src, "wb") as f:
+            f.write(data)
+        proc = subprocess.run([exe, "-hide_banner", "-nostdin", "-loglevel", "error", "-f", "libopenmpt",
+                               "-i", src, "-ac", "2", "-f", "f32le", "-"], capture_output=True, timeout=300)
+    assert proc.returncode == 0, proc.stderr.decode(errors="replace")
+    a = array.array("f")
+    a.frombytes(proc.stdout[: len(proc.stdout) // 4 * 4])
+    return max(max(a), -min(a)) if a else 0.0
+
+
 def correlation(x: list[float], y: list[float]) -> float:
     n = min(len(x), len(y))
     x, y = x[:n], y[:n]

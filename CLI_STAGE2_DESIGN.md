@@ -284,9 +284,11 @@ https://github.com/himayah/ModWeaver
 1. **`discover()` の WARNING はテストの実行順に影響される**: `cli.main` が `mod_weaver` ロガーを `propagate=False`＋独自ハンドラに
    するため、その後に caplog で WARNING を捕まえるテストは失敗する。`test_registry.py` では既存の `test_engine.py` と同じく
    ロガーを元に戻すフィクスチャを使う。
-2. **`orchestral` の seed 11 は検査 WARNING（V15: 左右の同時合計音量が上限超過）を出す**。第２段階の変更前（main）でも同じで、
-   本段階とは無関係の既存の挙動。`--genre random` のテストは選ばれるジャンルが変わるため stderr が空であることを求めない。
-   V15 自体の扱いは本段階の範囲外（必要なら別途検討）。
+2. **`orchestral` は検査 WARNING（V15: 左右の同時合計音量が上限超過）を出していた**。当初「seed 11 で出る」と記録したが誤りで、
+   **全 seed で**出ていた（MOD 100/100・XM 30/30。seed 11 はランダムジャンルのテストで orchestral が選ばれたときの seed）。
+   第２段階の変更前（main）でも同じで、本段階とは無関係の既存の挙動。`--genre random` のテストは選ばれるジャンルが変わるため
+   stderr が空であることを求めない。実再生では音割れしていないことを確認し、V15 の免除と実プレイヤーの音割れ検査で対処した
+   （branch `fix-orchestral-v15`。[GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) の orchestral 節を参照）。
 3. **README の実行例のバナーが実際と違っていた**: 表示名は `ModWeaver: Nostalgic` ではなく `ModWeaver: TwilightPad Procedural`。
    OpenMPT の Tip にあった「BPM 92」も曲ごとに変わるので一般的な書き方に直した。
 

@@ -90,11 +90,18 @@ def test_plan_too_many_patterns():
 
 @pytest.mark.parametrize("attrs", [
     dict(rows_per_measure=7), dict(rows_per_measure=0), dict(channel_plan=()), dict(tempo_policy="x"),
-    dict(rng_mode="x"), dict(target_format="xm"), dict(title="x" * 21), dict(title="日本"),
+    dict(rng_mode="x"), dict(target_format="bogus"), dict(title="x" * 21), dict(title="日本"),
+    dict(target_format="xm", channel_plan=()), dict(target_format="xm", channel_plan=tuple(range(33))),
 ])
 def test_profile_declaration_errors(attrs):
     with pytest.raises(PlanError):
         engine.build_song(make_profile(**attrs), 1)
+
+
+def test_xm_target_format_with_valid_channel_count_is_accepted():
+    """`target_format="xm"` 自体は §4.6② の分岐で有効な宣言（4chに限定されない）。"""
+    song = engine.build_song(make_profile(target_format="xm"), 1)
+    assert song is not None
 
 
 def test_rows_per_measure_8_is_accepted():
@@ -252,3 +259,53 @@ def test_verification_error_message_summarises():
     from mod_weaver.core.verify import Issue
     e = VerificationError([Issue("ERROR", f"V0{i}", "m") for i in range(1, 8)])
     assert "V01" in str(e) and "+2 more" in str(e)
+
+
+# ---------------- variable_meter / ChordSlot.rows (EXT-2 §4.0.2/§4.2) ----------------
+
+def _variable_plan(rows_list, bpm=100):
+    """各 slot が 1 measure・``rows`` 行の PatternPlan を1つ持つ SongPlan を返す。"""
+    def plan(self, rng):
+        slots = [ChordSlot(DUMMY_CHORD, 1, rows=r) for r in rows_list]
+        return SongPlan(bpm, [PatternPlan("a", slots)], [0], summary=["v"])
+    return plan
+
+
+def test_variable_meter_measure_rows_override_buffer_size():
+    seen = []
+
+    def compose(self, mctx, state, rng, buf):
+        seen.append((mctx.measure_rows, buf.rows))
+
+    profile = make_profile(
+        variable_meter=True, plan=_variable_plan([5, 7]), compose_measure=compose,
+    )
+    engine.build_song(profile, 1)
+    assert seen == [(5, 5), (7, 7)]
+
+
+def test_variable_meter_inserts_pattern_break_when_short():
+    profile = make_profile(variable_meter=True, plan=_variable_plan([5, 7]))   # 12 rows < 64
+    song = engine.build_song(profile, 1)
+    pat = song.patterns[0]
+    # row 11（最終 measure の最終 row）の空きチャンネルに D00 が入る
+    assert any(pat.get(11, ch) == Cell(None, 0, 0x0D, 0x00) for ch in range(pat.channels))
+
+
+def test_non_variable_meter_still_requires_exact_64_rows():
+    profile = make_profile(plan=_variable_plan([5, 7]))          # variable_meter=False（既定）
+    with pytest.raises(PlanError):
+        engine.build_song(profile, 1)
+
+
+def test_variable_meter_rejects_total_over_64_rows():
+    profile = make_profile(variable_meter=True, plan=_variable_plan([40, 30]))   # 70 rows > 64
+    with pytest.raises(PlanError):
+        engine.build_song(profile, 1)
+
+
+def test_variable_meter_allows_exact_64_without_break():
+    profile = make_profile(variable_meter=True, plan=_variable_plan([64]))
+    song = engine.build_song(profile, 1)
+    pat = song.patterns[0]
+    assert not any(pat.get(63, ch) == Cell(None, 0, 0x0D, 0x00) for ch in range(pat.channels))

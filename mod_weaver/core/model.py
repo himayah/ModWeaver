@@ -6,7 +6,9 @@
 - 計画系（``ChordSpec`` … ``RngStreams``）: プロファイルとエンジンの間で受け渡す純粋データ。
 
 行数・チャンネル数は定数 ``ROWS_PER_PATTERN`` / ``NUM_CHANNELS`` を既定値とするだけで、
-``CellGrid`` は任意の値を受け付ける（将来の可変小節・多チャンネル拡張の足場。CORE_EXTENSION_DESIGN 参照）。
+``CellGrid`` は任意の値を受け付ける（可変小節拡張（EXT-2。``ChordSlot.rows``／``MeasureCtx.measure_rows``
+経由で使用中）の足場として機能済み。多チャンネル拡張（EXT-6）はまだこの足場を使っていない。
+CORE_EXTENSION_DESIGN 参照）。
 """
 from __future__ import annotations
 
@@ -183,6 +185,38 @@ class CellGrid:
         self._check_allowed(row, ch, cell)
         self._cells[row][ch] = cell
 
+    def insert_command(self, row: int, effect: int, param: int) -> None:
+        """row の空きチャンネルへ ``(effect, param)`` を書き込む（``vol`` は使わない）。
+
+        探索順序（CORE_EXTENSION_DESIGN §4.0.1）:
+          ① is_empty なチャンネルのうち最小番号
+          ② なければ、note を持つが vol も effect も持たないチャンネル
+             （そのチャンネルの note/sample はそのまま残し、サンプル既定音量で鳴り続ける）
+        いずれも無ければ ChannelConflictError。``engine.apply_tempo`` や EXT-1/EXT-5（スウィング・
+        テンポカーブ）の row 単位コマンド挿入が共用する（`Song`/プロファイルに依存しないため
+        `CellGrid` のメソッドとして持つ。§4.0.1 参照）。
+        """
+        for ch in range(self.channels):
+            if self.get(row, ch).is_empty:
+                self.replace(row, ch, Cell(None, 0, effect, param))
+                return
+        for ch in range(self.channels):
+            c = self.get(row, ch)
+            if c.note is not None and c.vol is None and not c.has_effect:
+                self.replace(row, ch, Cell(c.note, c.sample, effect, param))
+                return
+        raise ChannelConflictError(f"no channel available for row command at row {row}")
+
+    def try_insert_command(self, row: int, effect: int, param: int) -> bool:
+        """``insert_command`` の非送出版。装飾的な row コマンド（EXT-1 スウィング／EXT-5 テンポ
+        カーブ等、「空きが無ければその row だけ諦めてよい」処理）が共通して使う、失敗を bool で
+        返すだけの薄いラッパ（探索ロジック自体は ``insert_command`` のものをそのまま使う）。"""
+        try:
+            self.insert_command(row, effect, param)
+            return True
+        except ChannelConflictError:
+            return False
+
     def get(self, row: int, ch: int) -> Cell:
         self._check_pos(row, ch)
         return self._cells[row][ch]
@@ -236,6 +270,7 @@ class SampleSpec:
     shift: int = 0                 # n = t + shift（§5.1）
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
     finetune: int = 0
+    pan: int = 128                 # EXT-6: 0=左、128=中央、255=右。MOD の serialize() は参照しない
 
     @property
     def length_words(self) -> int:
@@ -261,6 +296,8 @@ class SampleSpec:
             raise SampleConstraintError(f"sample {n!r}: rate_note out of range: {self.rate_note}")
         if not -8 <= self.finetune <= 7:
             raise SampleConstraintError(f"sample {n!r}: finetune out of range: {self.finetune}")
+        if not 0 <= self.pan <= 255:
+            raise SampleConstraintError(f"sample {n!r}: pan out of range: {self.pan}")
         if self.loop is not None:
             start, length = self.loop
             if start < 0 or length <= 1 or start + length > self.length_words:
@@ -352,6 +389,8 @@ class ChordDef:                    # 具体化済み（調・音域適用後）
 class ChordSlot:
     chord: ChordDef
     measures: int = 1              # 何 measure この和音が続くか
+    rows: Optional[int] = None     # この slot の1 measureあたりの row 数。None=profile.rows_per_measure
+                                    # （EXT-2 可変小節。variable_meter=False のプロファイルは常に None）
 
 
 @dataclass
@@ -393,6 +432,7 @@ class MeasureCtx:
     chord_measure_offset: int      # 現和音内での位置
     is_last: bool                  # pattern 最終 measure
     instruments: Mapping[str, Instrument]
+    measure_rows: int = 16         # 現在の measure の実際の row 数（= buf.rows と同値。EXT-2）
 
 
 @dataclass(frozen=True)

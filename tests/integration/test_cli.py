@@ -18,6 +18,12 @@ def run_cli(args, capsys):
     return code, cap.out, cap.err
 
 
+def test_default_output_path_extension_follows_target_format():
+    assert cli.default_output_path("nostalgic", 1) == Path("nostalgic/nostalgic_1.mod")
+    assert cli.default_output_path("nostalgic", 1, "mod") == Path("nostalgic/nostalgic_1.mod")
+    assert cli.default_output_path("orchestral", 5, "xm") == Path("orchestral/orchestral_5.xm")
+
+
 def test_default_genre_generates_file(tmp_path, capsys):
     out = tmp_path / "a.mod"
     code, stdout, err = run_cli(["--seed", "732501", "-o", str(out)], capsys)
@@ -53,6 +59,15 @@ def test_default_output_path_creates_missing_genre_dir(tmp_path, capsys, monkeyp
     monkeypatch.chdir(tmp_path)
     code, *_ = run_cli(["-g", "suspense-chase", "-s", "5"], capsys)
     assert code == 0 and (tmp_path / "suspense-chase" / "suspense-chase_5.mod").exists()
+
+
+def test_default_output_path_uses_xm_extension_for_xm_target_format(tmp_path, capsys, monkeypatch):
+    """orchestral は target_format="xm" なので既定出力は .mod ではなく .xm（実体との拡張子不一致を防ぐ）。"""
+    monkeypatch.chdir(tmp_path)
+    code, *_ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
+    out = tmp_path / "orchestral" / "orchestral_5.xm"
+    assert code == 0 and out.exists()
+    assert not (tmp_path / "orchestral" / "orchestral_5.mod").exists()
 
 
 def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys):

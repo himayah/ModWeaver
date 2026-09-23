@@ -6,7 +6,7 @@ import struct
 import pytest
 
 from mod_weaver.core.model import Cell, Pattern, SampleSpec, Song
-from mod_weaver.core.writer import WRITERS, serialize, write_file
+from mod_weaver.core.writer import WRITERS, serialize, serialize_xm, write_file
 from mod_weaver.errors import OutputError, PlanError, SampleConstraintError
 
 
@@ -73,6 +73,74 @@ def test_sample_constraint_propagates():
 
 def test_writers_registry():
     assert WRITERS["mod"] is serialize
+    assert WRITERS["xm"] is serialize_xm
+
+
+# ---------------- XM（EXT-6） ----------------
+
+def _xm_song(n_channels=6) -> Song:
+    pat = Pattern(None, channels=n_channels)
+    pat.put(0, 0, Cell(24, 1, 0xF, 100))
+    pat.put(1, 1, Cell(12, 2, vol=40))
+    samples = [
+        SampleSpec("One", bytes(range(0, 64)), 50, pan=30),
+        SampleSpec("Two", bytes(range(0, 128, 2)), 33, loop=(4, 20), pan=210),
+    ]
+    return Song("XM Test", samples, [pat, Pattern(None, channels=n_channels)], [0, 1, 0])
+
+
+def test_xm_header_layout():
+    data = serialize_xm(_xm_song())
+    assert data[0:17] == b"Extended Module: "
+    assert data[17:37] == b"XM Test".ljust(20, b" ")
+    assert data[37] == 0x1A
+    assert struct.unpack("<H", data[58:60])[0] == 0x0104
+    song_length, restart, n_channels, n_patterns, n_instruments, flags, speed, bpm = \
+        struct.unpack("<8H", data[64:80])
+    assert (song_length, n_channels, n_patterns, n_instruments) == (3, 6, 2, 2)
+    assert flags & 1 == 1                            # linear frequency table
+
+
+def test_xm_header_size_field_locates_real_pattern_data_offset():
+    """header_size は実 FT2/XM 規約どおり「offset 60（フィールド自身を含む）起点」で書かれている
+    ことを、parse_xm の実装と切り離して直接検査する（回帰: header_size=272 だった旧実装は自己
+    ラウンドトリップでは検出できず、実プレイヤー(OpenMPT)でパターン内容が読めない不具合になった）。
+    実際のパターンデータ開始位置は 60 + name(20)+0x1A(1)+tracker(20)+version(2) ではなく、固定
+    ヘッダ60byte + header_size フィールド自身(4)+8word(16)+order table(256) = 336byte のはず。"""
+    data = serialize_xm(_xm_song())
+    header_size = struct.unpack("<I", data[60:64])[0]
+    expected_pattern_data_start = 60 + 4 + 8 * 2 + 256   # = 336（実測の固定バイト数）
+    assert 60 + header_size == expected_pattern_data_start
+    # その offset に実際に pattern header（length=9 固定）が始まっていることも確認する。
+    assert struct.unpack("<I", data[60 + header_size:60 + header_size + 4])[0] == 9
+
+
+def test_xm_rejects_too_many_channels():
+    with pytest.raises(PlanError):
+        serialize_xm(_xm_song(n_channels=33))
+
+
+def test_xm_rejects_bad_order():
+    with pytest.raises(PlanError):
+        serialize_xm(Song("T", [], [Pattern()], []))
+    with pytest.raises(PlanError):
+        serialize_xm(Song("T", [], [Pattern()], [-1]))
+    with pytest.raises(PlanError):
+        serialize_xm(Song("T", [], [Pattern()], [5]))   # 参照先 pattern が存在しない
+
+
+def test_xm_pan_and_cells_round_trip_via_parse_xm():
+    """``SampleSpec.pan`` と Cell の note/instrument/effect/param が parse_xm で正しく読み戻せる。"""
+    from mod_weaver.core.verify import parse_xm
+
+    data = serialize_xm(_xm_song())
+    pm = parse_xm(data)
+    assert pm.consumed == len(data)
+    assert [s.pan for inst in pm.instruments for s in inst.samples] == [30, 210]
+    cell00 = pm.patterns[0][0][0]
+    assert (cell00.note, cell00.instrument, cell00.effect, cell00.param) == (25, 1, 0xF, 100)   # t=24 -> note 25
+    cell11 = pm.patterns[0][1][1]
+    assert (cell11.note, cell11.instrument, cell11.effect, cell11.param) == (13, 2, 0xC, 40)    # vol=40 -> effect C
 
 
 def test_write_file_creates_and_overwrites_existing(tmp_path):

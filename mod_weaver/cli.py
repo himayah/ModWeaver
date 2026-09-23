@@ -22,9 +22,14 @@ LINE = "=" * 50
 THIN = "-" * 50
 
 
-def default_output_path(genre_id: str, seed: int) -> Path:
-    """``--output`` 省略時の既定出力先: ``<genre>/<genre>_<seed>.mod``（ジャンルごとにサブディレクトリへ整理）。"""
-    return Path(genre_id) / f"{genre_id}_{seed}.mod"
+def default_output_path(genre_id: str, seed: int, target_format: str = "mod") -> Path:
+    """``--output`` 省略時の既定出力先: ``<genre>/<genre>_<seed>.<ext>``（ジャンルごとにサブディレクトリへ整理）。
+
+    拡張子は ``target_format``（``profile.target_format``、= ``writer.WRITERS`` のキー）をそのまま使う。
+    ``"mod"`` なら ``.mod``、``"xm"`` なら ``.xm``。中身のフォーマットと拡張子を一致させないと、
+    プレイヤー側がマジックバイトと拡張子の不一致で読み込みに失敗する（例: orchestral は xm 実体なのに
+    .mod 拡張子で保存されると再生できない）。"""
+    return Path(genre_id) / f"{genre_id}_{seed}.{target_format}"
 
 
 def _configure_logging() -> None:
@@ -63,7 +68,8 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="random seed (any integer) for reproducibility")
     parser.add_argument("--output", "-o", type=str, default=None,
-                        help="output .mod file path (default: <genre>/<genre>_<seed>.mod)")
+                        help="output file path (default: <genre>/<genre>_<seed>.<mod|xm>, "
+                             "extension depends on the genre's target format)")
     parser.add_argument("--list-genres", action="store_true",
                         help="print all genre ids, aliases and descriptions, then exit")
     return parser
@@ -109,7 +115,7 @@ def main(
         if args.output:
             out = args.output
         else:
-            out = default_output_path(profile.id, seed)
+            out = default_output_path(profile.id, seed, profile.target_format)
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:

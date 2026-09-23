@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 from ..errors import ModGenError
 from .pitch import NOTE_MAX, PERIODS
@@ -160,6 +160,17 @@ def _signed(b: int) -> int:
     return b - 256 if b > 127 else b
 
 
+def _loop_boundary_step(data: bytes) -> Optional[tuple[float, float]]:
+    """ループ境界の「段差 vs 許容量」を計算する（MOD/XM 共通のクリック検出ヒューリスティック）。
+    データが空なら ``None``（呼出し側は判定をスキップする）。"""
+    if not data:
+        return None
+    d = [_signed(b) for b in data]
+    max_diff = max((abs(d[i + 1] - d[i]) for i in range(len(d) - 1)), default=0)
+    step = abs(d[0] - d[-1])
+    return step, max(2.0, 1.5 * max_diff)
+
+
 def _check_header(pm: ParsedMod, rep: _Report) -> None:
     if pm.magic != b"M.K.":
         rep.add("ERROR", "V02", f"magic={pm.magic!r}")
@@ -195,11 +206,12 @@ def _check_loop_boundary(idx: int, s: ParsedSample, rep: _Report) -> None:
     lo, hi = s.loop_start * 2, (s.loop_start + s.loop_length) * 2
     if hi > len(s.data):
         return
-    d = [_signed(b) for b in s.data[lo:hi]]
-    max_diff = max((abs(d[i + 1] - d[i]) for i in range(len(d) - 1)), default=0)
-    step = abs(d[0] - d[-1])
-    if step > max(2.0, 1.5 * max_diff):
-        rep.add("WARN", "V11", f"sample {idx}: 境界段差 {step} > 許容 {max(2.0, 1.5 * max_diff):.1f}")
+    result = _loop_boundary_step(s.data[lo:hi])
+    if result is None:
+        return
+    step, limit = result
+    if step > limit:
+        rep.add("WARN", "V11", f"sample {idx}: 境界段差 {step} > 許容 {limit:.1f}")
 
 
 def _check_cells(pm: ParsedMod, plan, rep: _Report) -> set[int]:
@@ -284,5 +296,295 @@ def has_errors(issues: list[Issue]) -> bool:
     return any(i.level == "ERROR" for i in issues)
 
 
+# ============================================================
+# XM（FastTracker II Extended Module。EXT-6、CORE_EXTENSION_DESIGN §4.6④）
+# ============================================================
+
+XM_FIXED_HEADER = 60     # ID(17)+name(20)+0x1A(1)+tracker(20)+version(2)
+XM_ORDER_TABLE_SIZE = 256
+
+
+@dataclass(frozen=True)
+class ParsedXMCell:
+    note: int          # 0=無音、1..96=note+1（本プロジェクトは 1..36 のみ使用）
+    instrument: int
+    volume: int        # 本プロジェクトの writer は常に 0（vol column 不使用）
+    effect: int
+    param: int
+
+
+@dataclass
+class ParsedXMSample:
+    name: bytes
+    length: int         # バイト
+    loop_start: int      # バイト
+    loop_length: int      # バイト
+    volume: int
+    finetune: int
+    sample_type: int
+    pan: int
+    relative_note: int
+    data: bytes = b""
+
+
+@dataclass
+class ParsedXMInstrument:
+    name: bytes
+    n_samples: int
+    samples: list[ParsedXMSample] = field(default_factory=list)
+
+
+@dataclass
+class ParsedXM:
+    magic: bytes
+    title: bytes
+    song_length: int
+    n_channels: int
+    n_patterns: int
+    n_instruments: int
+    order: list[int]                                            # 256 エントリ
+    patterns: list[list[list[ParsedXMCell]]] = field(default_factory=list)   # [pattern][row][ch]
+    instruments: list[ParsedXMInstrument] = field(default_factory=list)
+    size: int = 0
+    consumed: int = 0                                            # 実際に読み進めたバイト数
+
+
+def _unpack_xm_cell(data: bytes, pos: int) -> tuple[ParsedXMCell, int]:
+    if pos >= len(data):
+        return ParsedXMCell(0, 0, 0, 0, 0), pos
+    b0 = data[pos]
+    pos += 1
+    if b0 & 0x80:
+        flags = b0 & 0x1F
+        note = instrument = volume = effect = param = 0
+        if flags & 0x01:
+            note, pos = data[pos], pos + 1
+        if flags & 0x02:
+            instrument, pos = data[pos], pos + 1
+        if flags & 0x04:
+            volume, pos = data[pos], pos + 1
+        if flags & 0x08:
+            effect, pos = data[pos], pos + 1
+        if flags & 0x10:
+            param, pos = data[pos], pos + 1
+    else:
+        note = b0
+        instrument, volume, effect, param = data[pos:pos + 4]
+        pos += 4
+    return ParsedXMCell(note, instrument, volume, effect, param), pos
+
+
+def parse_xm(data: bytes) -> ParsedXM:
+    """``.xm`` 形式のバイト列を読む。固定ヘッダ（60 byte）未満は ParseError。
+
+    ``parse_mod`` と同じ方針で、書込側（``writer.serialize_xm``）とは独立に ``struct`` で直接読む。
+    パターン・インストゥルメントデータが不足していても、読めた分だけを返す。
+    """
+    if len(data) < XM_FIXED_HEADER + 4:
+        raise ParseError(f"file too short: {len(data)} bytes (< {XM_FIXED_HEADER + 4})")
+    magic = data[0:17]
+    title = data[17:37]
+    header_size = struct.unpack("<I", data[60:64])[0]
+    hdr = data[64:64 + 16]
+    if len(hdr) < 16:
+        raise ParseError("XM header truncated")
+    song_length, _restart, n_channels, n_patterns, n_instruments, _flags, _speed, _bpm = \
+        struct.unpack("<8H", hdr)
+    order = list(data[80:80 + XM_ORDER_TABLE_SIZE])
+    pm = ParsedXM(magic, title, song_length, n_channels, n_patterns, n_instruments, order, size=len(data))
+
+    # header_size は offset 60（header_size フィールド自身）を起点に数える、というのが実際の
+    # FT2/XM 規約（writer.XM_HEADER_SIZE のコメント参照）。64 起点ではない。
+    pos = XM_FIXED_HEADER + header_size
+    for _ in range(n_patterns):
+        if pos + 9 > len(data):
+            break
+        phdr_len, _packing, n_rows, packed_size = struct.unpack("<IBHH", data[pos:pos + 9])
+        pos += max(9, phdr_len)
+        packed = data[pos:pos + packed_size]
+        pos += packed_size
+        if packed_size == 0:
+            rows = [[ParsedXMCell(0, 0, 0, 0, 0) for _ in range(n_channels)] for _ in range(n_rows)]
+        else:
+            rows = []
+            cpos = 0
+            for _r in range(n_rows):
+                row = []
+                for _c in range(n_channels):
+                    cell, cpos = _unpack_xm_cell(packed, cpos)
+                    row.append(cell)
+                rows.append(row)
+        pm.patterns.append(rows)
+
+    for _ in range(n_instruments):
+        if pos + 4 > len(data):
+            break
+        inst_size = struct.unpack("<I", data[pos:pos + 4])[0]
+        inst_start = pos
+        name = data[pos + 4:pos + 26]
+        n_samples = struct.unpack("<H", data[pos + 27:pos + 29])[0] if pos + 29 <= len(data) else 0
+        sample_header_size = 40
+        if n_samples > 0 and pos + 33 <= len(data):
+            sample_header_size = struct.unpack("<I", data[pos + 29:pos + 33])[0]
+        pos = inst_start + max(inst_size, 29)
+        samples: list[ParsedXMSample] = []
+        for _s in range(n_samples):
+            sh = data[pos:pos + sample_header_size]
+            pos += sample_header_size
+            if len(sh) < 18:
+                break
+            length, loop_start, loop_len, volume, finetune, stype, pan, relnote, _resv = \
+                struct.unpack("<IIIBbBBbB", sh[:18])
+            sname = sh[18:40]
+            samples.append(ParsedXMSample(sname, length, loop_start, loop_len, volume, finetune,
+                                           stype, pan, relnote))
+        for s in samples:
+            s.data = data[pos:pos + s.length] if pos <= len(data) else b""
+            pos += s.length
+        pm.instruments.append(ParsedXMInstrument(name, n_samples, samples))
+
+    pm.consumed = pos
+    return pm
+
+
+_XM_DESCRIPTIONS = {
+    "V01": "ファイルサイズが宣言内容と不一致",
+    "V02": "マジックが不正",
+    "V03": "曲長・order が不正",
+    "V04": "サンプルヘッダが不正",
+    "V06": "未定義のインストゥルメント番号を参照",
+    "V07": "note を持つセルにインストゥルメント番号がない",
+    "V08": "エフェクト param が不正（0xC>64 または 0xF=0）",
+    "V09": "チャンネルに許可されていないインストゥルメント",
+    "V10": "order[0] の pattern にテンポ設定（Fxx, param≥32）がない",
+    "V11": "ループ境界の段差が大きい（クリックの恐れ）",
+    "V12": "pattern 数が 64 を超える",
+    "V13": "未使用のインストゥルメントがある",
+    "V14": "note を持たない無効果セルにインストゥルメント番号がある",
+    "V15": "パン加重した左右合計音量が上限を超える",
+    "V16": "アルペジオが note 上限を超える",
+}
+
+
+def _check_xm_header(pm: ParsedXM, rep: _Report) -> None:
+    if pm.magic != b"Extended Module: ":
+        rep.add("ERROR", "V02", f"magic={pm.magic!r}")
+    if not 1 <= pm.song_length <= len(pm.order):
+        rep.add("ERROR", "V03", f"song_length={pm.song_length}")
+    for i, p in enumerate(pm.order[:pm.song_length]):
+        if p >= len(pm.patterns):
+            rep.add("ERROR", "V03", f"order[{i}]={p} は実 pattern 数 {len(pm.patterns)} 以上")
+    if pm.n_patterns > 64:
+        rep.add("ERROR", "V12", f"pattern 数={pm.n_patterns}")
+    if pm.size != pm.consumed:
+        rep.add("ERROR", "V01", f"size={pm.size} consumed={pm.consumed}")
+
+
+def _check_xm_samples(pm: ParsedXM, rep: _Report) -> None:
+    for i, inst in enumerate(pm.instruments, start=1):
+        for s in inst.samples:
+            if s.length == 0:
+                continue
+            if s.volume > 64:
+                rep.add("ERROR", "V04", f"instrument {i}: volume={s.volume}")
+            if (s.sample_type & 0x03) and s.loop_start + s.loop_length > s.length:
+                rep.add("ERROR", "V04", f"instrument {i}: loop {s.loop_start}+{s.loop_length} > {s.length}")
+            if (s.sample_type & 0x03) and s.loop_length > 2:
+                _check_xm_loop_boundary(i, s, rep)
+
+
+def _check_xm_loop_boundary(idx: int, s: ParsedXMSample, rep: _Report) -> None:
+    lo, hi = s.loop_start, s.loop_start + s.loop_length
+    if hi > len(s.data):
+        return
+    result = _loop_boundary_step(s.data[lo:hi])
+    if result is None:
+        return
+    step, limit = result
+    if step > limit:
+        rep.add("WARN", "V11", f"instrument {idx}: 境界段差 {step} > 許容 {limit:.1f}")
+
+
+def _check_xm_cells(pm: ParsedXM, plan, rep: _Report) -> set[int]:
+    defined = len(pm.instruments)
+    used: set[int] = set()
+    for p, pat in enumerate(pm.patterns):
+        for r, row in enumerate(pat):
+            for c, cell in enumerate(row):
+                where = f"pattern {p} row {r} ch{c + 1}"
+                if cell.instrument:
+                    used.add(cell.instrument)
+                    if cell.instrument > defined:
+                        rep.add("ERROR", "V06", f"{where}: instrument {cell.instrument}")
+                if cell.note and cell.instrument == 0:
+                    rep.add("ERROR", "V07", where)
+                if cell.effect == 0xC and cell.param > 64:
+                    rep.add("ERROR", "V08", f"{where}: C{cell.param:02X}")
+                if cell.effect == 0xF and cell.param == 0:
+                    rep.add("ERROR", "V08", f"{where}: F00")
+                if plan is not None and cell.instrument and cell.instrument not in plan[c].allowed:
+                    rep.add("ERROR", "V09", f"{where}: instrument {cell.instrument} on {plan[c].name}")
+                if not cell.note and cell.instrument and cell.effect == 0 and cell.param == 0:
+                    rep.add("WARN", "V14", f"{where}: instrument {cell.instrument}")
+                if cell.effect == 0 and cell.param and cell.note:
+                    t = cell.note - 1
+                    top = t + max(cell.param >> 4, cell.param & 0xF)
+                    if top > NOTE_MAX:
+                        rep.add("ERROR", "V16", f"{where}: t={t} arp={cell.param:02X}")
+    return used
+
+
+def _check_xm_tempo(pm: ParsedXM, rep: _Report) -> None:
+    if not pm.order or pm.order[0] >= len(pm.patterns):
+        return
+    first = pm.patterns[pm.order[0]]
+    if not any(c.effect == 0xF and c.param >= 32 for row in first for c in row):
+        rep.add("ERROR", "V10", f"pattern {pm.order[0]}")
+
+
+def _check_xm_volume_sum(pm: ParsedXM, rep: _Report) -> None:
+    """再生順に各チャンネルの音量を追跡し、instrument.pan で加重した左右合計を検査する
+    （MOD の固定 L/R チャンネル割当の一般化。CORE_EXTENSION_DESIGN §4.6④）。"""
+    n = pm.n_channels
+    vol = [0] * n
+    pan = [128] * n
+    seen: set[tuple[int, int]] = set()
+    for p in pm.order[:pm.song_length]:
+        if p >= len(pm.patterns):
+            continue
+        for r, row in enumerate(pm.patterns[p]):
+            for c, cell in enumerate(row):
+                if cell.effect == 0xC:
+                    vol[c] = cell.param
+                if cell.note and cell.instrument and cell.effect != 0xC:
+                    inst = pm.instruments[cell.instrument - 1] if cell.instrument <= len(pm.instruments) else None
+                    if inst and inst.samples:
+                        vol[c] = inst.samples[0].volume
+                        pan[c] = inst.samples[0].pan
+            left = sum(vol[c] * (255 - pan[c]) / 255.0 for c in range(n))
+            right = sum(vol[c] * pan[c] / 255.0 for c in range(n))
+            if (left > VOLUME_SUM_LIMIT or right > VOLUME_SUM_LIMIT) and (p, r) not in seen:
+                seen.add((p, r))
+                rep.add("WARN", "V15", f"pattern {p} row {r}: L={left:.0f} R={right:.0f}")
+
+
+def verify_xm(data: bytes, plan=None) -> list[Issue]:
+    """XM の構造検査。``plan``（ChannelPlan）を渡すと V09 も検査する。"""
+    try:
+        pm = parse_xm(data)
+    except ParseError as e:
+        return [Issue("ERROR", "V01", str(e))]
+    rep = _Report()
+    _check_xm_header(pm, rep)
+    _check_xm_samples(pm, rep)
+    used = _check_xm_cells(pm, plan, rep)
+    _check_xm_tempo(pm, rep)
+    _check_xm_volume_sum(pm, rep)
+    for i, inst in enumerate(pm.instruments, start=1):
+        if inst.samples and inst.samples[0].length > 0 and i not in used:
+            rep.add("INFO", "V13", f"instrument {i}")
+    return rep.issues(_XM_DESCRIPTIONS)
+
+
 # 出力フォーマット名 → 検査関数
-VERIFIERS: dict[str, Callable[..., list[Issue]]] = {"mod": verify}
+VERIFIERS: dict[str, Callable[..., list[Issue]]] = {"mod": verify, "xm": verify_xm}

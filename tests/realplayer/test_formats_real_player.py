@@ -24,20 +24,26 @@ def assert_equivalent(ref, other, *, envelope=0.8):
     assert correlation(ref.envelope(), other.envelope()) > envelope
 
 
+TRACKER_FORMATS = ["xm", "s3m"]
+
+
+@pytest.mark.parametrize("fmt", TRACKER_FORMATS)
 @pytest.mark.parametrize("genre", FOUR_CH)
-def test_xm_matches_mod(genre):
-    assert_equivalent(render(genre, "mod"), render(genre, "xm"))
+def test_format_matches_mod(genre, fmt):
+    assert_equivalent(render(genre, "mod"), render(genre, fmt))
 
 
-def test_orchestral_8chn_mod_plays_like_xm():
+@pytest.mark.parametrize("fmt", ["mod"] + [f for f in TRACKER_FORMATS if f != "xm"])
+def test_orchestral_plays_like_xm(fmt):
     """既定形式 mod では orchestral は 8CHN。パン以外は XM と同じ音で鳴る。"""
-    assert_equivalent(render("orchestral", "xm"), render("orchestral", "mod"))
+    assert_equivalent(render("orchestral", "xm"), render("orchestral", fmt))
 
 
-def test_xm_channel_pans_give_stereo_image_for_4ch_genre():
-    """全サンプルが既定パンの 4ch ジャンルでも XM で LRRL のステレオになる（vol column Px）。"""
+@pytest.mark.parametrize("fmt", TRACKER_FORMATS)
+def test_channel_pans_give_stereo_image_for_4ch_genre(fmt):
+    """全サンプルが既定パンの 4ch ジャンルでも LRRL のステレオになる（XM: vol column Px、S3M/IT: ヘッダ）。"""
     p = profiles.get_profile("nostalgic")
     song, plan = engine.compose_song(p, 123456)
-    left, right = decode(engine.serialize(p, song, plan, "xm"), ".xm", stereo=True)
+    left, right = decode(engine.serialize(p, song, plan, fmt), f".{fmt}", stereo=True)
     diff = sum(abs(a - b) for a, b in zip(left.samples, right.samples)) / len(left.samples)
     assert diff > 0.1 * left.rms(), "left and right are (almost) identical: panning not applied"

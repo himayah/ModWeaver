@@ -29,7 +29,7 @@ def test_default_genre_generates_file(tmp_path, capsys):
     code, stdout, err = run_cli(["--seed", "732501", "-o", str(out)], capsys)
     assert code == 0 and err == ""
     assert out.exists() and out.stat().st_size > 0
-    assert "Seed        : 732501" in stdout and "Tempo       : BPM 90" in stdout
+    assert "シード      : 732501" in stdout and "テンポ      : BPM 90" in stdout
     assert "Theme A" in stdout and "Theme B" in stdout
     assert "python -m mod_weaver.cli --genre nostalgic --seed 732501" in stdout
     assert not has_errors(verify(out.read_bytes()))
@@ -45,7 +45,7 @@ def test_short_options_and_negative_seed(tmp_path, capsys):
 def test_seed_omitted_uses_random_in_range(tmp_path, capsys):
     code, stdout, _ = run_cli(["-o", str(tmp_path / "r.mod")], capsys)
     assert code == 0
-    seed = int(next(l for l in stdout.splitlines() if l.startswith("Seed")).split(":")[1])
+    seed = int(next(l for l in stdout.splitlines() if l.startswith("シード")).split(":")[1])
     assert 100000 <= seed <= 999999
 
 
@@ -67,7 +67,7 @@ def test_default_format_is_mod_even_for_8ch_genre(tmp_path, capsys, monkeypatch)
     code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
     out = tmp_path / "output" / "orchestral_5.mod"
     assert code == 0 and out.exists() and out.read_bytes()[1080:1084] == b"8CHN"
-    assert "Format      : mod" in stdout and "--format" not in stdout
+    assert "出力形式    : mod" in stdout and "--format" not in stdout
 
 
 def test_format_option_sets_extension_and_repro(tmp_path, capsys, monkeypatch):
@@ -89,7 +89,7 @@ def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys, monkeypatch):
     assert code == 0 and err == ""
     for p in cli.profiles.list_profiles():
         assert p.id in stdout and p.description in stdout
-    assert "suspense-slow" in stdout and "suspense" in stdout  # alias も表示される
+    assert "suspense-slow (別名: suspense)" in stdout  # alias も表示される
     assert not (tmp_path / "output").exists()  # 生成は行われない
 
 
@@ -104,20 +104,20 @@ def test_no_arguments_prints_help_and_exits_0(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _, help_out, _ = run_cli(["--help"], capsys)
     code, stdout, err = run_cli([], capsys)
-    assert code == 0 and err == "" and stdout == help_out and stdout.startswith("usage:")
+    assert code == 0 and err == "" and stdout == help_out and stdout.startswith("使い方:")
     assert list(tmp_path.iterdir()) == []             # 生成は行われない
 
 
 def test_no_arguments_via_script_prints_usage(tmp_path):
     r = subprocess.run([sys.executable, str(ROOT / "modweaver.py")], capture_output=True, text=True, cwd=tmp_path)
-    assert r.returncode == 0 and r.stdout.startswith("usage: modweaver.py") and r.stderr == ""
+    assert r.returncode == 0 and r.stdout.startswith("使い方: modweaver.py") and r.stderr == ""
     assert list(tmp_path.iterdir()) == []
 
 
 def test_any_argument_still_generates_default_genre(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-s", "3"], capsys)
-    assert code == 0 and "Genre       : nostalgic" in stdout and (tmp_path / "output" / "nostalgic_3.mod").exists()
+    assert code == 0 and "ジャンル    : nostalgic" in stdout and (tmp_path / "output" / "nostalgic_3.mod").exists()
 
 
 @pytest.mark.parametrize("name", ["random", "r"])
@@ -125,9 +125,9 @@ def test_random_genre_generates_registered_genre(tmp_path, capsys, monkeypatch, 
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-g", name, "-s", "11"], capsys)   # stderr は選ばれたジャンル次第で検査 WARNING が出うる
     assert code == 0
-    genre_line = next(l for l in stdout.splitlines() if l.startswith("Genre"))
+    genre_line = next(l for l in stdout.splitlines() if l.startswith("ジャンル"))
     gid = genre_line.split(":")[1].split()[0]
-    assert genre_line.endswith(" (random)") and gid in [p.id for p in cli.profiles.list_profiles()]
+    assert genre_line.endswith(" (ランダム)") and gid in [p.id for p in cli.profiles.list_profiles()]
     assert f"--genre {gid} --seed 11" in stdout                          # 再現コマンドは決まったジャンル
     assert (tmp_path / "output" / f"{gid}_11.mod").exists()
 
@@ -136,7 +136,7 @@ def test_random_genre_picks_among_canonical_ids(tmp_path, capsys, monkeypatch):
     seen = []
     monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or "trap")
     code, stdout, _ = run_cli(["-g", "r", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
-    assert code == 0 and "Genre       : trap (random)" in stdout
+    assert code == 0 and "ジャンル    : trap (ランダム)" in stdout
     assert seen == [[p.id for p in cli.profiles.list_profiles()]]       # 別名（suspense）は含まない
 
 
@@ -144,7 +144,7 @@ def test_random_genre_with_tempo_excludes_genres_that_cannot_play_it(tmp_path, c
     seen = []
     monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or c[0])
     code, stdout, err = run_cli(["-g", "random", "-t", "200", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
-    assert code == 0 and "Tempo       : BPM 200" in stdout and err == ""
+    assert code == 0 and "テンポ      : BPM 200" in stdout and err == ""
     ids = [p.id for p in cli.profiles.list_profiles()]
     assert "free-jazz" in ids and seen == [[i for i in ids if i != "free-jazz"]]   # free-jazz は 44-163
 
@@ -174,6 +174,60 @@ def test_version_wins_over_other_arguments(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-g", "nostalgic", "-s", "1", "-v"], capsys)
     assert code == 0 and stdout.startswith("ModWeaver ") and list(tmp_path.iterdir()) == []
+
+
+def test_english_banner(tmp_path, capsys):
+    code, stdout, _ = run_cli(["-e", "--seed", "732501", "-o", str(tmp_path / "a.mod")], capsys)
+    assert code == 0
+    for line in ("Genre       : nostalgic", "Format      : mod", "Seed        : 732501", "Tempo       : BPM 90",
+                 "Success! To reproduce this exact song, run:",
+                 "  python -m mod_weaver.cli --genre nostalgic --seed 732501"):
+        assert line in stdout.splitlines()
+    assert not any(ord(c) > 0x7F for c in stdout)                    # 英語モードに日本語が混ざらない
+
+
+def test_english_flag_forms_and_random_marker(tmp_path, capsys):
+    for args in (["--english"], ["--eng"], ["-es", "4"]):
+        code, stdout, _ = run_cli(args + ["-g", "r", "-t", "90", "-s", "4", "-o", str(tmp_path / "x.mod")], capsys)
+        assert code == 0 and "(random)" in stdout and "Tempo       : BPM 90" in stdout, args
+
+
+def test_japanese_banner_is_aligned_by_display_width(tmp_path, capsys):
+    code, stdout, _ = run_cli(["-s", "732501", "-o", str(tmp_path / "a.mod")], capsys)
+    assert code == 0
+    assert "生成に成功しました。同じ曲を再現するには次を実行してください:" in stdout
+    labelled = [l for l in stdout.splitlines() if " : " in l or l.startswith("出力ファイル:")]
+    colon_cols = {cli._cols(l[:l.index(":")]) for l in labelled}
+    assert colon_cols == {12}, labelled                              # 全角2桁で数えて「:」の位置が揃う
+
+
+def test_english_help_and_listing(capsys):
+    code, en_help, _ = run_cli(["-e", "--help"], capsys)
+    assert code == 0 and en_help.startswith("usage:") and "options:" in en_help and "genres:" in en_help
+    code, en_noarg, _ = run_cli(["-e"], capsys)                       # -e だけ = 引数なし扱い（英語の usage）
+    assert code == 0 and en_noarg == en_help
+    code, ja_help, _ = run_cli(["-h"], capsys)
+    assert ja_help.startswith("使い方:") and "オプション:" in ja_help and "ジャンル一覧:" in ja_help
+    code, listing, _ = run_cli(["--list-genres", "-e"], capsys)
+    assert code == 0 and "suspense-slow (alias: suspense)" in listing
+    for p in cli.profiles.list_profiles():
+        assert p.description_en in listing and p.description not in listing
+        assert p.description_en in en_help
+
+
+def test_japanese_help_wraps_by_display_width(capsys, monkeypatch):
+    monkeypatch.setenv("COLUMNS", "80")
+    _, ja_help, _ = run_cli(["--help"], capsys)
+    body = ja_help[:ja_help.index("ジャンル一覧:")]                     # epilog（ジャンルの説明）は折り返さない
+    assert max(cli._cols(l) for l in body.splitlines()) <= 80
+    assert "free-jazz," in body                                      # 語の途中では折り返さない
+    assert not any(l.strip().startswith(("。", "、", "）")) for l in body.splitlines())
+
+
+def test_wrap_helper():
+    assert cli._wrap("あいうえお かきくけこ", 6) == ["あいう", "えお", "かきく", "けこ"]
+    assert cli._wrap("ab cd-ef gh", 5) == ["ab", "cd-ef", "gh"]
+    assert cli._wrap("あいう。", 6) == ["あいう。"]                     # 句読点は行頭に送らない
 
 
 def test_unknown_genre_exit_2(tmp_path, capsys):
@@ -241,16 +295,16 @@ def test_tempo_single_value(tmp_path, capsys):
     out = tmp_path / "t.mod"
     code, stdout, err = run_cli(["-s", "1", "-t", "123", "-o", str(out)], capsys)
     assert code == 0 and err == ""
-    assert "Tempo       : BPM 123\n" in stdout
+    assert "テンポ      : BPM 123\n" in stdout
     assert "--genre nostalgic --tempo 123 --seed 1" in stdout
 
 
 def test_tempo_range_picks_within_and_repro_uses_resolved_value(tmp_path, capsys):
     code, stdout, _ = run_cli(["-s", "5", "--tempo", "80-100", "-o", str(tmp_path / "r.mod")], capsys)
     assert code == 0
-    line = next(l for l in stdout.splitlines() if l.startswith("Tempo"))
+    line = next(l for l in stdout.splitlines() if l.startswith("テンポ"))
     bpm = int(line.split("BPM")[1].split()[0])
-    assert 80 <= bpm <= 100 and "(requested 80-100)" in line
+    assert 80 <= bpm <= 100 and "(指定 80-100)" in line
     assert f"--tempo {bpm} --seed 5" in stdout
 
 
@@ -282,7 +336,7 @@ def test_each_tracker_and_midi_format(tmp_path, capsys, monkeypatch, fmt, magic)
     ext = {"midi": ".mid"}.get(fmt, f".{fmt}")
     out = tmp_path / "output" / f"nostalgic_3{ext}"
     assert code == 0 and err == "" and magic(out.read_bytes())
-    assert f"Format      : {fmt}" in stdout
+    assert f"出力形式    : {fmt}" in stdout
 
 
 def test_mp3_without_ffmpeg_exits_5(tmp_path, capsys, monkeypatch):

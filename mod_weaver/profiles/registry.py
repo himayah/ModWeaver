@@ -22,13 +22,14 @@ _ALIASES: dict[str, str] = {}                           # 別名 → 正規 id
 
 
 def register_profile(cls: T) -> T:
-    """``@register_profile`` でクラスを登録する（id・別名の重複・予約語、説明の欠落・複数行は ValueError）。"""
+    """``@register_profile`` でクラスを登録する（id・別名の重複・予約語、説明（日本語・英語）の欠落・複数行は ValueError）。"""
     pid = getattr(cls, "id", None)
     if not isinstance(pid, str) or not pid:
         raise ValueError(f"{cls.__name__}: profile id must be a non-empty string")
-    desc = getattr(cls, "description", None)
-    if not isinstance(desc, str) or not desc.strip() or "\n" in desc or "\r" in desc:
-        raise ValueError(f"{pid}: description must be a non-empty single line")
+    for attr in ("description", "description_en"):
+        desc = getattr(cls, attr, None)
+        if not isinstance(desc, str) or not desc.strip() or "\n" in desc or "\r" in desc:
+            raise ValueError(f"{pid}: {attr} must be a non-empty single line")
     for name in (pid, *cls.aliases):
         if name in RESERVED_NAMES:
             raise ValueError(f"{pid}: {name!r} is reserved and cannot be a profile id or alias")

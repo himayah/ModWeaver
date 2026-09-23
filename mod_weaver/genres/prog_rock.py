@@ -159,6 +159,7 @@ class ProgRockProfile(GenreProfile):
     id = "prog-rock"
     display_name = "Prog Rock"
     description = "変拍子プログレ／マスロック。7/8+7/8+5/8 のリフ、4/4 のコーラスとの対比"
+    description_en = "Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus"
     title = "Prog Rock"
     default_filename = "ProgRock.mod"
     tempo_choices = (132, 136, 140, 144, 148)

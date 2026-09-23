@@ -134,6 +134,7 @@ class TrapProfile(GenreProfile):
     id = "trap"
     display_name = "Trap"
     description = "トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ"
+    description_en = "Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop"
     title = "Trap Beat"
     default_filename = "Trap.mod"
     tempo_choices = (140, 145, 150, 155)      # 32分格子なので実質ハーフタイム（70-77bpm相当）で感じる

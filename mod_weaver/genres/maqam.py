@@ -141,6 +141,7 @@ class MaqamProfile(GenreProfile):
     id = "maqam"
     display_name = "Maqam Rast"
     description = "中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程"
+    description_en = "Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals"
     title = "Maqam Rast"
     default_filename = "MaqamRast.mod"
     tempo_choices = (84, 88, 92, 96)

@@ -161,13 +161,12 @@ def test_discover_twice_is_silent(tmp_path, monkeypatch, warnings_captured, clea
 
 # --- 登録時の検査 ---
 
+@pytest.mark.parametrize("attr", ["description", "description_en"])
 @pytest.mark.parametrize("desc", ["", "   ", "two\nlines", "cr\rline", None])
-def test_description_must_be_single_nonempty_line(clean_registry, desc):
-    with pytest.raises(ValueError, match="description"):
-        @profiles.register_profile
-        class Bad(DummyProfile):
-            id = "bad-desc"
-            description = desc
+def test_description_must_be_single_nonempty_line(clean_registry, attr, desc):
+    bad = type("Bad", (DummyProfile,), {"id": "bad-desc", attr: desc})
+    with pytest.raises(ValueError, match=f"{attr} must be"):
+        profiles.register_profile(bad)
 
 
 @pytest.mark.parametrize("pid,aliases", [("random", ()), ("r", ()), ("ok-id", ("r",)), ("ok-id2", ("random",))])

@@ -193,6 +193,7 @@ class NostalgicProfile(GenreProfile):
     id = "nostalgic"
     display_name = "TwilightPad Procedural"
     description = "夕暮れの郷愁を誘う Lo-Fi ビートとオルゴール（従来の TwilightPad）"
+    description_en = "Lo-fi beat and music box evoking nostalgia at dusk (the original TwilightPad)"
     title = "Twilight Pad"
     default_filename = "TwilightPad.mod"
     tempo_choices = TEMPO_CHOICES

@@ -19,6 +19,7 @@ class DummyProfile(GenreProfile):
     id = "dummy"
     display_name = "Dummy"
     description = "test"
+    description_en = "test"
     title = "Dummy"
     default_filename = "Dummy.mod"
     tempo_choices = (100, 110)

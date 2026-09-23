@@ -105,6 +105,7 @@ class MinimalismProfile(GenreProfile):
     id = "minimalism"
     display_name = "Minimalism"
     description = "ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る"
+    description_en = "Minimal / phase music: four parts with 16/12/8/6-row cycles drift apart and realign"
     title = "Phase Process"
     default_filename = "PhaseProcess.mod"
     tempo_choices = (108, 112, 116, 120)

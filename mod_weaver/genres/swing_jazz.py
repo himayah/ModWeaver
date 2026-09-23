@@ -174,6 +174,7 @@ class SwingJazzProfile(GenreProfile):
     id = "swing-jazz"
     display_name = "Swing Jazz"
     description = "スウィング・ジャズ。ライド＋ウォーキングベース＋ピアノコンピング、Bbリズムチェンジ AABA"
+    description_en = "Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA)"
     title = "Swing Jazz"
     default_filename = "SwingJazz.mod"
     tempo_choices = (152, 156, 160, 164, 168)

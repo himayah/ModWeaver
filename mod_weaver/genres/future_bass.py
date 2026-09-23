@@ -135,6 +135,7 @@ class FutureBassProfile(GenreProfile):
     id = "future-bass"
     display_name = "Future Bass"
     description = "フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV"
+    description_en = "Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV"
     title = "Future Bass"
     default_filename = "FutureBass.mod"
     tempo_choices = (148, 150, 152, 155, 160)

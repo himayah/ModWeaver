@@ -153,6 +153,7 @@ class FreeJazzProfile(GenreProfile):
     id = "free-jazz"
     display_name = "Free Jazz"
     description = "フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化）"
+    description_en = "Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes)"
     title = "Free Jazz"
     default_filename = "FreeJazz.mod"
     tempo_choices = (INITIAL_BPM,)

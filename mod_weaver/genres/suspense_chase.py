@@ -32,6 +32,7 @@ class SuspenseChaseProfile(SuspenseBase):
     id = "suspense-chase"
     display_name = "Suspense Chase"
     description = "緊急脱出・追走。毎拍の心拍と 8 分連打、無音からの衝撃"
+    description_en = "Emergency escape / pursuit: heartbeat on every beat, driving eighth notes, impacts out of silence"
     title = "Suspense Chase"
     default_filename = "SuspenseChase.mod"
     tempo_choices = (138, 140, 142, 144, 146, 148)

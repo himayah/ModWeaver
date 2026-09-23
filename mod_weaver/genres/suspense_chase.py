@@ -9,8 +9,8 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules, articulate, ramp
 from ..core.model import Cell, MeasureBuffer, MeasureCtx, Pattern, PatternCtx, PatternPlan, RngStreams, SongPlan
 from ..core.pitch import fold_into_range
-from .registry import register_profile
-from .suspense_common import (
+from ..profiles.registry import register_profile
+from ..profiles.suspense_common import (
     CH_FX, CH_LEAD, CH_LOW, CH_TEX, KEY_PC, PIZZ_REG, SHOCK_GUARD_ROWS,
     PatternState, SuspenseBase, anvil_clear_row, progression_summary, put_oneshot_off, silence_run,
     strings_chord, swoosh_start_row, voice_progression,
@@ -32,6 +32,7 @@ class SuspenseChaseProfile(SuspenseBase):
     id = "suspense-chase"
     display_name = "Suspense Chase"
     description = "緊急脱出・追走。毎拍の心拍と 8 分連打、無音からの衝撃"
+    description_en = "Emergency escape / pursuit: heartbeat on every beat, driving eighth notes, impacts out of silence"
     title = "Suspense Chase"
     default_filename = "SuspenseChase.mod"
     tempo_choices = (138, 140, 142, 144, 146, 148)

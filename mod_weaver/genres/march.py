@@ -31,8 +31,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, Scale, fold_into_range
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（§8.5、8.5.3）
@@ -200,6 +200,7 @@ class MarchProfile(GenreProfile):
     id = "march"
     display_name = "Military March"
     description = "行進曲。Oom-Pah とスネアロール、ファンファーレ、トリオへの転調"
+    description_en = "Military march: oom-pah and snare rolls, fanfares, modulation into the trio"
     title = "Military March"
     default_filename = "MilitaryMarch.mod"
     tempo_choices = (118, 119, 120, 121, 122)

@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import maqam as mq
+from mod_weaver.genres import maqam as mq
 
 profile = get_profile("maqam")
 SEEDS = list(range(1, 41))

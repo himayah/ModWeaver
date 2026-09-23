@@ -34,8 +34,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, PERIODS, Scale, fold_into_range
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（GENRE_DESIGN_V2.md §4.3）
@@ -134,6 +134,7 @@ class TrapProfile(GenreProfile):
     id = "trap"
     display_name = "Trap"
     description = "トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ"
+    description_en = "Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop"
     title = "Trap Beat"
     default_filename = "Trap.mod"
     tempo_choices = (140, 145, 150, 155)      # 32分格子なので実質ハーフタイム（70-77bpm相当）で感じる

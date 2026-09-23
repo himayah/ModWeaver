@@ -29,8 +29,8 @@ from ..core.model import (
 )
 from ..core.pitch import MicroScale, parse, resolve_micronote
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音律（GENRE_DESIGN_V2.md §5.1）
@@ -141,6 +141,7 @@ class MaqamProfile(GenreProfile):
     id = "maqam"
     display_name = "Maqam Rast"
     description = "中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程"
+    description_en = "Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals"
     title = "Maqam Rast"
     default_filename = "MaqamRast.mod"
     tempo_choices = (84, 88, 92, 96)

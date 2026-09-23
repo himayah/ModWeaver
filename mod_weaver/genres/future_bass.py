@@ -26,8 +26,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, Scale
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（GENRE_DESIGN_V2.md §7.3）
@@ -135,6 +135,7 @@ class FutureBassProfile(GenreProfile):
     id = "future-bass"
     display_name = "Future Bass"
     description = "フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV"
+    description_en = "Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV"
     title = "Future Bass"
     default_filename = "FutureBass.mod"
     tempo_choices = (148, 150, 152, 155, 160)

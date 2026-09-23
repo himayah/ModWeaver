@@ -31,8 +31,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, Scale, fold_into_range
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（GENRE_DESIGN_V2.md §1.3）
@@ -174,6 +174,7 @@ class SwingJazzProfile(GenreProfile):
     id = "swing-jazz"
     display_name = "Swing Jazz"
     description = "スウィング・ジャズ。ライド＋ウォーキングベース＋ピアノコンピング、Bbリズムチェンジ AABA"
+    description_en = "Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA)"
     title = "Swing Jazz"
     default_filename = "SwingJazz.mod"
     tempo_choices = (152, 156, 160, 164, 168)

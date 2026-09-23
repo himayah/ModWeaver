@@ -30,8 +30,8 @@ from ..core.model import (
 )
 from ..core.pitch import MODES, Scale
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・調・進行（GENRE_DESIGN_V2.md §2.3）
@@ -159,6 +159,7 @@ class ProgRockProfile(GenreProfile):
     id = "prog-rock"
     display_name = "Prog Rock"
     description = "変拍子プログレ／マスロック。7/8+7/8+5/8 のリフ、4/4 のコーラスとの対比"
+    description_en = "Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus"
     title = "Prog Rock"
     default_filename = "ProgRock.mod"
     tempo_choices = (132, 136, 140, 144, 148)

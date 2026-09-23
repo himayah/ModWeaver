@@ -7,7 +7,7 @@ from mod_weaver import engine
 from mod_weaver.core.verify import verify
 from mod_weaver.core.writer import serialize
 from mod_weaver.profiles import get_profile
-from mod_weaver.profiles import future_bass as fb
+from mod_weaver.genres import future_bass as fb
 
 profile = get_profile("future-bass")
 SEEDS = list(range(1, 41))

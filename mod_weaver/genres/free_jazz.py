@@ -31,8 +31,8 @@ from ..core.model import (
 )
 from ..core.pitch import fold_into_range
 from ..core.midi import GmVoice
-from .base import GenreProfile
-from .registry import register_profile
+from ..profiles.base import GenreProfile
+from ..profiles.registry import register_profile
 
 # ============================================================
 # 音域・和声（GENRE_DESIGN_V2.md §8.2）
@@ -153,6 +153,7 @@ class FreeJazzProfile(GenreProfile):
     id = "free-jazz"
     display_name = "Free Jazz"
     description = "フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化）"
+    description_en = "Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes)"
     title = "Free Jazz"
     default_filename = "FreeJazz.mod"
     tempo_choices = (INITIAL_BPM,)

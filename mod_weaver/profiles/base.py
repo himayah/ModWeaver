@@ -26,7 +26,8 @@ class GenreProfile(ABC):
     id: str
     aliases: tuple[str, ...] = ()
     display_name: str
-    description: str
+    description: str                   # 1行の説明（日本語。--list-genres・--help に出す）
+    description_en: str                # 同じ説明の英語版（-e / --english のとき使う）
     title: str                         # 出力ファイルのタイトル欄（ASCII ≤20。全形式共通）
     default_filename: str
     tempo_choices: tuple[int, ...]     # 離散値。値は4分音符の BPM（=tracker の Fxx。1拍=24 tick）

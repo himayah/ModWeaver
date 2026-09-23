@@ -1,9 +1,9 @@
-"""orchestral: フルオーケストラ / 劇伴（GENRE_DESIGN_V2.md §3）。
+"""orchestral: フルオーケストラ / 劇伴（DESIGN.md §6.13）。
 
 8チャンネル（EXT-6。MOD では FastTracker 系の ``8CHN``、XM/S3M/IT ではサンプルパンでステレオ配置）の実証ジャンル。6声（bass/tenor/alto/soprano1/
 soprano2/descant）の和声を、``harmony.voice()`` が返す標準4フィールド（bass/harmony/chord_tones）
 に、残り3声（alto/soprano1/descant）を ``mctx.chord.chord_tones`` のピッチクラス集合から都度
-導出する方式で表現する（§3.3 設計レビュー: 6声データを ``PatternPlan.extra`` や ``state`` に
+導出する方式で表現する（DESIGN_HISTORY.md §9: 6声データを ``PatternPlan.extra`` や ``state`` に
 持たせる必要はなく、``mctx.chord`` だけから毎回計算できる。既存 core は無変更）。
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・6声・進行（GENRE_DESIGN_V2.md §3.3）
+# 音域・6声・進行（DESIGN.md §6.13）
 # ============================================================
 
 KEY_PC = 0                                    # C
@@ -64,7 +64,7 @@ def progression_summary() -> str:
 
 def _extra_voices(chord: ChordDef) -> tuple[int, int, int, int]:
     """alto/sop1/descant/sop2(旋律) を ``chord.chord_tones`` のピッチクラス集合から導出する。
-    ``begin_pattern``/``state`` を使わず、``mctx.chord`` のみから毎回再計算できる（§3.3 参照）。
+    ``begin_pattern``/``state`` を使わず、``mctx.chord`` のみから毎回再計算できる（DESIGN.md §6.13 参照）。
     """
     pcs = sorted({t % 12 for t in chord.chord_tones}) or [chord.bass % 12]
     alto = lowest_note_with_pc(pcs[1 % len(pcs)], *ALTO_REG)
@@ -75,7 +75,7 @@ def _extra_voices(chord: ChordDef) -> tuple[int, int, int, int]:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §3.1）
+# sample 番号 / ChannelPlan（DESIGN.md §6.13）
 # ============================================================
 
 VLN1, VLN2, VLA, VC, CB, WW, HORN, TRUMPET, TIMPANI, CYMBAL = range(1, 11)

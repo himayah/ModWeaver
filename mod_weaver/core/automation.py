@@ -1,4 +1,4 @@
-"""テンポ＆ダイナミクス・オートメーション（CORE_EXTENSION_DESIGN §4.5、EXT-5）。
+"""テンポ＆ダイナミクス・オートメーション（DESIGN.md §4.9、EXT-5）。
 
 - ``TempoCurve``/``render_tempo_curve``: row 単位で BPM を連続的に変化させる（フリージャズのルバート、
   EDM のビルドアップ等）。``Pattern`` への直接アクセスを持つ既存フック ``finalize_pattern`` から呼ぶ

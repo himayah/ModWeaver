@@ -1,4 +1,4 @@
-"""和音の具体化 ``ChordSpec`` → ``ChordDef``（設計書 §6.6、D14）。"""
+"""和音の具体化 ``ChordSpec`` → ``ChordDef``（DESIGN.md §4.2）。"""
 from __future__ import annotations
 
 from dataclasses import dataclass

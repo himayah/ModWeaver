@@ -1,4 +1,4 @@
-"""Scream Tracker 3 ``.s3m`` のシリアライザと構造検査（FORMAT_TEMPO_DESIGN §4.3）。
+"""Scream Tracker 3 ``.s3m`` のシリアライザと構造検査（DESIGN.md §7.4）。
 
 スコープは XM と同じ方針: 1 Instrument = 1 PCM サンプル、アドリブ音色・S3M 固有機能は使わない。
 

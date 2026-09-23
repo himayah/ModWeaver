@@ -1,4 +1,4 @@
-"""orchestral の契約・8chマルチチャンネル(XM)・検査クリーン性（GENRE_DESIGN_V2.md §3）。"""
+"""orchestral の契約・8chマルチチャンネル・検査クリーン性（DESIGN.md §6.13）。"""
 from __future__ import annotations
 
 import pytest
@@ -51,7 +51,7 @@ def test_tempo_cell_present_on_first_pattern(seed):
 @pytest.mark.parametrize("seed", SEEDS[:10])
 def test_intro_is_strings_only(seed):
     """intro は弦楽器のみ。row 0 の CH_WW/CH_BRASS/CH_TIMP には F<bpm> テンポセルが入りうる
-    （空きチャンネルへ挿入される。§4.0.1）ため sample 番号で判定する。"""
+    （空きチャンネルへ挿入される。DESIGN.md §3.2）ため sample 番号で判定する。"""
     song, _ = build(seed)
     pat = song.patterns[0]
     for r in range(pat.rows):

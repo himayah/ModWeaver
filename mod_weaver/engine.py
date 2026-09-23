@@ -1,4 +1,4 @@
-"""生成エンジン（設計書 §3.2、§6.5、§7）。
+"""生成エンジン（DESIGN.md §2.3、§5）。
 
 エンジンが所有する処理: テンポセル挿入、pattern への転記、順序表、バイト化、検査、書込。
 プロファイルが所有する処理: 音色、和声、リズム、フレーズ、パート間の音の配置。
@@ -37,7 +37,7 @@ TEMPO_MIN, TEMPO_MAX = 32, 255  # Fxx が Tempo と解釈される範囲（31 �
 
 @dataclass(frozen=True)
 class TempoRequest:
-    """``--tempo`` の要求（単一値は ``lo == hi``）。FORMAT_TEMPO_DESIGN §3。"""
+    """``--tempo`` の要求（単一値は ``lo == hi``）。DESIGN.md §5.5。"""
     lo: int
     hi: int
 
@@ -70,7 +70,7 @@ class Result:
 
 
 # ------------------------------------------------------------
-# 契約検査（§7.3）
+# 契約検査（DESIGN.md §5.4）
 # ------------------------------------------------------------
 
 def validate_timebase(rows_per_measure: int) -> None:
@@ -85,7 +85,7 @@ MAX_PROFILE_CHANNELS = 64   # プロファイルが宣言できる上限（形�
 
 def validate_profile(profile: GenreProfile) -> None:
     """形式に依存しない宣言の検査。形式ごとのチャンネル数上限は ``generate()`` が
-    ``formats.check_channels`` で検査する（FORMAT_TEMPO_DESIGN §2.1）。"""
+    ``formats.check_channels`` で検査する（DESIGN.md §7.1）。"""
     if profile.variable_meter:
         if profile.rows_per_measure <= 0:
             raise PlanError(f"{profile.id}: rows_per_measure must be positive: {profile.rows_per_measure}")
@@ -160,7 +160,7 @@ def _make_rng(profile: GenreProfile, seed: int) -> Union[random.Random, RngStrea
 
 
 def resolve_tempo(request: TempoRequest, seed: int, profile: GenreProfile) -> int:
-    """``--tempo`` の要求をジャンルの ``tempo_range`` と突き合わせ、BPM を1つに確定する（§3.3・§3.4）。
+    """``--tempo`` の要求をジャンルの ``tempo_range`` と突き合わせ、BPM を1つに確定する（DESIGN.md §5.5）。
 
     一部だけ重なる場合は重なり部分へ切り詰めて WARNING、重ならなければ ``TempoRangeError``。
     範囲からの選択は専用ストリーム（``RngStreams`` と同じ命名規約）で行い、他の乱数消費を一切変えない。
@@ -178,7 +178,7 @@ def resolve_tempo(request: TempoRequest, seed: int, profile: GenreProfile) -> in
 def apply_tempo(song: Song, bpm: int) -> None:
     """``order[0]`` の pattern の row 0 に ``F bpm`` を挿入する（tempo_policy="engine"）。
 
-    探索・挿入は ``CellGrid.insert_command``（core/model.py。CORE_EXTENSION_DESIGN §4.0.1）に委譲する。
+    探索・挿入は ``CellGrid.insert_command``（core/model.py。DESIGN.md §3.2・§4.10）に委譲する。
     空きチャンネルが無ければそちらが ChannelConflictError を送出する（プロファイルの不具合）。
     """
     song.patterns[song.order[0]].insert_command(0, 0x0F, bpm)

@@ -293,7 +293,7 @@ def test_xm_v16_arpeggio_range():
 
 def test_xm_round_trips_through_real_genres():
     """全登録ジャンルの Song を XM へシリアライズし、parse_xm で自己無矛盾（バイト数一致・エラー無し）
-    であることを確認する（実プレイヤーでの検証は別途必要。§11）。"""
+    であることを確認する（実プレイヤーでの検証は tests/realplayer/。DESIGN.md §9.2）。"""
     from mod_weaver import engine
     from mod_weaver.profiles.registry import PROFILE_REGISTRY
 

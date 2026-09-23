@@ -1,6 +1,6 @@
-"""作曲補助: リズム動機・旋律生成・配置とダイナミクス（設計書 §6.2）。
+"""作曲補助: リズム動機・旋律生成・配置とダイナミクス（DESIGN.md §4.3）。
 
-Nostalgic は本モジュールを使わず、旧アルゴリズムを ``genres/nostalgic.py`` に移植している（§8.1）。
+Nostalgic は本モジュールを使わず、旧アルゴリズムを ``genres/nostalgic.py`` に移植している（DESIGN.md §6.1）。
 """
 from __future__ import annotations
 

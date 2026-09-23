@@ -1,4 +1,4 @@
-"""Impulse Tracker ``.it`` のシリアライザと構造検査（FORMAT_TEMPO_DESIGN §4.4）。
+"""Impulse Tracker ``.it`` のシリアライザと構造検査（DESIGN.md §7.5）。
 
 **サンプルモード**（インストゥルメント不使用）で書く。1 Instrument = 1 IT サンプル。エンベロープ・NNA 等の
 IT 固有機能は使わない（XM/S3M と同じスコープ方針）。

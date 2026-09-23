@@ -1,4 +1,4 @@
-"""Suspense 共通の音色・語彙・和声（設計書 §8.2）。"""
+"""Suspense 共通の音色・語彙・和声（DESIGN.md §6.2）。"""
 from __future__ import annotations
 
 import cmath
@@ -65,7 +65,7 @@ def _bin_energy(data: bytes, start: int, length: int, k: int) -> float:
 
 
 def test_loop_content_frequencies_follow_design():
-    """ループ本体の主成分が設計の周期数 K に立っている（§8.2.2 の K, L と §5.1 の spc）。"""
+    """ループ本体の主成分が設計の周期数 K に立っている（DESIGN.md §6.2 の K, L と §3.1 の spc）。"""
     drone = SAMPLES["drone"]
     e = {k: _bin_energy(drone.data, 60, 760, k) for k in range(1, 12)}
     assert max(e, key=e.get) == 6                         # K=6

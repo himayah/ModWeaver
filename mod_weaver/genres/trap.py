@@ -1,4 +1,4 @@
-"""trap: トラップ / ドリル（GENRE_DESIGN_V2.md §4）。
+"""trap: トラップ / ドリル（DESIGN.md §6.8）。
 
 1 measure = 32 row = 4/4（1 row = 32分音符。1拍=8row）。32 は64の約数のため EXT-2 なしで合法。
 EXT-1（``core/groove.py`` のサブステップ・リトリガ）と EXT-5（``core/automation.py`` の808グライド）
@@ -6,7 +6,7 @@ EXT-1（``core/groove.py`` のサブステップ・リトリガ）と EXT-5（``
 
 **設計時からの簡略化**: 当初案の "i - VI - VII - i" 4和音進行は、``rows_per_measure=32`` では
 1 pattern（64 row）に2 measure しか収まらず、4和音を1 pattern に収めることができない
-（``variable_meter`` を使わずに解決する場合の制約。GENRE_DESIGN_V2.md 執筆時点の見落とし）。
+（``variable_meter`` を使わずに解決する場合の制約。当初の設計の見落とし。DESIGN_HISTORY.md §9）。
 実際の trap は2和音ループ（例: Cm-Ab）が非常に一般的であるため、"i - VI" の2和音ループ
 （2 measure=64 row でちょうど収まる）に簡略化している。
 """
@@ -38,7 +38,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・調・進行（GENRE_DESIGN_V2.md §4.3）
+# 音域・調・進行（DESIGN.md §6.8）
 # ============================================================
 
 KEY_PC = 0                                    # C
@@ -66,7 +66,7 @@ def progression_summary() -> str:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §4.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.8）
 # ============================================================
 
 K808, SNARE, HAT_C, HAT_O, LEAD = 1, 2, 3, 4, 5
@@ -188,7 +188,7 @@ class TrapProfile(GenreProfile):
         808 はワンショット（非ループ）なので、先行音が鳴り終わった後の 3xx は「滑らせる音が無い」。
         ProTracker は差し替えたサンプルを頭から鳴らし直す固有の挙動（sample swap）でたまたま鳴っていたが、
         XM/S3M/IT では無音になる。先行音の再生位置を追跡し、鳴り終わっていれば新しい打鍵として書く
-        （MOD での聴感はほぼ同じ。グライドは1 row で完了するため。FORMAT_TEMPO_DESIGN §4）。"""
+        （MOD での聴感はほぼ同じ。グライドは1 row で完了するため。DESIGN.md §6.8）。"""
         k808 = ins["k808"]
         shift = k808.spec.shift          # logical note -> tracker note（t = n - shift）は PERIODS の添字に必要
         root, fifth = chord.bass, fold_into_range(chord.bass + 7, *BASS_REG)

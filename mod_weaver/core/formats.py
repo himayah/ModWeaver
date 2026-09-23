@@ -1,4 +1,4 @@
-"""出力形式の能力表とチャンネルパンの決定（FORMAT_TEMPO_DESIGN §2）。
+"""出力形式の能力表とチャンネルパンの決定（DESIGN.md §7.1）。
 
 ``engine.compose_song()`` が作る ``Song``（Cell＝MOD 風のエフェクト表現）を形式中立の中間表現として扱い、
 形式ごとの差はすべて各シリアライザが吸収する。作曲ロジック（profiles/*）は出力形式を一切意識しない。
@@ -16,7 +16,7 @@ from .model import ChannelPlan, SampleSpec, Song
 
 DEFAULT_FORMAT = "mod"
 
-# §2.3: 明示的なパン指定が無い 4ch 系ジャンルを MOD 以外で出すときの Amiga 風 L R R L 配置。
+# DESIGN.md §7.1: 明示的なパン指定が無い 4ch 系ジャンルを MOD 以外で出すときの Amiga 風 L R R L 配置。
 # 0/255 の完全分離は耳障りなので 64/192 に緩める。
 AMIGA_LEFT, AMIGA_RIGHT = 64, 192
 CENTER = 128
@@ -50,7 +50,7 @@ def check_channels(fmt: OutputFormat, n_channels: int, where: str) -> None:
 
 
 def channel_pans(song: Song, declared: Optional[Sequence[int]] = None) -> tuple[int, ...]:
-    """§2.3 の規則でチャンネルごとのパンを決める。
+    """DESIGN.md §7.1 の規則でチャンネルごとのパンを決める。
 
     1. プロファイルの宣言（``GenreProfile.channel_pans``）があればそれ
     2. 全サンプルが既定パン（128）なら Amiga 風 L R R L の繰り返し（64/192）

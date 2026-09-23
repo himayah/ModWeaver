@@ -12,7 +12,7 @@ PHRYGIAN = Scale(0, MODES["phrygian"])
 
 
 def test_design_examples_are_regression_values():
-    """設計書 §6.6 の例（主音 C、HARMONY_REG=(17,28)、BASS_REG=(0,11)）。"""
+    """DESIGN.md §4.2 の例（主音 C、HARMONY_REG=(17,28)、BASS_REG=(0,11)）。"""
     cdim = voice(ChordSpec(0, "dim"), 0, PHRYGIAN, REGS, arp=True)
     assert (cdim.bass, cdim.harmony, cdim.arp) == (0, 24, 0x36)
     assert {n % 12 for n in cdim.chord_tones} == {0, 3, 6}

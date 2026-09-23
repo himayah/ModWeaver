@@ -1,5 +1,5 @@
 """第三者の実プレイヤー（ffmpeg 内蔵の libopenmpt＝OpenMPT の再生エンジン）で出力を検証する補助
-（FORMAT_TEMPO_DESIGN §7）。
+（DESIGN.md §9.2）。
 
 自作 writer を自作 parser で読み戻すだけの検査は、仕様の誤解を writer・parser が共有していると検出できない
 （XM header_size・XM 音高の2件がまさにそれだった）。ここでは独立した実装で実際に再生し、

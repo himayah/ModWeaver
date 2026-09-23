@@ -1,4 +1,4 @@
-"""march: 行進曲（設計書 §8.5）。
+"""march: 行進曲（DESIGN.md §6.5）。
 
 構成: intro（heroic）→ a（sousa）→ a2（heroic）→ trio → trio2 → coda（heroic）。
 ``order=[0, 1, 2, 1, 2, 3, 4, 3, 4, 5]``（10 pattern × 8 measure × 8 row ≈ 80 秒）。
@@ -35,7 +35,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・調・進行（§8.5、8.5.3）
+# 音域・調・進行（DESIGN.md §6.5）
 # ============================================================
 
 KEY_CHOICES = (0, 5, 10, 3)                  # C / F / Bb / Eb
@@ -92,7 +92,7 @@ def progression_summary(label: str, name: str, tonic_pc: int) -> str:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（§8.5.1〜8.5.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.5）
 # ============================================================
 
 BD, SD, CRASH, TUBA, HORN, SECTION, PICC = 1, 2, 3, 4, 5, 6, 7
@@ -111,7 +111,7 @@ VIBRATO_PARAM = 0x46          # picc の 4xy（長音のビブラート）
 
 
 # ============================================================
-# 音色合成（§8.5.1）。core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
+# 音色合成（DESIGN.md §6.5）。core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
 # ============================================================
 
 def synth_bd() -> SampleSpec:
@@ -163,7 +163,7 @@ def build_march_samples() -> dict[str, SampleSpec]:
 
 
 # ============================================================
-# 文法の語彙（§8.5.5）
+# 文法の語彙（DESIGN.md §6.5）
 # ============================================================
 
 # RhythmMotif: (0,6)=付点4分+8分 / (0,3,4,7)=付点8分+16分x2 / (0,2,4,6)=8分x4 / (0,4)=4分x2

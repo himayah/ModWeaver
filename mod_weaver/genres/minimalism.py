@@ -1,4 +1,4 @@
-"""minimalism: ミニマル / フェーズ音楽（GENRE_DESIGN_V2.md §6）。
+"""minimalism: ミニマル / フェーズ音楽（DESIGN.md §6.12）。
 
 4チャンネルそれぞれが異なる固定周期（16/12/8/6 row）で決まった音型を反復する（ライヒの
 "Piano Phase" 的な発想）。1 pattern = 1 "measure" = LCM(16,12,8,6) = 48 row（``ChordSlot(rows=48)``、
@@ -30,7 +30,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §6.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.12）
 # ============================================================
 
 PIANO, MARIMBA, VIBES, WOOD = 1, 2, 3, 4
@@ -51,7 +51,7 @@ LCM_ROWS = 48
 N_PHASES = CYCLE_PIANO           # 16段階でCH_PIANOの周期をちょうど1周する
 
 # 固定音型（row -> (logical note or None, vol)）。乱数は使わない（決定論的な反復）。
-# CH_WOOD は row0 を意図的に避ける（tempo/D00 挿入のため row0/row47 に空きチャンネルを残す契約。§6.6）。
+# CH_WOOD は row0 を意図的に避ける（tempo/D00 挿入のため row0/row47 に空きチャンネルを残す契約。DESIGN.md §4.10・§6.12）。
 PIANO_PATTERN: dict[int, tuple[Optional[int], int]] = {
     0: (24, 44), 2: (28, 40), 4: (31, 42), 6: (28, 38),
     8: (24, 44), 10: (28, 40), 12: (31, 42), 14: (28, 38),

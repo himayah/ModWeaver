@@ -1,4 +1,4 @@
-"""波形・フィルタ・レート算出（設計書 §6.1）。
+"""波形・フィルタ・レート算出（DESIGN.md §4.4）。
 
 ``clamp`` / ``pad_even`` は旧実装と同名・同挙動。全ジャンル（nostalgic 含む）のサンプル合成は
 core/synth.py の Patch 方式を経由し、本モジュールの各プリミティブを内部で利用する。
@@ -46,7 +46,7 @@ Partials = Sequence[tuple[float, float]]   # [(倍率 mult, 重み weight)]
 
 
 def content_spc(rate_note: int, shift: int) -> float:
-    """pitched サンプルの 1 周期あたりサンプル数 ``spc = R / F``（設計書 §5.1）。
+    """pitched サンプルの 1 周期あたりサンプル数 ``spc = R / F``（DESIGN.md §3.1）。
 
     ``F = f(rate_note + shift)``（rate_note で発音したとき logical note ``rate_note+shift`` が鳴る）。
     """
@@ -99,7 +99,7 @@ def adsr(t: float, total: float, a: float, d: float, s: float, r: float) -> floa
 
 
 def noise_lp(rng: _random.Random, n: int, a_start: float, a_end: float) -> list[float]:
-    """ホワイトノイズを 1 次 IIR LP に通す（設計書 §6.1）。
+    """ホワイトノイズを 1 次 IIR LP に通す（DESIGN.md §4.4）。
 
     ``y[i] = a[i]·y[i−1] + (1−a[i])·x[i]``、``a[i]`` は ``a_start→a_end`` の線形補間。
     ``a`` が大きいほど暗い（旧スネアの ``lp = lp*0.35 + raw*0.65`` は a=0.35）。``rng`` を n 回消費。

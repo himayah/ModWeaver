@@ -1,5 +1,5 @@
 """ProTracker ``M.K.``（＋FastTracker 系の多チャンネル ``xCHN``）および FastTracker II ``.xm``
-シリアライザと原子的書込（設計書 §6.3、CORE_EXTENSION_DESIGN §4.6③ EXT-6、FORMAT_TEMPO_DESIGN §4.1・§4.2）。
+シリアライザと原子的書込（DESIGN.md §7.2・§7.3）。
 
 出力形式の一覧は ``core/formats.py`` の ``FORMATS``。
 """
@@ -81,10 +81,10 @@ def serialize(song: Song) -> bytes:
 # XM（FastTracker II Extended Module。EXT-6）
 # ============================================================
 #
-# CORE_EXTENSION_DESIGN §4.6③ のスコープどおり、エンベロープ／複数サンプルキーマップ／XM 独自の
+# DESIGN.md §7.3 のスコープどおり、エンベロープ／複数サンプルキーマップ／XM 独自の
 # vol column は使わない（1 Instrument = 1 sample、Cell の vol/effect 排他制約をそのまま流用）。
 #
-# §11 の要検証事項: OpenMPT でパターン内容が読めない不具合を実際に検出・修正済み（header_size の
+# DESIGN_HISTORY.md §8: OpenMPT でパターン内容が読めない不具合を実際に検出・修正済み（header_size の
 # 基準オフセット、下記 XM_HEADER_SIZE のコメント参照）。波形・パンニングの実プレイヤーでの聴感確認は
 # まだ未実施。
 
@@ -109,7 +109,7 @@ XM_FINETUNE_SCALE = 16                # MOD finetune(-8..7) を XM finetune(-128
 # period 856 は FT2 の C-3（XM note 37）に相当する（FT2 の C-4＝note 49 が period 428／8363Hz）。
 # 以前は t+1（C-0）と書いていたため 3 オクターブ低く鳴っていた。parse_xm も同じ誤った規約で読んでいたので
 # 自己ラウンドトリップでは検出できず、libopenmpt で MOD と XM を実際に再生比較して発覚した
-# （FORMAT_TEMPO_DESIGN §1.1。tests/realplayer/ の形式間等価性テストが回帰を防ぐ）。
+# （DESIGN_HISTORY.md §8。tests/realplayer/ の形式間等価性テストが回帰を防ぐ）。
 XM_NOTE_OFFSET = 37
 
 
@@ -122,7 +122,7 @@ def _xm_text(text: str, limit: int, what: str) -> bytes:
 
 def _xm_cell_effect(cell: Cell) -> tuple[int, int]:
     """``vol`` は XM でも effect=0xC（Set Volume）へ変換する（MOD の Cell.serialize() と同じ解決）。
-    XM 独自の volume column は使わない（CORE_EXTENSION_DESIGN §4.6③ のスコープどおり）。"""
+    XM 独自の volume column は使わない（DESIGN.md §7.3 のスコープどおり）。"""
     return (0xC, cell.vol) if cell.vol is not None else (cell.effect, cell.param)
 
 
@@ -155,7 +155,7 @@ def _pack_xm_pattern(pat: Pattern, pan_for: Sequence[Optional[int]], default_pan
     """``pan_for[c]``: チャンネル c のパン（None なら書かない）。``default_pan[i]``: sample i+1 が既定パンか。
 
     XM は instrument 番号付きのセルでチャンネルパンがサンプル既定値に戻るため、既定パン（128）の
-    サンプルを鳴らすセルにだけ毎回 ``Px`` を付けてチャンネルパンを再設定する（FORMAT_TEMPO_DESIGN §4.2）。"""
+    サンプルを鳴らすセルにだけ毎回 ``Px`` を付けてチャンネルパンを再設定する（DESIGN.md §7.3）。"""
     out = bytearray()
     for r in range(pat.rows):
         for c in range(pat.channels):

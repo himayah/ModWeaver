@@ -1,4 +1,4 @@
-"""suspense-chase: 緊急脱出・追走（設計書 §8.4）。
+"""suspense-chase: 緊急脱出・追走（DESIGN.md §6.4）。
 
 構成: intro → a → a → b → a → b → climax → outro（``order=[0,1,2,3,1,3,4,5]``、約 53 秒）。
 進行は A=pedal / B=tritone 固定（増 4 度の追走が主役）。文法の核は「毎拍の心拍＋8 分連打の drone＋

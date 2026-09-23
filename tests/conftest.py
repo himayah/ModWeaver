@@ -15,7 +15,7 @@ REFERENCE_PATH = Path(__file__).parent / "reference" / "twilight_pad_v1.py"
 # 旧 twilight_pad.py の SHA-256（Phase 0 で凍結。誤編集の検知用）
 REFERENCE_SHA256 = "b7f1aaef9df37622aef67c0d1053b23974bf6905ae51e792c8835b5cb2f3b2a0"
 
-# 回帰用の固定 seed 20 件（§11.4）: 固定 5 件 + 決定的に生成した 15 件
+# 回帰用の固定 seed 20 件（DESIGN.md §10）: 固定 5 件 + 決定的に生成した 15 件
 FIXED_SEEDS = [1, 42, 100000, 732501, 999999]
 
 

@@ -1,4 +1,4 @@
-"""パート間リアクティブ・ミキサー（CORE_EXTENSION_DESIGN §4.4、EXT-4）。
+"""パート間リアクティブ・ミキサー（DESIGN.md §4.8、EXT-4）。
 
 - ``SidechainRule``/``apply_sidechain``: あるサンプル（``trigger_sample`）が鳴った row を検出し、
   別チャンネルの音量を一時的にダッキングして線形復帰させる後処理（``profile.post_processors`` から

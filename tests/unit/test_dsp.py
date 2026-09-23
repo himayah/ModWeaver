@@ -11,7 +11,7 @@ from tests.conftest import load_reference
 
 
 def test_content_spc_matches_design_table():
-    # 設計書 §5.1 の例表（rate_note=C-3）
+    # DESIGN.md §3.1 の例表（rate_note=C-3）
     assert dsp.content_spc(24, -24) == pytest.approx(126.7, abs=0.05)
     assert dsp.content_spc(24, -12) == pytest.approx(63.4, abs=0.05)
     assert dsp.content_spc(24, 0) == pytest.approx(31.68, abs=0.01)
@@ -19,7 +19,7 @@ def test_content_spc_matches_design_table():
 
 
 def test_heard_pitch_follows_n_equals_t_plus_shift():
-    """rate_note で作った波形を tracker note t で鳴らすと logical note t+shift（n = t + shift）が聞こえる（§5.1）。
+    """rate_note で作った波形を tracker note t で鳴らすと logical note t+shift（n = t + shift）が聞こえる（DESIGN.md §3.1）。
 
     Period 表の丸め誤差（最大約 8 cent）の範囲で一致する。spc は発音 note によらず一定。
     """
@@ -154,7 +154,7 @@ def test_with_attack():
 
 
 def test_full_loop_recipe_passes_verify_v11():
-    """drone のレシピ（§6.1）で作ったループが V11（境界段差）を満たす。"""
+    """drone のレシピ（DESIGN.md §4.4）で作ったループが V11（境界段差）を満たす。"""
     from mod_weaver.core.model import SampleSpec
     from mod_weaver.core.verify import ParsedSample, _Report, _check_loop_boundary
 

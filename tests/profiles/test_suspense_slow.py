@@ -1,4 +1,4 @@
-"""suspense-slow の文法・音域・契約（設計書 §8.3、§11.3）。"""
+"""suspense-slow の文法・音域・契約（DESIGN.md §6.3、§10）。"""
 from __future__ import annotations
 
 import pytest

@@ -1,4 +1,4 @@
-"""--format mp3 を実際に ffmpeg で生成し、デコードして検査する（FORMAT_TEMPO_DESIGN §5.2）。"""
+"""--format mp3 を実際に ffmpeg で生成し、デコードして検査する（DESIGN.md §9.2）。"""
 import pytest
 
 from mod_weaver import engine, profiles

@@ -1,4 +1,4 @@
-"""swing-jazz: スウィング・ジャズ / ビバップ（GENRE_DESIGN_V2.md §1）。
+"""swing-jazz: スウィング・ジャズ / ビバップ（DESIGN.md §6.6）。
 
 1 measure = 8 row = 4/4（1 row = 8分音符）。EXT-1（``core/groove.py``）のスウィング（row 偶奇で
 Speed を交互に変える）を実証する最初のジャンル。Bb のリズムチェンジ形式 AABA（32 measure = 4 pattern
@@ -35,7 +35,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・調・進行（GENRE_DESIGN_V2.md §1.3）
+# 音域・調・進行（DESIGN.md §6.6）
 # ============================================================
 
 KEY_PC = 10                                   # Bb
@@ -87,7 +87,7 @@ def progression_summary(label: str, name: str) -> str:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §1.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.6）
 # ============================================================
 
 RIDE, BRUSH, BASS, PIANO, SAX = 1, 2, 3, 4, 5
@@ -106,7 +106,7 @@ RIDE_ROWS = (0, 2, 3, 4, 6, 7)          # "ding-ding-a-ding"
 RIDE_STRONG_ROWS = (0, 4)
 BACKBEAT_ROWS = (2, 6)
 # どちらも row 0/2/4/6（ride の強拍・walk bass の全拍）を避け、swing（EXT-1）が row 0 に必要とする
-# 空きチャンネルを piano 側が確実に残す（GENRE_DESIGN_V2 §1.6 の row0 契約を全 measure に一般化）。
+# 空きチャンネルを piano 側が確実に残す（DESIGN.md §4.10 の row0 契約を全 measure に一般化）。
 COMP_A = (1, 3)
 COMP_B = (1, 5)
 
@@ -120,8 +120,8 @@ WALK_MOTIF = RhythmMotif((0, 2, 4, 6))
 HOLD_MOTIF = RhythmMotif((0,))
 
 SAX_RETRIG_TICKS = 5        # 裏拍（short_speed=10 tick）の中ほどで1回だけ再発音する装飾
-SWING_CONFIG = groove.SwingConfig(long_speed=14, short_speed=10)  # 14:10 = 1.4:1、合計24 tick＝1拍（GENRE_DESIGN_V2 §10 試聴調整対象）
-# ↑ 以前は 7:5（合計12 tick/拍）で、tempo_choices の2倍（約 300〜340 BPM）で鳴っていた。FORMAT_TEMPO_DESIGN §1.3
+SWING_CONFIG = groove.SwingConfig(long_speed=14, short_speed=10)  # 14:10 = 1.4:1、合計24 tick＝1拍（DESIGN.md §11 試聴調整対象）
+# ↑ 以前は 7:5（合計12 tick/拍）で、tempo_choices の2倍（約 300〜340 BPM）で鳴っていた。DESIGN_HISTORY.md §9
 
 
 def _apply_swing_to_all(song, plan) -> None:
@@ -237,7 +237,7 @@ class SwingJazzProfile(GenreProfile):
     def _ride(buf: MeasureBuffer, ins) -> None:
         """強拍(0,4)は vol=58 の明示アクセント、弱拍は vol を指定せずサンプル既定音量で鳴らす
         （vol 無し＝``CellGrid.insert_command`` の2番目の探索対象になれる。swing の row 挿入余地を
-        増やす。GENRE_DESIGN_V2 §1.6）。"""
+        増やす。DESIGN.md §6.6）。"""
         for r in RIDE_ROWS:
             if r in RIDE_STRONG_ROWS:
                 buf.put(r, CH_DRUM, ins["ride"].cell(vol=58))

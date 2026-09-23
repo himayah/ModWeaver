@@ -1,4 +1,4 @@
-"""独立パーサ ``parse_mod`` と構造検査 ``verify``（設計書 §6.4）。
+"""独立パーサ ``parse_mod`` と構造検査 ``verify``（DESIGN.md §9.1）。
 
 書込側（``writer`` / ``model``）とは独立に、バイト列を ``struct`` で直接読む。
 参照するのは Period 表（``pitch``）と ``ChannelPlan`` の型のみ。
@@ -321,7 +321,7 @@ def has_errors(issues: list[Issue]) -> bool:
 
 
 # ============================================================
-# XM（FastTracker II Extended Module。EXT-6、CORE_EXTENSION_DESIGN §4.6④）
+# XM（FastTracker II Extended Module。DESIGN.md §7.3・§9.1）
 # ============================================================
 
 XM_FIXED_HEADER = 60     # ID(17)+name(20)+0x1A(1)+tracker(20)+version(2)
@@ -574,7 +574,7 @@ def _check_xm_tempo(pm: ParsedXM, rep: _Report) -> None:
 
 def _check_xm_volume_sum(pm: ParsedXM, rep: _Report) -> None:
     """再生順に各チャンネルの音量を追跡し、instrument.pan で加重した左右合計を検査する
-    （MOD の固定 L/R チャンネル割当の一般化。CORE_EXTENSION_DESIGN §4.6④）。"""
+    （MOD の固定 L/R チャンネル割当の一般化。DESIGN.md §9.1）。"""
     n = pm.n_channels
     vol = [0] * n
     pan = [128] * n

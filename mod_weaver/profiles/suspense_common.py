@@ -1,4 +1,4 @@
-"""Suspense 共通: 音色・和声・語彙（設計書 §8.2）。
+"""Suspense 共通: 音色・和声・語彙（DESIGN.md §6.2）。
 
 ``suspense-slow`` / ``suspense-chase`` が共有する。両者は ``SuspenseBase`` を継承し、
 ``plan()`` と文法（各 kind の作曲メソッド）だけを別実装する。
@@ -33,7 +33,7 @@ from ..core.midi import GmVoice
 from .base import GenreProfile
 
 # ============================================================
-# 音域・調・進行（設計書 §8.2.1 / §8.2.4）
+# 音域・調・進行（DESIGN.md §6.2）
 # ============================================================
 
 KEY_PC = 0                                   # 主調 C
@@ -59,7 +59,7 @@ PROGRESSIONS: dict[str, tuple[str, list[ChordSpec]]] = {
 }
 
 # ============================================================
-# sample 番号 / ChannelPlan（§8.2.3）
+# sample 番号 / ChannelPlan（DESIGN.md §6.2）
 # ============================================================
 
 HEART, ANVIL, SWOOSH, DRONE, PIZZ, STRINGS, LEAD = 1, 2, 3, 4, 5, 6, 7
@@ -80,7 +80,7 @@ ANVIL_RING_SEC = 0.6    # anvil の余韻としてこの秒数は Ch1 の心拍�
 
 
 # ============================================================
-# 音色合成（§8.2.2）。全音色 core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
+# 音色合成（DESIGN.md §6.2）。全音色 core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
 # ============================================================
 
 def synth_heart() -> SampleSpec:
@@ -153,7 +153,7 @@ def build_suspense_samples() -> dict[str, SampleSpec]:
 
 
 # ============================================================
-# 共通語彙（§8.2.4）
+# 共通語彙（DESIGN.md §6.2）
 # ============================================================
 
 def row_seconds(bpm: int) -> float:

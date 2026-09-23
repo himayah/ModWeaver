@@ -2,7 +2,7 @@
 
 **日本語** | [English](README.en.md)
 
-[![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
@@ -34,7 +34,7 @@
 
 ## 動作要件
 
-- **Python 3.7 以上**（追加の `pip install` は不要です）
+- **Python 3.10 以上**（追加の `pip install` は不要です）
 - **`--format mp3` を使う場合のみ: ffmpeg**（**libopenmpt** と **libmp3lame** を有効にしてビルドされたもの）
   - MP3 は、曲をいったん `.xm` にして ffmpeg 内蔵の libopenmpt（OpenMPT の再生エンジン）で再生し、MP3 に符号化して作ります。ModWeaver 自身は音声の再生エンジンを持ちません。
   - `ffmpeg` を PATH に通すか、環境変数 `MODWEAVER_FFMPEG` に実行ファイルのパスを指定してください。
@@ -193,9 +193,7 @@ https://github.com/himayah/ModWeaver
 | `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
 | `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ |
 
-最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
-
-ジャンルは `mod_weaver/genres/` に置いたモジュール（1ファイル＝1ジャンル）から起動のたびに自動で読み込まれます。新しいジャンルは、このディレクトリに `@register_profile` 付きの `GenreProfile` サブクラス（`id` と、1行の説明 `description`（日本語）・`description_en`（英語）を持つ）を定義した `.py` を置くだけで追加できます（詳細は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3）。
+最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。`-e` を付けると説明が英語で表示されます。
 
 #### 終了コード
 
@@ -231,7 +229,7 @@ https://github.com/himayah/ModWeaver
 チャンネル役割・使用音色はジャンルごとに異なる `ChannelPlan` として `mod_weaver/genres/*.py` に定義されています。
 以下は既定ジャンル `nostalgic` の構成例です（Amigaのステレオ定位特性 1:左, 2:右, 3:右, 4:左 に合わせた
 バランスの良い音像設計）。他ジャンルの構成は各 `genres/*.py` の `CHANNEL_PLAN`、または
-[GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) の各ジャンル節（ChannelPlan／音色キット）を参照してください。
+[DESIGN.md](DESIGN.md) §6 の各ジャンルの節を参照してください。
 
 | チャンネル | 定位 | パート | 使用音色 | 役割 |
 |:---|:---|:---|:---|:---|
@@ -256,18 +254,13 @@ https://github.com/himayah/ModWeaver
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
 │                       #        trap / future-bass / maqam / free-jazz / minimalism / orchestral）
 ├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
-├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
-├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
-├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）
-├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a〜4e（EXT-1〜6）全て実装済み
-├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。8ジャンル全て実装済み
-├── FORMAT_TEMPO_DESIGN.md  # 出力形式選択（--format）・テンポ指定（--tempo）の設計書。実装済み
-├── CLI_STAGE2_DESIGN.md    # ジャンル自動検出・--genre random・--version 等の設計書。実装済み
+├── DESIGN.md          # 設計書（現在の仕様）
+├── DESIGN_HISTORY.md  # 設計の経緯（決定の理由・訂正・見送ったもの）
 ├── README.md          # 本ドキュメント（日本語）
 └── README.en.md       # 英語版 README
 ```
 
-より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。第一段階（nostalgic/suspense/march）の実装詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8、第二段階の core 拡張（EXT-1〜6、全て実装済み）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)、各ジャンル（swing-jazz/prog-rock/orchestral 等、8ジャンル全て実装済み）の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md)、出力形式とテンポ指定は [FORMAT_TEMPO_DESIGN.md](FORMAT_TEMPO_DESIGN.md)、ジャンルの自動検出と CLI の改善は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) をご参照ください。
+設計の詳細は [DESIGN.md](DESIGN.md)（現在の仕様）を、なぜそうなったか・過去の検討や訂正は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) をご参照ください。
 
 ---
 

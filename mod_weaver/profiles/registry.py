@@ -1,4 +1,4 @@
-"""プロファイル登録簿（設計書 §7.4）とジャンルモジュールの自動検出（CLI_STAGE2_DESIGN §3）。"""
+"""プロファイル登録簿とジャンルモジュールの自動検出（DESIGN.md §5.6）。"""
 from __future__ import annotations
 
 import importlib

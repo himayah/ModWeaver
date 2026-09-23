@@ -289,7 +289,7 @@ def test_exit_code_of_module_invocation_for_unknown_genre(tmp_path):
     assert r.returncode == 2
 
 
-# ---------------- --tempo（FORMAT_TEMPO_DESIGN §3） ----------------
+# ---------------- --tempo（DESIGN.md §5.5） ----------------
 
 def test_tempo_single_value(tmp_path, capsys):
     out = tmp_path / "t.mod"
@@ -324,7 +324,7 @@ def test_tempo_outside_genre_range_exit_2(tmp_path, capsys):
     assert code == 2 and "free-jazz" in err and not (tmp_path / "x.mod").exists()
 
 
-# ---------------- --format（FORMAT_TEMPO_DESIGN §2・§5） ----------------
+# ---------------- --format（DESIGN.md §7） ----------------
 
 @pytest.mark.parametrize("fmt, magic", [
     ("mod", lambda b: b[1080:1084] == b"M.K."), ("xm", lambda b: b[:17] == b"Extended Module: "),

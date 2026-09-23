@@ -28,6 +28,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MicroScale, parse, resolve_micronote
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -124,6 +125,17 @@ class MaqamState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "dum": GmVoice(drum_note=64),
+    "tek": GmVoice(drum_note=63),
+    "oud": GmVoice(program=24),
+    "oud_n3": GmVoice(program=24),
+    "oud_n7": GmVoice(program=24),
+    "nay": GmVoice(program=77),
+    "qanun": GmVoice(program=15),
+}
+
+
 @register_profile
 class MaqamProfile(GenreProfile):
     id = "maqam"
@@ -134,6 +146,7 @@ class MaqamProfile(GenreProfile):
     tempo_choices = (84, 88, 92, 96)
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

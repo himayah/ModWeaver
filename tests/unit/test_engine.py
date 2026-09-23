@@ -90,18 +90,16 @@ def test_plan_too_many_patterns():
 
 @pytest.mark.parametrize("attrs", [
     dict(rows_per_measure=7), dict(rows_per_measure=0), dict(channel_plan=()), dict(tempo_policy="x"),
-    dict(rng_mode="x"), dict(target_format="bogus"), dict(title="x" * 21), dict(title="日本"),
-    dict(target_format="xm", channel_plan=()), dict(target_format="xm", channel_plan=tuple(range(33))),
+    dict(rng_mode="x"), dict(title="x" * 21), dict(title="日本"), dict(channel_plan=tuple(range(65))),
 ])
 def test_profile_declaration_errors(attrs):
     with pytest.raises(PlanError):
         engine.build_song(make_profile(**attrs), 1)
 
 
-def test_xm_target_format_with_valid_channel_count_is_accepted():
-    """`target_format="xm"` 自体は §4.6② の分岐で有効な宣言（4chに限定されない）。"""
-    song = engine.build_song(make_profile(target_format="xm"), 1)
-    assert song is not None
+def test_unknown_format_is_rejected(tmp_path):
+    with pytest.raises(PlanError, match="unknown format"):
+        engine.generate(make_profile(), 1, tmp_path / "x.bin", fmt="bogus")
 
 
 def test_rows_per_measure_8_is_accepted():

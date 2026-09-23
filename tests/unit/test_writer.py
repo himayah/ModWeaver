@@ -6,7 +6,7 @@ import struct
 import pytest
 
 from mod_weaver.core.model import Cell, Pattern, SampleSpec, Song
-from mod_weaver.core.writer import WRITERS, serialize, serialize_xm, write_file
+from mod_weaver.core.writer import mod_magic, serialize, serialize_xm, write_file
 from mod_weaver.errors import OutputError, PlanError, SampleConstraintError
 
 
@@ -71,9 +71,29 @@ def test_sample_constraint_propagates():
         serialize(make_song(samples=[bad]))
 
 
-def test_writers_registry():
-    assert WRITERS["mod"] is serialize
-    assert WRITERS["xm"] is serialize_xm
+def test_formats_registry_default_is_mod():
+    from mod_weaver.core import formats
+
+    assert formats.DEFAULT_FORMAT == "mod"
+    assert formats.get_format("mod").extension == ".mod" and formats.get_format("xm").extension == ".xm"
+
+
+@pytest.mark.parametrize("n, magic", [(4, b"M.K."), (1, b"1CHN"), (6, b"6CHN"), (8, b"8CHN"), (10, b"10CH"), (32, b"32CH")])
+def test_mod_magic_for_channel_counts(n, magic):
+    assert mod_magic(n) == magic
+
+
+def test_mod_multichannel_round_trips_via_parse_mod():
+    from mod_weaver.core.verify import parse_mod, verify
+
+    pat = Pattern(None, channels=8)
+    pat.put(0, 7, Cell(12, 1, 0xF, 125))
+    song = Song("Eight", [SampleSpec("S", bytes(64), 40)], [pat], [0])
+    data = serialize(song)
+    assert data[1080:1084] == b"8CHN" and len(data) == 1084 + 64 * 8 * 4 + 64
+    pm = parse_mod(data)
+    assert pm.channels == 8 and pm.patterns[0][0][7].sample == 1
+    assert not [i for i in verify(data) if i.level == "ERROR"]
 
 
 # ---------------- XM（EXT-6） ----------------
@@ -98,7 +118,8 @@ def test_xm_header_layout():
     song_length, restart, n_channels, n_patterns, n_instruments, flags, speed, bpm = \
         struct.unpack("<8H", data[64:80])
     assert (song_length, n_channels, n_patterns, n_instruments) == (3, 6, 2, 2)
-    assert flags & 1 == 1                            # linear frequency table
+    assert flags & 1 == 0                            # Amiga frequency table（MOD と同じ period 単位のスライド）
+    assert (speed, bpm) == (6, 125)
 
 
 def test_xm_header_size_field_locates_real_pattern_data_offset():
@@ -138,9 +159,9 @@ def test_xm_pan_and_cells_round_trip_via_parse_xm():
     assert pm.consumed == len(data)
     assert [s.pan for inst in pm.instruments for s in inst.samples] == [30, 210]
     cell00 = pm.patterns[0][0][0]
-    assert (cell00.note, cell00.instrument, cell00.effect, cell00.param) == (25, 1, 0xF, 100)   # t=24 -> note 25
+    assert (cell00.note, cell00.instrument, cell00.effect, cell00.param) == (61, 1, 0xF, 100)   # t=24 -> note 61（t+37）
     cell11 = pm.patterns[0][1][1]
-    assert (cell11.note, cell11.instrument, cell11.effect, cell11.param) == (13, 2, 0xC, 40)    # vol=40 -> effect C
+    assert (cell11.note, cell11.instrument, cell11.effect, cell11.param) == (49, 2, 0xC, 40)    # t=12 -> note 49（C-4）、vol=40 -> effect C
 
 
 def test_write_file_creates_and_overwrites_existing(tmp_path):

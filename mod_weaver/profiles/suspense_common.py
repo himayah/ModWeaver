@@ -29,6 +29,7 @@ from ..core.model import (
     SampleSpec,
 )
 from ..core.pitch import MODES, Scale, lowest_note_with_pc
+from ..core.midi import GmVoice
 from .base import GenreProfile
 
 # ============================================================
@@ -240,11 +241,23 @@ class PatternState:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "heart": GmVoice(drum_note=35),
+    "anvil": GmVoice(program=14),
+    "swoosh": GmVoice(program=122),
+    "drone": GmVoice(program=95),
+    "pizz": GmVoice(program=45),
+    "strings": GmVoice(program=44),
+    "lead": GmVoice(program=81),
+}
+
+
 class SuspenseBase(GenreProfile):
     """Suspense 2 プロファイルの共通部。"""
 
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

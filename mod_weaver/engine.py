@@ -5,17 +5,17 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import logging
 import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
+from .core import formats, writer
 from .core import verify as verify_mod
-from .core import writer
 from .core.model import (
     MAX_SAMPLES,
-    NUM_CHANNELS,
     ROWS_PER_PATTERN,
     Instrument,
     MeasureBuffer,
@@ -26,12 +26,36 @@ from .core.model import (
     Song,
     SongPlan,
 )
-from .errors import PlanError, SampleConstraintError, VerificationError
+from .errors import PlanError, SampleConstraintError, TempoRangeError, VerificationError
 from .profiles.base import GenreProfile
 
 log = logging.getLogger("mod_weaver")
 
 SEED_RANGE = (100000, 999999)   # seed 省略時の乱数範囲（旧仕様どおり）
+TEMPO_MIN, TEMPO_MAX = 32, 255  # Fxx が Tempo と解釈される範囲（31 以下は Speed になる）
+
+
+@dataclass(frozen=True)
+class TempoRequest:
+    """``--tempo`` の要求（単一値は ``lo == hi``）。FORMAT_TEMPO_DESIGN §3。"""
+    lo: int
+    hi: int
+
+    def __post_init__(self) -> None:
+        if not TEMPO_MIN <= self.lo <= self.hi <= TEMPO_MAX:
+            raise ValueError(f"tempo must satisfy {TEMPO_MIN} <= MIN <= MAX <= {TEMPO_MAX}: {self}")
+
+    @classmethod
+    def parse(cls, text: str) -> "TempoRequest":
+        """``"120"`` または ``"80-100"``。不正は ValueError。"""
+        parts = text.strip().split("-")
+        if len(parts) not in (1, 2) or not all(p.strip().isdigit() for p in parts):
+            raise ValueError(f"invalid tempo {text!r} (expected BPM or MIN-MAX, e.g. 120 or 80-100)")
+        lo, hi = int(parts[0]), int(parts[-1])
+        return cls(lo, hi)
+
+    def __str__(self) -> str:
+        return str(self.lo) if self.lo == self.hi else f"{self.lo}-{self.hi}"
 
 
 @dataclass
@@ -41,6 +65,8 @@ class Result:
     song: Song
     plan: SongPlan
     issues: list[verify_mod.Issue]
+    tempo_request: Optional[TempoRequest] = None
+    fmt: str = formats.DEFAULT_FORMAT
 
 
 # ------------------------------------------------------------
@@ -54,33 +80,39 @@ def validate_timebase(rows_per_measure: int) -> None:
         raise PlanError(f"rows_per_measure must divide {ROWS_PER_PATTERN}: {rows_per_measure}")
 
 
+MAX_PROFILE_CHANNELS = 64   # プロファイルが宣言できる上限（形式ごとの上限は formats.OutputFormat.max_channels）
+
+
 def validate_profile(profile: GenreProfile) -> None:
-    # target_format 自体の妥当性は最初に確定させる（以降の channel_plan 検査がその値で分岐するため）。
-    if profile.target_format not in writer.WRITERS:
-        raise PlanError(f"{profile.id}: unsupported target_format {profile.target_format!r}")
+    """形式に依存しない宣言の検査。形式ごとのチャンネル数上限は ``generate()`` が
+    ``formats.check_channels`` で検査する（FORMAT_TEMPO_DESIGN §2.1）。"""
     if profile.variable_meter:
         if profile.rows_per_measure <= 0:
             raise PlanError(f"{profile.id}: rows_per_measure must be positive: {profile.rows_per_measure}")
     else:
         validate_timebase(profile.rows_per_measure)
-    if profile.target_format == "mod":
-        if len(profile.channel_plan) != NUM_CHANNELS:
-            raise PlanError(f"{profile.id}: channel_plan must have {NUM_CHANNELS} roles for target_format=mod")
-    elif not 1 <= len(profile.channel_plan) <= writer.XM_MAX_CHANNELS:
-        raise PlanError(
-            f"{profile.id}: channel_plan must have 1..{writer.XM_MAX_CHANNELS} roles for target_format={profile.target_format!r}"
-        )
+    if not 1 <= len(profile.channel_plan) <= MAX_PROFILE_CHANNELS:
+        raise PlanError(f"{profile.id}: channel_plan must have 1..{MAX_PROFILE_CHANNELS} roles")
     if profile.tempo_policy not in ("engine", "profile"):
         raise PlanError(f"{profile.id}: invalid tempo_policy {profile.tempo_policy!r}")
     if profile.rng_mode not in ("single", "streams"):
         raise PlanError(f"{profile.id}: invalid rng_mode {profile.rng_mode!r}")
+    lo, hi = profile.tempo_range
+    if not TEMPO_MIN <= lo <= hi <= TEMPO_MAX:
+        raise PlanError(f"{profile.id}: tempo_range must be within {TEMPO_MIN}..{TEMPO_MAX}: {profile.tempo_range}")
+    if any(not lo <= b <= hi for b in profile.tempo_choices):
+        raise PlanError(f"{profile.id}: tempo_choices {profile.tempo_choices} outside tempo_range {profile.tempo_range}")
     if len(profile.title) > 20 or not profile.title.isascii():
         raise PlanError(f"{profile.id}: title must be ASCII and <= 20 chars: {profile.title!r}")
 
 
-def validate_plan(profile: GenreProfile, plan: SongPlan) -> None:
+def validate_plan(profile: GenreProfile, plan: SongPlan, *, tempo_overridden: bool = False) -> None:
     where = f"[{profile.id}]"
-    if plan.bpm not in profile.tempo_choices:
+    if tempo_overridden:
+        lo, hi = profile.tempo_range
+        if not lo <= plan.bpm <= hi:
+            raise PlanError(f"{where} bpm {plan.bpm} outside tempo_range {profile.tempo_range}")
+    elif plan.bpm not in profile.tempo_choices:
         raise PlanError(f"{where} bpm {plan.bpm} not in tempo_choices {profile.tempo_choices}")
     if not plan.patterns:
         raise PlanError(f"{where} plan has no patterns")
@@ -127,6 +159,22 @@ def _make_rng(profile: GenreProfile, seed: int) -> Union[random.Random, RngStrea
     return RngStreams.for_seed(seed, profile.id)
 
 
+def resolve_tempo(request: TempoRequest, seed: int, profile: GenreProfile) -> int:
+    """``--tempo`` の要求をジャンルの ``tempo_range`` と突き合わせ、BPM を1つに確定する（§3.3・§3.4）。
+
+    一部だけ重なる場合は重なり部分へ切り詰めて WARNING、重ならなければ ``TempoRangeError``。
+    範囲からの選択は専用ストリーム（``RngStreams`` と同じ命名規約）で行い、他の乱数消費を一切変えない。
+    """
+    lo, hi = max(request.lo, profile.tempo_range[0]), min(request.hi, profile.tempo_range[1])
+    if lo > hi:
+        allowed = f"{profile.tempo_range[0]}-{profile.tempo_range[1]}"
+        raise TempoRangeError(f"tempo {request} is outside the range genre {profile.id!r} supports ({allowed})")
+    if (lo, hi) != (request.lo, request.hi):
+        log.warning("tempo %s clipped to %s-%s (genre %r supports %s-%s)",
+                    request, lo, hi, profile.id, *profile.tempo_range)
+    return random.Random(f"{seed}:{profile.id}:tempo").randint(lo, hi)
+
+
 def apply_tempo(song: Song, bpm: int) -> None:
     """``order[0]`` の pattern の row 0 に ``F bpm`` を挿入する（tempo_policy="engine"）。
 
@@ -136,14 +184,21 @@ def apply_tempo(song: Song, bpm: int) -> None:
     song.patterns[song.order[0]].insert_command(0, 0x0F, bpm)
 
 
-def compose_song(profile: GenreProfile, seed: int) -> tuple[Song, SongPlan]:
-    """純粋関数（I/O なし）。Song と SongPlan を返す。"""
+def compose_song(
+    profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None,
+) -> tuple[Song, SongPlan]:
+    """純粋関数（I/O なし）。Song と SongPlan を返す。
+
+    ``tempo`` を渡すと ``plan()`` が選んだ BPM を上書きする。``plan()`` 自体は従来どおり BPM を引く
+    （引いた値を捨てる）ので他の乱数消費は変わらず、「同じ seed・別テンポ＝同じ曲の速さ違い」になる。"""
     validate_profile(profile)
     rng = _make_rng(profile, seed)
 
     specs, instruments = make_instruments(profile)
     plan = profile.plan(rng)
-    validate_plan(profile, plan)
+    if tempo is not None:
+        plan = dataclasses.replace(plan, bpm=resolve_tempo(tempo, seed, profile))
+    validate_plan(profile, plan, tempo_overridden=tempo is not None)
     log.debug("%s seed=%s bpm=%s patterns=%d order=%s", profile.id, seed, plan.bpm, len(plan.patterns), plan.order)
 
     rpm = profile.rows_per_measure
@@ -187,7 +242,7 @@ def compose_song(profile: GenreProfile, seed: int) -> tuple[Song, SongPlan]:
             pattern.insert_command(row - 1, 0x0D, 0x00)   # D00: 次 pattern の row0 へ break
         patterns.append(pattern)
 
-    song = Song(profile.title, specs, patterns, list(plan.order))
+    song = Song(profile.title, specs, patterns, list(plan.order), instrument_names=tuple(instruments))
     for post in profile.post_processors:
         post(song, plan)
     if profile.tempo_policy == "engine":
@@ -195,9 +250,30 @@ def compose_song(profile: GenreProfile, seed: int) -> tuple[Song, SongPlan]:
     return song, plan
 
 
-def build_song(profile: GenreProfile, seed: int) -> Song:
+def build_song(profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None) -> Song:
     """純粋関数（I/O なし）。テストは Song／bytes を直接検査できる。"""
-    return compose_song(profile, seed)[0]
+    return compose_song(profile, seed, tempo=tempo)[0]
+
+
+def write_options(profile: GenreProfile, song: Song, plan: SongPlan) -> formats.WriteOptions:
+    """形式中立な付帯情報（チャンネルパン・初期テンポ・MIDI 用の音色表と拍子）をまとめる。"""
+    rpm = profile.rows_per_measure
+    return formats.WriteOptions(
+        channel_pans=formats.channel_pans(song, profile.channel_pans),
+        initial_bpm=plan.bpm,
+        instrument_names=song.instrument_names,
+        gm_voices=dict(getattr(profile, "gm_voices", {}) or {}),
+        rows_per_measure=rpm,
+        measure_rows=tuple(
+            tuple(s.rows if s.rows is not None else rpm for s in pp.slots for _ in range(s.measures))
+            for pp in plan.patterns
+        ),
+    )
+
+
+def serialize(profile: GenreProfile, song: Song, plan: SongPlan, fmt: str = formats.DEFAULT_FORMAT) -> bytes:
+    """Song を ``fmt`` 形式のバイト列にする（検査はしない）。"""
+    return formats.get_format(fmt).serialize(song, write_options(profile, song, plan))
 
 
 def generate(
@@ -206,17 +282,21 @@ def generate(
     out: Union[str, Path],
     *,
     verify: bool = True,
+    tempo: Optional[TempoRequest] = None,
+    fmt: str = formats.DEFAULT_FORMAT,
 ) -> Result:
-    """Song を生成し、検査して ``profile.target_format`` に応じたファイル（.mod/.xm）を書き出す。
+    """Song を生成し、検査して ``fmt`` 形式（既定 mod）のファイルを書き出す。
     検査 ERROR があればファイルを書かない。"""
+    output = formats.get_format(fmt)
+    formats.check_channels(output, len(profile.channel_plan), profile.id)
     if seed is None:
         seed = random.randint(*SEED_RANGE)
-    song, plan = compose_song(profile, seed)
-    data = writer.WRITERS[profile.target_format](song)
+    song, plan = compose_song(profile, seed, tempo=tempo)
+    data = output.serialize(song, write_options(profile, song, plan))
 
     issues: list[verify_mod.Issue] = []
-    if verify:
-        issues = verify_mod.VERIFIERS[profile.target_format](data, profile.channel_plan)
+    if verify and output.verify is not None:
+        issues = output.verify(data, profile.channel_plan)
         for i in issues:
             if i.level == "WARN":
                 log.warning("%s %s", i.code, i.message)
@@ -228,4 +308,4 @@ def generate(
 
     path = Path(out)
     writer.write_file(path, data)
-    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues)
+    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues, tempo_request=tempo, fmt=fmt)

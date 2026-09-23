@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import math
+
 import random
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -28,6 +30,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -86,6 +89,25 @@ TEMPO_CURVES: dict[str, tuple[tuple[int, int, int, int, str], ...]] = {
     "movement_c": ((126, 70, 0, 63, "linear"),),
 }
 
+# --tempo で開始 BPM を上書きされたときは、カーブ全体を plan.bpm / INITIAL_BPM 倍に相似拡大する。
+# 拡大後も全点が Fxx の範囲（32..255）に収まる開始 BPM だけを許す（クランプでカーブの形を崩さない）。
+_CURVE_POINTS = [b for curves in TEMPO_CURVES.values() for c in curves for b in c[:2]]
+TEMPO_RANGE = (math.ceil(32 * INITIAL_BPM / min(_CURVE_POINTS)), math.floor(255 * INITIAL_BPM / max(_CURVE_POINTS)))
+
+
+def _scaled(bpm: int, start_bpm: int) -> int:
+    return round(bpm * start_bpm / INITIAL_BPM)
+
+
+def _rubato_summary() -> str:
+    """テンポ推移を開始 BPM に対する倍率で表す（--tempo で開始 BPM が変わっても正しい表示になる）。"""
+    seq = [INITIAL_BPM]
+    for kind in ("movement_a", "movement_b", "climax", "movement_c"):
+        for _s, end, *_ in TEMPO_CURVES[kind]:
+            seq.append(end)
+    return "Rubato      : " + " -> ".join(f"x{b / INITIAL_BPM:.2f}" for b in seq) + " of start BPM (EXT-5 TempoCurve)"
+
+
 # 楽器ごとの発音確率（1 row あたり。intensity 倍率を掛ける）
 DENSITY = {"bass": 0.18, "piano": 0.25, "perc": 0.08}
 SAX_DENSITY_CLIMAX = 0.12
@@ -118,6 +140,14 @@ class FreeJazzState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "piano_cluster": GmVoice(program=0),
+    "arco_bass": GmVoice(program=43),
+    "sax_screech": GmVoice(program=66),
+    "cymbal_swell": GmVoice(program=119),
+}
+
+
 @register_profile
 class FreeJazzProfile(GenreProfile):
     id = "free-jazz"
@@ -126,8 +156,10 @@ class FreeJazzProfile(GenreProfile):
     title = "Free Jazz"
     default_filename = "FreeJazz.mod"
     tempo_choices = (INITIAL_BPM,)
+    tempo_range = TEMPO_RANGE
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "profile"          # apply_tempo をスキップ（TempoCurve が BPM を管理する）
     rng_mode = "streams"
     strict_buffers = True
@@ -151,7 +183,7 @@ class FreeJazzProfile(GenreProfile):
         order = [0, 1, 2, 3]              # 通作形式。ループしない
         return SongPlan(
             bpm=INITIAL_BPM, patterns=patterns, order=order, key_pc=None,
-            summary=["Rubato            : 96 -> 82 -> 126 -> 150 -> 126 -> 70 (EXT-5 TempoCurve)"],
+            summary=[_rubato_summary()],
         )
 
     def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> FreeJazzState:
@@ -166,7 +198,8 @@ class FreeJazzProfile(GenreProfile):
         for ch in (CH_PIANO, CH_BASS, CH_SAX, CH_PERC):
             pattern.put(pattern.rows - 1, ch, Cell(None, 0, vol=0))
         for start_bpm, end_bpm, start_row, end_row, curve_type in TEMPO_CURVES[pctx.kind]:
-            curve = automation.TempoCurve(start_bpm, end_bpm, start_row, end_row, curve_type)
+            curve = automation.TempoCurve(_scaled(pctx.bpm, start_bpm), _scaled(pctx.bpm, end_bpm),
+                                          start_row, end_row, curve_type)
             automation.render_tempo_curve(pattern, curve)
 
     # ------------------------------------------------------------ 文法（確率密度のテクスチャ）

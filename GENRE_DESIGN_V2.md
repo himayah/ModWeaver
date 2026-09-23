@@ -65,7 +65,7 @@ A（8 measure、`ChordSpec` 半音オフセット・Bb基準）: `Bb6(1) - G7(1)
 - **ブラシスネア**（バックビート）: `row 2, 6` に vol 40。`ChannelRole.priority` により同 row のライドより優先（衝突時はブラシが勝つ設計はしない＝ライドと同row同chではなくブラシは独立chなので実際には競合しない。優先度は「連打時の意図的上書き」のためのみ）。
 - **ウォーキングベース**: 4分音符＝`row 0,2,4,6` の4打。`composer.MelodyGenerator`（`register=BASS_REG`, `ScaleRules(step_choices=(-1,1,-2,2), leap_probability=0.35, leap_semitones=(3,4,5,7))`）で、各 measure の頭は和音のルートかベース（`chord.bass`）から開始し、次の和音のルートへ向かう順次進行/跳躍で繋ぐ（典型的なウォーキングベースの手法をそのまま `MelodyGenerator.bar()` の `cadence_target` 機構で表現: 次 measure 頭の音を `cadence_target` として最終拍にセットする）。
 - **ピアノ・コンピング**: 各 measure、`rng.harmony` で "Charleston"（row 0 と row 3）または "offbeat 2発"（row 1, 5 など奇数row2つ）のどちらかを選び、`chord.arp` 付きで刺す（vol 34、強拍なら 44）。
-- **サックス**: `head_a`/`head_b` は事前定義の `RhythmMotif` プール（`(0,2,4,6)`＝4分主体、`(0,1,3,5,6)`＝シンコペ主体 等、march の `MARCH_MOTIFS` と同型で新規に4種）を `rng.melody` で選び `MelodyGenerator`（`register=MELODY_REG`, `leap_probability=0.30`）で生成。4小節に1回、末尾の swung 8th（奇数 row）に `groove.retrigger_param(3)` を使った短い E9x ターン（装飾）を確率0.25で付与。`solo_a`/`solo_b` は同じ生成器だが `leap_probability=0.45`・`dissonance_weight=0.12` に上げてアドリブらしいアウトサイド感を出す。
+- **サックス**: `head_a`/`head_b` は事前定義の `RhythmMotif` プール（`(0,2,4,6)`＝4分主体、`(0,1,3,5,6)`＝シンコペ主体 等、march の `MARCH_MOTIFS` と同型で新規に4種）を `rng.melody` で選び `MelodyGenerator`（`register=MELODY_REG`, `leap_probability=0.30`）で生成。4小節に1回、末尾の swung 8th（奇数 row）に `groove.retrigger_param(SAX_RETRIG_TICKS=5)` を使った短い E9x ターン（装飾）を確率0.25で付与（当初は `retrigger_param(3)`。FORMAT_TEMPO_DESIGN でスウィングの Speed を 14/10 に倍化した際、「裏拍の中ほどで1回だけ再発音」の意味を保つよう 5 に変更）。`solo_a`/`solo_b` は同じ生成器だが `leap_probability=0.45`・`dissonance_weight=0.12` に上げてアドリブらしいアウトサイド感を出す。
 
 ### 1.6. 使用する core 拡張
 
@@ -226,7 +226,7 @@ Cマイナー、`i - VI`（Cm - Ab）の2和音ループ（`rows_per_measure=32`
 
 ### 4.5. 文法（実装済み。`profiles/trap.py` の値と一致）
 
-- **808パターン**: `RhythmMotif` 相当の固定行 `(0,8,12,20)`（拍=8row間隔のシンコペーション）で `chord.bass`（root）と `fold_into_range(chord.bass+7,*BASS_REG)`（fifth）を交互に鳴らす（1 measure 内での root-fifth 往復。当初案の「和音が切り替わる直前」＝measure をまたぐ和音進行へのグライドは、`i-VI` の2和音ループへの簡略化（§4.3）により measure 内の root-fifth 往復へ置き換えた）。2打目以降は `automation.portamento_param(PERIODS[prev_t], PERIODS[note_t], rows=1)` で `effect=3` グライドを付与する。**`PERIODS` の添字は tracker note**（`t = note - ins["k808"].spec.shift`）であり `chord.bass` 等の logical note をそのまま使わない（CORE_EXTENSION_DESIGN §4.5② 参照。実装時に判明した注意点）。
+- **808パターン**: `RhythmMotif` 相当の固定行 `(0,8,12,20)`（拍=8row間隔のシンコペーション）で `chord.bass`（root）と `fold_into_range(chord.bass+7,*BASS_REG)`（fifth）を交互に鳴らす（1 measure 内での root-fifth 往復。当初案の「和音が切り替わる直前」＝measure をまたぐ和音進行へのグライドは、`i-VI` の2和音ループへの簡略化（§4.3）により measure 内の root-fifth 往復へ置き換えた）。2打目以降は `automation.portamento_param(PERIODS[prev_t], PERIODS[note_t], rows=1)` で `effect=3` グライドを付与する。**ただし先行音（ワンショット）が既に鳴り終わっている場合は 3xx ではなく新しい打鍵として書く**（FORMAT_TEMPO_DESIGN §9 で追記。鳴り終わった後の 3xx は ProTracker では固有の sample swap 挙動でたまたま鳴り直すが、XM/S3M/IT では無音になるため。再生位置は Paula クロック/period の実レートで追跡する）。**`PERIODS` の添字は tracker note**（`t = note - ins["k808"].spec.shift`）であり `chord.bass` 等の logical note をそのまま使わない（CORE_EXTENSION_DESIGN §4.5② 参照。実装時に判明した注意点）。
 - **ハイハット**: 8分（row 4刻み、8箇所）で `HAT_C`。measure に1箇所、確率0.6で「ロール」に差し替え、そこへ `groove.retrigger_param(3)`（1row内3連打）を適用。フレーズ末尾の row には `HAT_O`（優先度2で `HAT_C` を上書き）。
 - **スネア/クラップ**: row 16, row 28（2拍・4拍相当。4拍目はやや後ろにずらす trap の定型）に配置。intensity に応じて vol を調整。
 - **リード**: `hook` のみ登場。`MelodyGenerator`（`ScaleRules(leap_probability=0.2, dissonance_weight=0.1)`、Cエオリアン）で短いフレーズを生成し、他は空ける（ドラム/808の存在感を最優先するジャンル特性）。
@@ -496,7 +496,7 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 
 ## 10. 未確定・試聴調整が前提の項目（実装時に詰める）
 
-- ~~swing-jazz: `SwingConfig(long_speed, short_speed)` の最終比率~~ → **実装済み**（`7:5` で確定。`profiles/swing_jazz.py` の `SWING_CONFIG`）。試聴による再調整はいつでも可能。
+- ~~swing-jazz: `SwingConfig(long_speed, short_speed)` の最終比率~~ → **実装済み**（比率 1.4:1。`profiles/swing_jazz.py` の `SWING_CONFIG`）。試聴による再調整はいつでも可能。**2026-09-23 修正**: 当初の `7:5`（1拍=12 tick）では tracker の BPM（1拍=24 tick 前提）の2倍の速さ（`tempo_choices` 152〜168 が実際には 300〜340）で鳴っていたため、同じ比率の `14:10`（1拍=24 tick）に変更し、表示 BPM どおりに鳴るようにした（FORMAT_TEMPO_DESIGN §1.3・§9）。
 - ~~prog-rock: 主リフの実音~~ → **実装済み**（`profiles/prog_rock.py`。ビブラート付与は簡略化のため未実装のまま。§2.1 `PROG_LEAD_GTR` 参照）。
 - ~~trap: ハイハットロールの発生確率・密度、808グライドの正確な speed 値~~ → **実装済み**（ロール確率0.6、`portamento_param(rows=1)`。`profiles/trap.py`）。値は試聴による再調整の余地あり。
 - ~~future-bass: `duck_ratio`/`release_rows` の初期値~~ → **実装済み**（`duck_ratio=0.25`(bass)/`0.35`(chord)、`release_rows=3`/`4`。`profiles/future_bass.py` の `SIDECHAIN_RULES`）。値は試聴による再調整の余地あり。

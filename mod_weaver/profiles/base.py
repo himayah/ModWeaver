@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Union
+from types import MappingProxyType
+from typing import Any, Callable, Mapping, Optional, Union
 
 from ..core.model import (
     ChannelPlan,
@@ -26,9 +27,12 @@ class GenreProfile(ABC):
     aliases: tuple[str, ...] = ()
     display_name: str
     description: str
-    title: str                         # 出力ファイルのタイトル欄（ASCII ≤20。mod/xm 共通）
+    title: str                         # 出力ファイルのタイトル欄（ASCII ≤20。全形式共通）
     default_filename: str
-    tempo_choices: tuple[int, ...]     # 離散値
+    tempo_choices: tuple[int, ...]     # 離散値。値は4分音符の BPM（=tracker の Fxx。1拍=24 tick）
+    tempo_range: tuple[int, int] = (32, 255)
+    # ↑ --tempo で上書きできる BPM の範囲（両端含む）。BPM から row 数を計算しているジャンル等、極端な
+    #   テンポで破綻するものだけ狭める（FORMAT_TEMPO_DESIGN §3.3。値は総当たりの実測で決める）
     rows_per_measure: int = 16         # 64 の約数
     channel_plan: ChannelPlan
     tempo_policy: str = "engine"       # "engine" | "profile"
@@ -36,7 +40,12 @@ class GenreProfile(ABC):
     strict_buffers: bool = True        # False: 無条件上書き（Nostalgic）
 
     # --- 将来拡張の差込口（CORE_EXTENSION_DESIGN の Opt-in 方針。既定値では何も変わらない） ---
-    target_format: str = "mod"         # writer.WRITERS / verify.VERIFIERS のキー
+    channel_pans: Optional[tuple[int, ...]] = None
+    # ↑ MOD 以外の形式でのチャンネルごとのパン（0=左、128=中央、255=右）。None なら core/formats.py の
+    #   channel_pans() が決める（全サンプル既定パンなら Amiga 風 LRRL、明示パンがあればサンプルから）
+    gm_voices: Mapping[str, Any] = MappingProxyType({})
+    # ↑ --format midi 用の GM 音色表（build_samples() のキー → core.midi.GmVoice）。全楽器の宣言が必須
+    #   （推測はしない。tests/unit/test_midi.py が全ジャンルの網羅を検査する）
     post_processors: tuple[Callable[[Song, SongPlan], None], ...] = ()
     # ↑ 全 pattern 作成後・テンポ挿入前に順に適用する後処理（サイドチェイン等の装飾用）
     variable_meter: bool = False        # EXT-2: True で pattern 合計行数 < 64 rows を許容し D00 を自動挿入する

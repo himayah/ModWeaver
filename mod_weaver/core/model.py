@@ -271,6 +271,11 @@ class SampleSpec:
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
     finetune: int = 0
     pan: int = 128                 # EXT-6: 0=左、128=中央、255=右。MOD の serialize() は参照しない
+    sounding_hz: Optional[float] = None
+    # ↑ tracker note ``rate_note``（finetune 0）で鳴らしたときに実際に聞こえる基本周波数（Hz）。
+    #   synth.render() が記録する。音高を持たない音色は None。MIDI 出力が実音の高さを求めるのに使う
+    #   （合成は dsp.sample_rate()＝実際の Paula 再生レートの半分を基準に波形を作るため、論理 note の
+    #   pitch.hz(n) とは一致しない。FORMAT_TEMPO_DESIGN §6.4）
 
     @property
     def length_words(self) -> int:
@@ -312,6 +317,7 @@ class Song:
     samples: list[SampleSpec]      # 位置=sample番号-1
     patterns: list[Pattern]
     order: list[int]               # 1..128 エントリ
+    instrument_names: tuple[str, ...] = ()   # build_samples() のキー（sample 番号順）。MIDI の音色表引き用
 
 
 @dataclass(frozen=True)

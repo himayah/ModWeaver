@@ -1,6 +1,6 @@
 """orchestral: フルオーケストラ / 劇伴（GENRE_DESIGN_V2.md §3）。
 
-8チャンネル・``target_format="xm"``（EXT-6）の実証ジャンル。6声（bass/tenor/alto/soprano1/
+8チャンネル（EXT-6。MOD では FastTracker 系の ``8CHN``、XM/S3M/IT ではサンプルパンでステレオ配置）の実証ジャンル。6声（bass/tenor/alto/soprano1/
 soprano2/descant）の和声を、``harmony.voice()`` が返す標準4フィールド（bass/harmony/chord_tones）
 に、残り3声（alto/soprano1/descant）を ``mctx.chord.chord_tones`` のピッチクラス集合から都度
 導出する方式で表現する（§3.3 設計レビュー: 6声データを ``PatternPlan.extra`` や ``state`` に
@@ -29,6 +29,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale, lowest_note_with_pc
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -119,20 +120,34 @@ def build_orchestral_samples() -> dict[str, SampleSpec]:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "vln1": GmVoice(program=40),
+    "vln2": GmVoice(program=40),
+    "vla": GmVoice(program=41),
+    "vc": GmVoice(program=42),
+    "cb": GmVoice(program=43),
+    "ww": GmVoice(program=73),
+    "horn": GmVoice(program=60),
+    "trumpet": GmVoice(program=56),
+    "timpani": GmVoice(program=47),
+    "cymbal": GmVoice(program=119),
+}
+
+
 @register_profile
 class OrchestralProfile(GenreProfile):
     id = "orchestral"
     display_name = "Orchestral"
-    description = "フルオーケストラ／劇伴。8chマルチチャンネル(XM)、6声の弦+木管+金管+ティンパニ"
+    description = "フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ"
     title = "Orchestral Suite"
     default_filename = "OrchestralSuite.xm"
     tempo_choices = (76, 80, 84, 88)
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True
-    target_format = "xm"                    # EXT-6: 8ch は MOD(4ch固定)では表現できない
 
     grammar = {
         "intro": "_intro", "theme": "_theme", "development": "_development",

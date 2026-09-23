@@ -1,14 +1,14 @@
-"""ProTracker ``M.K.`` および FastTracker II ``.xm`` シリアライザと原子的書込
-（設計書 §6.3、CORE_EXTENSION_DESIGN §4.6③ EXT-6）。
+"""ProTracker ``M.K.``（＋FastTracker 系の多チャンネル ``xCHN``）および FastTracker II ``.xm``
+シリアライザと原子的書込（設計書 §6.3、CORE_EXTENSION_DESIGN §4.6③ EXT-6、FORMAT_TEMPO_DESIGN §4.1・§4.2）。
 
-``WRITERS`` は出力フォーマット名→シリアライザの表（``"mod"``／``"xm"``）。
+出力形式の一覧は ``core/formats.py`` の ``FORMATS``。
 """
 from __future__ import annotations
 
 import os
 import struct
 from pathlib import Path
-from typing import Callable, Union
+from typing import Optional, Sequence, Union
 
 from ..errors import OutputError, PlanError
 from .model import Cell, Pattern, SampleSpec, Song
@@ -17,6 +17,7 @@ HEADER_SAMPLES = 31
 ORDER_TABLE_SIZE = 128
 TITLE_SIZE = 20
 MAGIC = b"M.K."
+MOD_MAX_CHANNELS = 32  # 4 以外は FastTracker 系の "xCHN"/"xxCH"（本家 ProTracker/Amiga では再生不可）
 
 XM_MAX_CHANNELS = 32   # target_format != "mod" のプロファイルが宣言できる channel_plan の上限
 
@@ -27,8 +28,17 @@ def _ascii_bytes(text: str, limit: int, what: str) -> bytes:
     return text.encode("ascii")
 
 
+def mod_magic(n_channels: int) -> bytes:
+    """4ch は ``M.K.``、1..9ch は ``"{n}CHN"``、10..32ch は ``"{n}CH"``（FastTracker/OpenMPT/libxmp 対応）。"""
+    if not 1 <= n_channels <= MOD_MAX_CHANNELS:
+        raise PlanError(f"MOD channel count must be 1..{MOD_MAX_CHANNELS}: {n_channels}")
+    if n_channels == 4:
+        return MAGIC
+    return f"{n_channels}CHN".encode() if n_channels < 10 else f"{n_channels}CH".encode()
+
+
 def serialize(song: Song) -> bytes:
-    """Song を ``M.K.`` 形式のバイト列へ変換する。"""
+    """Song を MOD 形式のバイト列へ変換する（4ch は ``M.K.``、それ以外は ``xCHN``）。"""
     if not 1 <= len(song.order) <= ORDER_TABLE_SIZE:
         raise PlanError(f"order length must be 1..{ORDER_TABLE_SIZE}: {len(song.order)}")
     if len(song.samples) > HEADER_SAMPLES:
@@ -58,7 +68,7 @@ def serialize(song: Song) -> bytes:
 
     out += struct.pack(">BB", len(song.order), 0x7F)
     out += bytes(song.order + [0] * (ORDER_TABLE_SIZE - len(song.order)))
-    out += MAGIC
+    out += mod_magic(song.patterns[0].channels if song.patterns else 4)
 
     for pat in song.patterns[:n_patterns]:
         out += pat.serialize()
@@ -95,6 +105,12 @@ XM_INSTRUMENT_HEADER_SIZE = 243       # sample 1個・エンベロープ無し�
 XM_SAMPLE_HEADER_SIZE = 40
 XM_MAX_INSTRUMENTS = 128
 XM_FINETUNE_SCALE = 16                # MOD finetune(-8..7) を XM finetune(-128..127 相当) へ変換する倍率
+# tracker note t（0=ProTracker C-1＝period 856）→ XM note 番号（1始まり、1=C-0）への加算値。
+# period 856 は FT2 の C-3（XM note 37）に相当する（FT2 の C-4＝note 49 が period 428／8363Hz）。
+# 以前は t+1（C-0）と書いていたため 3 オクターブ低く鳴っていた。parse_xm も同じ誤った規約で読んでいたので
+# 自己ラウンドトリップでは検出できず、libopenmpt で MOD と XM を実際に再生比較して発覚した
+# （FORMAT_TEMPO_DESIGN §1.1。tests/realplayer/ の形式間等価性テストが回帰を防ぐ）。
+XM_NOTE_OFFSET = 37
 
 
 def _xm_text(text: str, limit: int, what: str) -> bytes:
@@ -110,10 +126,10 @@ def _xm_cell_effect(cell: Cell) -> tuple[int, int]:
     return (0xC, cell.vol) if cell.vol is not None else (cell.effect, cell.param)
 
 
-def _pack_xm_cell(cell: Cell) -> bytes:
+def _pack_xm_cell(cell: Cell, pan: Optional[int] = None) -> bytes:
     """XM のパック済みセル形式（bit7=圧縮フラグ、bit0..4=note/instrument/vol/effect_type/effect_param
-    の有無）。vol column（bit2）は常に立てない。"""
-    note = 0 if cell.note is None else cell.note + 1     # 0=無音。t=0..35 -> XM note 1..36
+    の有無）。vol column（bit2）はチャンネルパン（``pan``、0..255）の ``Px`` にだけ使う。"""
+    note = 0 if cell.note is None else cell.note + XM_NOTE_OFFSET   # 0=無音。t=0..35 -> XM note 37..72
     instrument = cell.sample                              # 0=無音のまま一致
     effect, param = _xm_cell_effect(cell)
 
@@ -125,6 +141,9 @@ def _pack_xm_cell(cell: Cell) -> bytes:
     if instrument:
         flags |= 0x02
         body.append(instrument)
+    if pan is not None:
+        flags |= 0x04
+        body.append(0xC0 | (pan >> 4))                    # vol column Px: Set Panning（0..F）
     if effect or param:
         flags |= 0x08 | 0x10
         body.append(effect)
@@ -132,16 +151,23 @@ def _pack_xm_cell(cell: Cell) -> bytes:
     return bytes([0x80 | flags]) + bytes(body)
 
 
-def _pack_xm_pattern(pat: Pattern) -> bytes:
+def _pack_xm_pattern(pat: Pattern, pan_for: Sequence[Optional[int]], default_pan: Sequence[bool]) -> bytes:
+    """``pan_for[c]``: チャンネル c のパン（None なら書かない）。``default_pan[i]``: sample i+1 が既定パンか。
+
+    XM は instrument 番号付きのセルでチャンネルパンがサンプル既定値に戻るため、既定パン（128）の
+    サンプルを鳴らすセルにだけ毎回 ``Px`` を付けてチャンネルパンを再設定する（FORMAT_TEMPO_DESIGN §4.2）。"""
     out = bytearray()
     for r in range(pat.rows):
         for c in range(pat.channels):
-            out += _pack_xm_cell(pat.get(r, c))
+            cell = pat.get(r, c)
+            known = 0 < cell.sample <= len(default_pan)       # 未定義番号は verify の V06 に任せ、ここでは書くだけ
+            pan = pan_for[c] if known and default_pan[cell.sample - 1] else None
+            out += _pack_xm_cell(cell, pan)
     return bytes(out)
 
 
-def _serialize_xm_pattern(pat: Pattern) -> bytes:
-    packed = _pack_xm_pattern(pat)
+def _serialize_xm_pattern(pat: Pattern, pan_for: Sequence[Optional[int]], default_pan: Sequence[bool]) -> bytes:
+    packed = _pack_xm_pattern(pat, pan_for, default_pan)
     if pat.rows > 256:
         raise PlanError(f"XM pattern rows must be <= 256: {pat.rows}")
     header = struct.pack("<IBHH", 9, 0, pat.rows, len(packed))
@@ -201,8 +227,13 @@ def _serialize_xm_instrument(spec: SampleSpec) -> bytes:
     return bytes(header) + bytes(sample_header) + _xm_delta_encode(spec.data)
 
 
-def serialize_xm(song: Song) -> bytes:
-    """Song を FastTracker II ``.xm`` 形式のバイト列へ変換する（EXT-6）。"""
+def serialize_xm(
+    song: Song, *, channel_pans: Optional[Sequence[int]] = None, initial_bpm: int = 125,
+) -> bytes:
+    """Song を FastTracker II ``.xm`` 形式のバイト列へ変換する（EXT-6）。
+
+    ``channel_pans`` を渡すと、既定パン（128）のサンプルを鳴らすセルにチャンネルパンを付ける
+    （省略時は従来どおりサンプルパンのみ）。``initial_bpm`` はヘッダの初期テンポ。"""
     if not 1 <= len(song.order) <= ORDER_TABLE_SIZE:
         raise PlanError(f"order length must be 1..{ORDER_TABLE_SIZE}: {len(song.order)}")
     if len(song.samples) > XM_MAX_INSTRUMENTS:
@@ -230,14 +261,18 @@ def serialize_xm(song: Song) -> bytes:
     out += struct.pack("<H", n_channels)
     out += struct.pack("<H", n_patterns)
     out += struct.pack("<H", len(song.samples))       # number of instruments
-    out += struct.pack("<H", 1)                        # flags: bit0=1 -> linear frequency table
+    out += struct.pack("<H", 0)                        # flags: bit0=0 -> Amiga frequency table
+    # ↑ MOD と同じ Amiga period 単位で 1xx/2xx/3xx が効く（automation.portamento_param は period 基準で
+    #   param を計算している。linear table だとグライドの速さが変わる）
     out += struct.pack("<H", 6)                         # default speed（ticks/row）
-    out += struct.pack("<H", 125)                        # default bpm（実テンポは Cell の Fxx が支配する）
+    out += struct.pack("<H", initial_bpm)                # default bpm（実テンポは Cell の Fxx が支配する）
     order_table = bytes(song.order) + bytes(XM_ORDER_TABLE_SIZE - len(song.order))
     out += order_table
 
+    pan_for = list(channel_pans) if channel_pans is not None else [None] * n_channels
+    default_pan = [s.pan == 128 for s in song.samples]
     for pat in song.patterns[:n_patterns]:
-        out += _serialize_xm_pattern(pat)
+        out += _serialize_xm_pattern(pat, pan_for, default_pan)
     for spec in song.samples:
         out += _serialize_xm_instrument(spec)
     return bytes(out)
@@ -262,5 +297,12 @@ def write_file(path: Union[str, Path], data: bytes) -> None:
         raise OutputError(f"cannot write {target}: {e}") from e
 
 
-# 出力フォーマット名 → シリアライザ
-WRITERS: dict[str, Callable[[Song], bytes]] = {"mod": serialize, "xm": serialize_xm}
+# ---- core/formats.py の OutputFormat.serialize 用アダプタ（(Song, WriteOptions) -> bytes） ----
+
+def serialize_with_options(song: Song, opts) -> bytes:
+    """MOD はチャンネルパン（プレイヤー固定）・初期テンポ（ヘッダに欄が無い）を持たない。"""
+    return serialize(song)
+
+
+def serialize_xm_with_options(song: Song, opts) -> bytes:
+    return serialize_xm(song, channel_pans=opts.channel_pans, initial_bpm=opts.initial_bpm)

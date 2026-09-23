@@ -1,6 +1,7 @@
 """コマンドライン入口（設計書 §9、§10）。
 
-終了コード: 0=成功 / 2=引数エラー・未登録 genre / 3=生成・検査エラー / 4=I/O エラー / 1=想定外例外。
+終了コード: 0=成功 / 2=引数エラー・未登録 genre・ジャンルが対応しないテンポ / 3=生成・検査エラー / 4=I/O エラー /
+5=外部ツール（mp3 出力の ffmpeg）が無い・機能不足 / 1=想定外例外。
 ログは stderr（WARNING 以上）、バナーは stdout。
 """
 from __future__ import annotations
@@ -14,22 +15,21 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from . import profiles
-from .engine import SEED_RANGE, Result, generate
-from .errors import ModGenError, OutputError, ProfileNotFoundError
+from .core import formats
+from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
+from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
 
 DEFAULT_GENRE = "nostalgic"
 LINE = "=" * 50
 THIN = "-" * 50
 
 
-def default_output_path(genre_id: str, seed: int, target_format: str = "mod") -> Path:
-    """``--output`` 省略時の既定出力先: ``<genre>/<genre>_<seed>.<ext>``（ジャンルごとにサブディレクトリへ整理）。
+def default_output_path(genre_id: str, seed: int, fmt: str = formats.DEFAULT_FORMAT) -> Path:
+    """``--output`` 省略時の既定出力先: ``<genre>/<genre>_<seed><ext>``（ジャンルごとにサブディレクトリへ整理）。
 
-    拡張子は ``target_format``（``profile.target_format``、= ``writer.WRITERS`` のキー）をそのまま使う。
-    ``"mod"`` なら ``.mod``、``"xm"`` なら ``.xm``。中身のフォーマットと拡張子を一致させないと、
-    プレイヤー側がマジックバイトと拡張子の不一致で読み込みに失敗する（例: orchestral は xm 実体なのに
-    .mod 拡張子で保存されると再生できない）。"""
-    return Path(genre_id) / f"{genre_id}_{seed}.{target_format}"
+    拡張子は出力形式の ``OutputFormat.extension``（``mod``→``.mod``、``midi``→``.mid``）。中身の形式と
+    拡張子を一致させないと、プレイヤー側がマジックバイトと拡張子の不一致で読み込みに失敗する。"""
+    return Path(genre_id) / f"{genre_id}_{seed}{formats.get_format(fmt).extension}"
 
 
 def _configure_logging() -> None:
@@ -55,11 +55,18 @@ def genre_listing() -> str:
     return "\n".join(lines)
 
 
+def _tempo_arg(text: str) -> TempoRequest:
+    try:
+        return TempoRequest.parse(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
 def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     ids = ", ".join(p.id for p in profiles.list_profiles())
     parser = argparse.ArgumentParser(
         prog=prog,
-        description="ModWeaver: Procedural ProTracker MOD Generator",
+        description="ModWeaver: Procedural tracker music generator (MOD/XM/S3M/IT/MIDI/MP3)",
         epilog="genres:\n" + genre_listing() + "\n\nuse --list-genres to print this list alone and exit",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -67,9 +74,15 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
                         help=f"genre id (default: {DEFAULT_GENRE}). choices: {ids} (see genres below)")
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="random seed (any integer) for reproducibility")
+    names = formats.format_names()
+    parser.add_argument("--format", "-f", choices=names, default=None,
+                        help=f"output format (default: {formats.DEFAULT_FORMAT}). choices: {', '.join(names)}")
     parser.add_argument("--output", "-o", type=str, default=None,
-                        help="output file path (default: <genre>/<genre>_<seed>.<mod|xm>, "
-                             "extension depends on the genre's target format)")
+                        help="output file path (default: <genre>/<genre>_<seed>.<ext>, "
+                             "extension follows --format)")
+    parser.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
+                        help=f"tempo in quarter-note BPM ({TEMPO_MIN}-{TEMPO_MAX}); a range such as 80-100 "
+                             "picks a random BPM within it (default: chosen by the genre)")
     parser.add_argument("--list-genres", action="store_true",
                         help="print all genre ids, aliases and descriptions, then exit")
     return parser
@@ -77,11 +90,14 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
 
 def print_banner(profile, result: Result, repro: str) -> None:
     print(LINE)
-    print(f"  {profile.display_name} MOD Generator")
+    print(f"  ModWeaver: {profile.display_name}")
     print(LINE)
     print(f"Genre       : {profile.id}")
+    print(f"Format      : {result.fmt}")
     print(f"Seed        : {result.seed}")
-    print(f"Tempo       : BPM {result.plan.bpm}")
+    requested = result.tempo_request
+    note = f" (requested {requested})" if requested is not None and requested.lo != requested.hi else ""
+    print(f"Tempo       : BPM {result.plan.bpm}{note}")
     for line in result.plan.summary:
         print(line)
     print(THIN)
@@ -112,21 +128,25 @@ def main(
     try:
         profile = profiles.get_profile(args.genre)
         seed = args.seed if args.seed is not None else random.randint(*SEED_RANGE)
+        fmt = args.format or formats.DEFAULT_FORMAT
         if args.output:
             out = args.output
         else:
-            out = default_output_path(profile.id, seed, profile.target_format)
+            out = default_output_path(profile.id, seed, fmt)
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
-        result = generate(profile, seed, out)
-    except ProfileNotFoundError as e:
+        result = generate(profile, seed, out, tempo=args.tempo, fmt=fmt)
+    except (ProfileNotFoundError, TempoRangeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except OutputError as e:
         print(f"error: {e}", file=sys.stderr)
         return 4
+    except ExternalToolError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 5
     except ModGenError as e:
         print(f"error: {e}", file=sys.stderr)
         return 3
@@ -136,6 +156,10 @@ def main(
 
     if repro is None:
         repro = f"{invocation or 'python -m mod_weaver.cli'} --genre {profile.id}"
+    if args.format is not None:
+        repro += f" --format {args.format}"
+    if args.tempo is not None:
+        repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
     print_banner(profile, result, repro)
     return 0
 

@@ -2,6 +2,8 @@
 
 - ``SwingConfig``/``apply_swing``: row の偶奇で Speed（``F0x``）を交互に変え、スウィング/シャッフルを
   作る後処理（``profile.post_processors`` から適用する）。1拍=2row（8分音符格子）の timebase を前提にする。
+  tracker の BPM（``Fxx``≥0x20）は「24 tick＝1拍」の速さなので、long+short＝24 tick にすると
+  ``SongPlan.bpm`` がそのまま4分音符の BPM として鳴る（FORMAT_TEMPO_DESIGN §3.1）。
 - ``retrigger_param``/``delay_param``: ``E9x``（Retrigger）/``EDx``（Note Delay）の param を返す純粋
   関数（effect は両方とも常に ``0x0E`` 固定なので呼出し側が渡す。``automation.portamento_param`` 等と
   同じ「param のみ返す」規約に揃えている）。1 row 内で複数打を鳴らすサブステップ・ロール用（trap 等）。
@@ -22,9 +24,11 @@ log = logging.getLogger("mod_weaver")
 
 @dataclass(frozen=True)
 class SwingConfig:
-    long_speed: int = 8     # 偶数 row（拍の表）の Speed
-    short_speed: int = 4    # 奇数 row（拍の裏）の Speed。long:short のティック比がスウィング比になる
-    # 例: 8:4 = 2:1（純粋3連スウィング）。7:5 = 1.4:1（軽いスウィング）
+    long_speed: int = 16    # 偶数 row（拍の表）の Speed
+    short_speed: int = 8    # 奇数 row（拍の裏）の Speed。long:short のティック比がスウィング比になる
+    # 例: 16:8 = 2:1（純粋3連スウィング）。14:10 = 1.4:1（軽いスウィング）。
+    # long+short は 24 にする（1拍=24 tick。これ以外だと実際のテンポが BPM 表示の 24/(long+short) 倍になる。
+    # 以前の既定 8:4 や swing-jazz の 7:5 は合計12で、表示の2倍の速さで鳴っていた）
 
     def __post_init__(self) -> None:
         for v in (self.long_speed, self.short_speed):

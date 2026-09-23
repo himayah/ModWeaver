@@ -29,6 +29,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -143,6 +144,16 @@ class ProgState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "kick": GmVoice(drum_note=36),
+    "snare": GmVoice(drum_note=38),
+    "crash": GmVoice(drum_note=49),
+    "bass": GmVoice(program=34),
+    "gtr": GmVoice(program=30),
+    "lead": GmVoice(program=29),
+}
+
+
 @register_profile
 class ProgRockProfile(GenreProfile):
     id = "prog-rock"
@@ -153,6 +164,7 @@ class ProgRockProfile(GenreProfile):
     tempo_choices = (132, 136, 140, 144, 148)
     rows_per_measure = 16                 # ChordSlot.rows で measure ごとに上書きする（EXT-2）
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

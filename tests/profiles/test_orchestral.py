@@ -19,7 +19,6 @@ def build(seed):
 
 def test_declaration():
     assert profile.id == "orchestral" and profile.aliases == ()
-    assert profile.target_format == "xm"
     assert len(profile.channel_plan) == 8
     assert (profile.title, profile.default_filename) == ("Orchestral Suite", "OrchestralSuite.xm")
 

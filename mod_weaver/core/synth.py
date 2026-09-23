@@ -75,7 +75,7 @@ from typing import Callable, Optional, Sequence, Union
 from ..errors import SampleConstraintError
 from . import dsp
 from .model import SampleSpec
-from .pitch import hz
+from .pitch import PERIODS, hz
 
 TWO_PI = dsp.TWO_PI
 
@@ -378,4 +378,27 @@ def render(patch: Patch) -> SampleSpec:
     return SampleSpec(
         patch.name, data, patch.volume, loop=loop, rate_note=patch.rate_note,
         shift=patch.shift, pitched=patch.pitched, finetune=patch.finetune,
+        sounding_hz=_sounding_hz(patch, f0, rate),
     )
+
+
+def _sounding_hz(patch: Patch, f0: float, rate: float) -> Optional[float]:
+    """``rate_note`` で実際に鳴らしたときの基本周波数（``SampleSpec.sounding_hz``）。
+
+    プレイヤーは tracker note t のサンプルを Paula クロック / period[t] で再生する。合成時の基準レート
+    ``rate``（dsp.sample_rate）はその半分なので、ワンショットの f0 は実際には 2 倍の高さで鳴る。
+    ループは「ループ長 L に K サイクル」なので、最小の K が基本周波数を決める。"""
+    if not patch.pitched:
+        return None
+    real_rate = dsp.CLOCK / PERIODS[patch.rate_note]
+    if isinstance(patch.finish, Loop):
+        k = min(mult for wl in patch.layers for mult, _w, _a in wl.layer.partials)
+        return k * real_rate / patch.finish.length
+    tones = [wl for wl in patch.layers if isinstance(wl.layer, ToneLayer)]
+    if tones:
+        return f0 * real_rate / rate
+    sweeps = [wl for wl in patch.layers if isinstance(wl.layer, PitchSweepLayer)]
+    if sweeps:
+        main = max(sweeps, key=lambda wl: wl.weight)
+        return main.layer.freq_end * real_rate / rate
+    return None

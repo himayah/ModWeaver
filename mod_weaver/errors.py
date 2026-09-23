@@ -33,6 +33,10 @@ class SampleConstraintError(ModGenError):
     ``PlanError`` と使い分ける）。"""
 
 
+class TempoRangeError(ModGenError):
+    """``--tempo`` の要求範囲がジャンルの許容範囲（``GenreProfile.tempo_range``）と重ならない。"""
+
+
 class PlanError(ModGenError):
     """64 row 不一致、order 不正、pattern 数超過、tempo が tempo_choices 外。"""
 
@@ -49,3 +53,7 @@ class VerificationError(ModGenError):
 
 class OutputError(ModGenError):
     """I/O 失敗（OSError をラップ）。"""
+
+
+class ExternalToolError(ModGenError):
+    """必要な外部ツール（mp3 出力の ffmpeg）が無い・機能不足・実行失敗。"""

@@ -30,6 +30,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale, fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -118,7 +119,9 @@ SWING_MOTIFS = (
 WALK_MOTIF = RhythmMotif((0, 2, 4, 6))
 HOLD_MOTIF = RhythmMotif((0,))
 
-SWING_CONFIG = groove.SwingConfig(long_speed=7, short_speed=5)   # 7:5 ≈ 1.4:1（GENRE_DESIGN_V2 §10 試聴調整対象）
+SAX_RETRIG_TICKS = 5        # 裏拍（short_speed=10 tick）の中ほどで1回だけ再発音する装飾
+SWING_CONFIG = groove.SwingConfig(long_speed=14, short_speed=10)  # 14:10 = 1.4:1、合計24 tick＝1拍（GENRE_DESIGN_V2 §10 試聴調整対象）
+# ↑ 以前は 7:5（合計12 tick/拍）で、tempo_choices の2倍（約 300〜340 BPM）で鳴っていた。FORMAT_TEMPO_DESIGN §1.3
 
 
 def _apply_swing_to_all(song, plan) -> None:
@@ -157,6 +160,15 @@ class SwingState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "ride": GmVoice(drum_note=51),
+    "brush": GmVoice(drum_note=38),
+    "bass": GmVoice(program=32),
+    "piano": GmVoice(program=0),
+    "sax": GmVoice(program=65),
+}
+
+
 @register_profile
 class SwingJazzProfile(GenreProfile):
     id = "swing-jazz"
@@ -167,6 +179,7 @@ class SwingJazzProfile(GenreProfile):
     tempo_choices = (152, 156, 160, 164, 168)
     rows_per_measure = 8                  # 1 row = 8分音符（swing timebase。EXT-1）
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True
@@ -274,7 +287,7 @@ class SwingJazzProfile(GenreProfile):
             last = events[-1]
             if last.row % 2 == 1:                     # swung 8th（裏拍）の onset にのみ装飾を足す
                 buf.replace(last.row, CH_MEL,
-                            ins["sax"].cell(last.note, effect=0x0E, param=groove.retrigger_param(3)))
+                            ins["sax"].cell(last.note, effect=0x0E, param=groove.retrigger_param(SAX_RETRIG_TICKS)))
 
     # ------------------------------------------------------------ 各 pattern の文法
     def _intro(self, mctx: MeasureCtx, st: SwingState, rng: RngStreams, buf: MeasureBuffer) -> None:

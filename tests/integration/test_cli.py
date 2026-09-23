@@ -18,7 +18,7 @@ def run_cli(args, capsys):
     return code, cap.out, cap.err
 
 
-def test_default_output_path_extension_follows_target_format():
+def test_default_output_path_extension_follows_format():
     assert cli.default_output_path("nostalgic", 1) == Path("nostalgic/nostalgic_1.mod")
     assert cli.default_output_path("nostalgic", 1, "mod") == Path("nostalgic/nostalgic_1.mod")
     assert cli.default_output_path("orchestral", 5, "xm") == Path("orchestral/orchestral_5.xm")
@@ -61,13 +61,26 @@ def test_default_output_path_creates_missing_genre_dir(tmp_path, capsys, monkeyp
     assert code == 0 and (tmp_path / "suspense-chase" / "suspense-chase_5.mod").exists()
 
 
-def test_default_output_path_uses_xm_extension_for_xm_target_format(tmp_path, capsys, monkeypatch):
-    """orchestral は target_format="xm" なので既定出力は .mod ではなく .xm（実体との拡張子不一致を防ぐ）。"""
+def test_default_format_is_mod_even_for_8ch_genre(tmp_path, capsys, monkeypatch):
+    """--format 省略時は全ジャンル mod（8ch の orchestral は FastTracker 系 8CHN）。"""
     monkeypatch.chdir(tmp_path)
-    code, *_ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
+    code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
+    out = tmp_path / "orchestral" / "orchestral_5.mod"
+    assert code == 0 and out.exists() and out.read_bytes()[1080:1084] == b"8CHN"
+    assert "Format      : mod" in stdout and "--format" not in stdout
+
+
+def test_format_option_sets_extension_and_repro(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5", "-f", "xm"], capsys)
     out = tmp_path / "orchestral" / "orchestral_5.xm"
-    assert code == 0 and out.exists()
-    assert not (tmp_path / "orchestral" / "orchestral_5.mod").exists()
+    assert code == 0 and out.read_bytes()[:17] == b"Extended Module: "
+    assert "--genre orchestral --format xm --seed 5" in stdout
+
+
+def test_unknown_format_exit_2(tmp_path, capsys):
+    code, _, err = run_cli(["-f", "wav", "-o", str(tmp_path / "x")], capsys)
+    assert code == 2 and "format" in err
 
 
 def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys):
@@ -143,3 +156,68 @@ def test_python_dash_m_forms_produce_identical_output(tmp_path):
 def test_exit_code_of_module_invocation_for_unknown_genre(tmp_path):
     r = subprocess.run([sys.executable, "-m", "mod_weaver", "-g", "zzz"], capture_output=True, text=True, cwd=ROOT)
     assert r.returncode == 2
+
+
+# ---------------- --tempo（FORMAT_TEMPO_DESIGN §3） ----------------
+
+def test_tempo_single_value(tmp_path, capsys):
+    out = tmp_path / "t.mod"
+    code, stdout, err = run_cli(["-s", "1", "-t", "123", "-o", str(out)], capsys)
+    assert code == 0 and err == ""
+    assert "Tempo       : BPM 123\n" in stdout
+    assert "--genre nostalgic --tempo 123 --seed 1" in stdout
+
+
+def test_tempo_range_picks_within_and_repro_uses_resolved_value(tmp_path, capsys):
+    code, stdout, _ = run_cli(["-s", "5", "--tempo", "80-100", "-o", str(tmp_path / "r.mod")], capsys)
+    assert code == 0
+    line = next(l for l in stdout.splitlines() if l.startswith("Tempo"))
+    bpm = int(line.split("BPM")[1].split()[0])
+    assert 80 <= bpm <= 100 and "(requested 80-100)" in line
+    assert f"--tempo {bpm} --seed 5" in stdout
+
+
+def test_tempo_omitted_keeps_repro_unchanged(tmp_path, capsys):
+    _, stdout, _ = run_cli(["-s", "5", "-o", str(tmp_path / "r.mod")], capsys)
+    assert "--tempo" not in stdout
+
+
+@pytest.mark.parametrize("bad", ["fast", "100-80", "20", "300", "80-"])
+def test_tempo_invalid_syntax_exit_2(tmp_path, capsys, bad):
+    code, _, err = run_cli(["-t", bad, "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "tempo" in err
+
+
+def test_tempo_outside_genre_range_exit_2(tmp_path, capsys):
+    code, _, err = run_cli(["-g", "free-jazz", "-t", "250", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "free-jazz" in err and not (tmp_path / "x.mod").exists()
+
+
+# ---------------- --format（FORMAT_TEMPO_DESIGN §2・§5） ----------------
+
+@pytest.mark.parametrize("fmt, magic", [
+    ("mod", lambda b: b[1080:1084] == b"M.K."), ("xm", lambda b: b[:17] == b"Extended Module: "),
+    ("s3m", lambda b: b[44:48] == b"SCRM"), ("it", lambda b: b[:4] == b"IMPM"), ("midi", lambda b: b[:4] == b"MThd"),
+])
+def test_each_tracker_and_midi_format(tmp_path, capsys, monkeypatch, fmt, magic):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, err = run_cli(["-g", "nostalgic", "-s", "3", "-f", fmt], capsys)
+    ext = {"midi": ".mid"}.get(fmt, f".{fmt}")
+    out = tmp_path / "nostalgic" / f"nostalgic_3{ext}"
+    assert code == 0 and err == "" and magic(out.read_bytes())
+    assert f"Format      : {fmt}" in stdout
+
+
+def test_mp3_without_ffmpeg_exits_5(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("MODWEAVER_FFMPEG", str(tmp_path / "no-such-ffmpeg"))
+    code, _, err = run_cli(["-f", "mp3", "-s", "1", "-o", str(tmp_path / "x.mp3")], capsys)
+    assert code == 5 and "ffmpeg" in err and not (tmp_path / "x.mp3").exists()
+
+
+def test_mp3_with_ffmpeg_lacking_libopenmpt_exits_5(tmp_path, capsys, monkeypatch):
+    fake = tmp_path / "ffmpeg"
+    fake.write_text("#!/bin/sh\necho ' D  mp3  MP3'\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("MODWEAVER_FFMPEG", str(fake))
+    code, _, err = run_cli(["-f", "mp3", "-s", "1", "-o", str(tmp_path / "x.mp3")], capsys)
+    assert code == 5 and "libopenmpt" in err and "libmp3lame" in err

@@ -30,6 +30,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale, fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -183,6 +184,17 @@ class MarchState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "bd": GmVoice(drum_note=36),
+    "sd": GmVoice(drum_note=38),
+    "crash": GmVoice(drum_note=49),
+    "tuba": GmVoice(program=58),
+    "horn": GmVoice(program=60),
+    "section": GmVoice(program=61),
+    "picc": GmVoice(program=72),
+}
+
+
 @register_profile
 class MarchProfile(GenreProfile):
     id = "march"
@@ -193,6 +205,7 @@ class MarchProfile(GenreProfile):
     tempo_choices = (118, 119, 120, 121, 122)
     rows_per_measure = 8
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

@@ -19,9 +19,9 @@ def run_cli(args, capsys):
 
 
 def test_default_output_path_extension_follows_format():
-    assert cli.default_output_path("nostalgic", 1) == Path("nostalgic/nostalgic_1.mod")
-    assert cli.default_output_path("nostalgic", 1, "mod") == Path("nostalgic/nostalgic_1.mod")
-    assert cli.default_output_path("orchestral", 5, "xm") == Path("orchestral/orchestral_5.xm")
+    assert cli.default_output_path("nostalgic", 1) == Path("output/nostalgic_1.mod")
+    assert cli.default_output_path("nostalgic", 1, "mod") == Path("output/nostalgic_1.mod")
+    assert cli.default_output_path("orchestral", 5, "xm") == Path("output/orchestral_5.xm")
 
 
 def test_default_genre_generates_file(tmp_path, capsys):
@@ -49,23 +49,23 @@ def test_seed_omitted_uses_random_in_range(tmp_path, capsys):
     assert 100000 <= seed <= 999999
 
 
-def test_default_output_path_is_genre_subdir(tmp_path, capsys, monkeypatch):
+def test_default_output_path_is_output_dir(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, *_ = run_cli(["-s", "1"], capsys)
-    assert code == 0 and (tmp_path / "nostalgic" / "nostalgic_1.mod").exists()
+    assert code == 0 and (tmp_path / "output" / "nostalgic_1.mod").exists()
 
 
-def test_default_output_path_creates_missing_genre_dir(tmp_path, capsys, monkeypatch):
+def test_default_output_path_creates_missing_output_dir(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, *_ = run_cli(["-g", "suspense-chase", "-s", "5"], capsys)
-    assert code == 0 and (tmp_path / "suspense-chase" / "suspense-chase_5.mod").exists()
+    assert code == 0 and (tmp_path / "output" / "suspense-chase_5.mod").exists()
 
 
 def test_default_format_is_mod_even_for_8ch_genre(tmp_path, capsys, monkeypatch):
     """--format 省略時は全ジャンル mod（8ch の orchestral は FastTracker 系 8CHN）。"""
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
-    out = tmp_path / "orchestral" / "orchestral_5.mod"
+    out = tmp_path / "output" / "orchestral_5.mod"
     assert code == 0 and out.exists() and out.read_bytes()[1080:1084] == b"8CHN"
     assert "Format      : mod" in stdout and "--format" not in stdout
 
@@ -73,7 +73,7 @@ def test_default_format_is_mod_even_for_8ch_genre(tmp_path, capsys, monkeypatch)
 def test_format_option_sets_extension_and_repro(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5", "-f", "xm"], capsys)
-    out = tmp_path / "orchestral" / "orchestral_5.xm"
+    out = tmp_path / "output" / "orchestral_5.xm"
     assert code == 0 and out.read_bytes()[:17] == b"Extended Module: "
     assert "--genre orchestral --format xm --seed 5" in stdout
 
@@ -83,13 +83,14 @@ def test_unknown_format_exit_2(tmp_path, capsys):
     assert code == 2 and "format" in err
 
 
-def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys):
+def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     code, stdout, err = run_cli(["--list-genres"], capsys)
     assert code == 0 and err == ""
     for p in cli.profiles.list_profiles():
         assert p.id in stdout and p.description in stdout
     assert "suspense-slow" in stdout and "suspense" in stdout  # alias も表示される
-    assert not (tmp_path / "nostalgic").exists()  # 生成は行われない
+    assert not (tmp_path / "output").exists()  # 生成は行われない
 
 
 def test_genre_listing_appears_in_help(capsys):
@@ -116,7 +117,7 @@ def test_no_arguments_via_script_prints_usage(tmp_path):
 def test_any_argument_still_generates_default_genre(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, stdout, _ = run_cli(["-s", "3"], capsys)
-    assert code == 0 and "Genre       : nostalgic" in stdout and (tmp_path / "nostalgic" / "nostalgic_3.mod").exists()
+    assert code == 0 and "Genre       : nostalgic" in stdout and (tmp_path / "output" / "nostalgic_3.mod").exists()
 
 
 @pytest.mark.parametrize("name", ["random", "r"])
@@ -128,7 +129,7 @@ def test_random_genre_generates_registered_genre(tmp_path, capsys, monkeypatch, 
     gid = genre_line.split(":")[1].split()[0]
     assert genre_line.endswith(" (random)") and gid in [p.id for p in cli.profiles.list_profiles()]
     assert f"--genre {gid} --seed 11" in stdout                          # 再現コマンドは決まったジャンル
-    assert (tmp_path / gid / f"{gid}_11.mod").exists()
+    assert (tmp_path / "output" / f"{gid}_11.mod").exists()
 
 
 def test_random_genre_picks_among_canonical_ids(tmp_path, capsys, monkeypatch):
@@ -279,7 +280,7 @@ def test_each_tracker_and_midi_format(tmp_path, capsys, monkeypatch, fmt, magic)
     monkeypatch.chdir(tmp_path)
     code, stdout, err = run_cli(["-g", "nostalgic", "-s", "3", "-f", fmt], capsys)
     ext = {"midi": ".mid"}.get(fmt, f".{fmt}")
-    out = tmp_path / "nostalgic" / f"nostalgic_3{ext}"
+    out = tmp_path / "output" / f"nostalgic_3{ext}"
     assert code == 0 and err == "" and magic(out.read_bytes())
     assert f"Format      : {fmt}" in stdout
 

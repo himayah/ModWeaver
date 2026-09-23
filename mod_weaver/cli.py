@@ -25,12 +25,15 @@ LINE = "=" * 50
 THIN = "-" * 50
 
 
+OUTPUT_DIR = Path("output")
+
+
 def default_output_path(genre_id: str, seed: int, fmt: str = formats.DEFAULT_FORMAT) -> Path:
-    """``--output`` 省略時の既定出力先: ``<genre>/<genre>_<seed><ext>``（ジャンルごとにサブディレクトリへ整理）。
+    """``--output`` 省略時の既定出力先: ``output/<genre>_<seed><ext>``（カレントディレクトリの ``output`` にまとめる）。
 
     拡張子は出力形式の ``OutputFormat.extension``（``mod``→``.mod``、``midi``→``.mid``）。中身の形式と
     拡張子を一致させないと、プレイヤー側がマジックバイトと拡張子の不一致で読み込みに失敗する。"""
-    return Path(genre_id) / f"{genre_id}_{seed}{formats.get_format(fmt).extension}"
+    return OUTPUT_DIR / f"{genre_id}_{seed}{formats.get_format(fmt).extension}"
 
 
 def _configure_logging() -> None:
@@ -93,7 +96,7 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     parser.add_argument("--format", "-f", choices=names, default=None,
                         help=f"output format (default: {formats.DEFAULT_FORMAT}). choices: {', '.join(names)}")
     parser.add_argument("--output", "-o", type=str, default=None,
-                        help="output file path (default: <genre>/<genre>_<seed>.<ext>, "
+                        help="output file path (default: output/<genre>_<seed>.<ext>, "
                              "extension follows --format)")
     parser.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
                         help=f"tempo in quarter-note BPM ({TEMPO_MIN}-{TEMPO_MAX}); a range such as 80-100 "

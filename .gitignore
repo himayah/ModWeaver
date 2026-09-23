@@ -4,7 +4,9 @@ __pycache__/
 .coverage
 htmlcov/
 
-# 生成物（--output 省略時の既定出力先。設計書 EXTENSION_DESIGN.md §9）
+# 生成物（--output 省略時の既定出力先。CLI_STAGE2_DESIGN.md §12）
+/output/
+# 旧既定出力先（ジャンル別フォルダ。EXTENSION_DESIGN.md §9）
 /nostalgic/
 /suspense-slow/
 /suspense-chase/

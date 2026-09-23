@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `CORE_EXTENSION_DESIGN.md` §2 の8ジャンル（`swing-jazz`/`prog-rock`/`orchestral`/`trap`/`maqam`/`minimalism`/`future-bass`/`free-jazz`）の具体的なプロファイル設計 |
 | 前提ドキュメント | [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)（EXT-1〜6 の core 仕様）、[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) §7〜8（Profile 契約・既存4ジャンルの設計。本書は同じ様式で書く） |
-| ステータス | **§1 `swing-jazz`・§2 `prog-rock`・§4 `trap`・§5 `maqam`・§6 `minimalism`・§7 `future-bass`・§8 `free-jazz` は実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,maqam,minimalism,future_bass,free_jazz}.py`。全て300 seed で検査クリーンを確認済み）。§3（`orchestral`）のみ詳細設計で未実装。**minimalism 実装時に判明した追加修正**: 4チャンネル全てが固定パターンで row0 に onset を持つと `apply_tempo` の row0 空きチャンネル要求と衝突するため、最長周期（woodblock、6row）のアクセントを意図的に row1 に置いた（§6.6）。各節は march.py と同じ粒度（音色の DSP 構成、`ChordSpec` 進行、`ChannelPlan`、曲構成、文法）で「実装すればそのまま動く」レベルまで具体化している。試聴による微調整が前提の値には §10 に一覧化した上で明示している。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md の各版の改訂履歴を参照。**§3〜§8 の再レビュー（2026-09-23、実装前）で見つけた設計不整合を修正済み**: `Finish=Loop` の禁止パターン（`attack_ms`/`post_filter`/`NoiseLayer` 混在、比率でのデチューン指定が非整数 K になる問題。§3 `ORCH_VIOLIN`/`ORCH_CELLO`、§5 `MAQAM_NAY`（実装時に隣接整数 K で確認済み）、§7 `FB_SUPERSAW`（同）、§8 `FREE_ARCO_BASS`（同））、orchestral の6声データ受け渡し方法（§3.3 で `begin_pattern`/`state` 方式に修正）、maqam の `MicroScale` 相対セント→絶対セント変換の欠落（`MicroScale.absolute_cents()` を core 側に追加）。**trap 実装時に判明した追加修正**: 進行を4和音から2和音ループへ簡略化（§4.3）、`PERIODS` の添字は tracker note（§4.5）。**future-bass 実装時に判明した追加修正**: kick/clap のチャンネル優先度共有問題（§7.6）。**maqam 実装時に判明した追加修正**: なし（§5 の設計はそのまま実装できた。EXT-3 設計時に見つけた `absolute_cents()` の欠落は core 側で先に解決済みだったため）。**free-jazz 実装時に判明した追加修正**: `ChordDef.chord_tones` を全楽器で共有すると shift の違いで無効な音域になる楽器が出るため、`chord.bass`（単一音、arco_bass 専用）と `chord.chord_tones`（共有音域、shift=0 の楽器専用）を役割分担させた（§8.2） |
+| ステータス | **8ジャンル全て実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,maqam,minimalism,future_bass,free_jazz,orchestral}.py`。全て300 seed で検査クリーンを確認済み。§3 `orchestral` のみ実プレイヤーでの再生確認が未了＝EXT-6 の残課題。CORE_EXTENSION_DESIGN.md §11参照）。各節は march.py と同じ粒度で「実装すればそのまま動く」レベルまで具体化していた設計がそのまま実装できた。試聴による微調整が前提の値は §10 参照。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md の各版（v2.1〜v2.5）の改訂履歴を参照。要点: **§3〜§8 の再レビュー**で `Finish=Loop` の禁止パターン（§3/§5/§7/§8。全て実装で解決を確認）・orchestral の6声受け渡し方法（§3.3）・maqam の `MicroScale.absolute_cents()` 欠落を修正。**trap**: 進行を2和音ループへ簡略化（§4.3）、`PERIODS` は tracker note 添字（§4.5）。**future-bass**: kick/clap のチャンネル優先度共有問題（§7.6）。**maqam/orchestral**: 追加修正なし（設計どおり実装できた）。**free-jazz**: `chord.bass`/`chord.chord_tones` の役割分担（§8.2）。**minimalism**: row0/row1 のアクセント配置調整（§6.6）。**orchestral**: VLN1-4種の弦楽器は同一 Patch を `shift` だけ変えて派生、6声は `mctx.chord` から毎回導出（`state` 不要。§3.3 の設計どおり） |
 | 読み方 | 各節は EXTENSION_DESIGN.md §8.5（march）と同一の構成: ①音色キット ②ChannelPlan ③進行 ④曲構成 ⑤文法 ⑥使用する core 拡張とその設定値。`core/synth.py` の `Patch`/`Layer` 語彙、`core/composer.py` の `MelodyGenerator`/`RhythmMotif`/`articulate` 語彙、`core/harmony.py` の `Registers`/`voice()` 語彙は既存4ジャンルと共通のまま使う（新規 core 追加は行わない。追加が要る箇所は個別に明記） |
 
 ---
@@ -117,7 +117,7 @@ E aeolian（Eマイナー）モーダル。主リフの和声度数は `i - bVII
 
 ---
 
-## 3. `orchestral`（フルオーケストラ / 劇伴）
+## 3. `orchestral`（フルオーケストラ / 劇伴。実装済み。`profiles/orchestral.py` の値と一致）
 
 ### 3.1. チャンネル構成（8ch, `target_format="xm"`）
 
@@ -126,60 +126,68 @@ CH_VLN1, CH_VLN2, CH_VLA, CH_VC, CH_CB, CH_WW, CH_BRASS, CH_TIMP = 0..7
 ```
 | ch | 役割 | サンプル | `SampleSpec.pan` |
 |:---|:---|:---|:---|
-| VLN1 | 第1ヴァイオリン（旋律） | `ORCH_VIOLIN` (shift=0) | 30（左寄り） |
-| VLN2 | 第2ヴァイオリン（対旋律/ハーモニー） | `ORCH_VIOLIN`（同一パッチを別スロットで複製、finetune 微小デチューンでアンサンブル感） | 80 |
-| VLA | ヴィオラ | `ORCH_VIOLA`（`ORCH_VIOLIN` の `shift=-7`, 倍音構成を少し暗く） | 150 |
-| VC | チェロ | `ORCH_CELLO`（`shift=-12`） | 190 |
-| CB | コントラバス | `ORCH_BASS_STR`（`shift=-24`） | 210（右寄り） |
-| WW | 木管（フルート/オーボエを priority で共有） | `ORCH_FLUTE`, `ORCH_OBOE` | 100 |
-| BRASS | 金管（march の `HORN`/`SECTION` 資産を流用・拡張） | `ORCH_HORN`（march `MARCH_BRASS_HORN` を再利用）, `ORCH_TRUMPET`（新規） | 160 |
-| TIMP | ティンパニ・打楽器 | `ORCH_TIMPANI`（音程付き打楽器）, `ORCH_CYMBAL_SWELL` | 128（中央） |
+| VLN1 | 第1ヴァイオリン（旋律） | `orch_violin`（shift=0） | 30（左寄り） |
+| VLN2 | 第2ヴァイオリン | `orch_violin` を `dataclasses.replace(finetune=3)` した派生（合奏感の軽いデチューン） | 80 |
+| VLA | ヴィオラ | `orch_viola`（`orch_violin` を `shift=-7` で派生） | 150 |
+| VC | チェロ | `orch_cello`（`shift=-12`） | 190 |
+| CB | コントラバス | `orch_bass_str`（`shift=-24`） | 210（右寄り） |
+| WW | 木管 | `nostalgic_flute` を流用（新規合成不要） | 100 |
+| BRASS | 金管（development は horn、climax は trumpet。優先度 trumpet>horn） | march `march_brass_section`（horn）、`orch_trumpet`（trumpet） | 160 |
+| TIMP | ティンパニ・打楽器（優先度 cymbal>timpani） | `orch_timpani`、`free_cymbal_swell` を流用 | 128（中央） |
 
-### 3.2. 音色キット（新規のみ抜粋）
+**設計レビューで簡略化**: 当初案の「木管はフルート/オーボエをpriorityで共有」「金管はhorn(march再利用)/trumpet(新規)」のうち、木管は1音色（既存 `nostalgic_flute` を再利用、新規合成なし）に簡略化した。金管は当初案どおり march 資産（`march_brass_section`）と新規 `orch_trumpet` の2音色・優先度共有を維持。
+
+### 3.2. 音色キット（新規のみ）
 
 | 名前 | 構成 | 備考 |
 |:---|:---|:---|
-| `ORCH_VIOLIN` | `ToneLayer(h=1..8, weight 1/h^0.8)` を2層、片方は `mult` を隣接整数（`K, K+1`。**`Finish=Loop` の `mult` は整数サイクル数でなければならないため、比率での「±0.3%」指定は不可**＝`core/synth.py` 制約。`fb_supersaw`（実装済み）と同じ「大きめの L を選び隣接整数でうなりを作る」技法）にずらす合成内デチューンで束ねてアンサンブル感。`Finish=Loop(length, attack_samples=N)`（弓の起動は `Loop.attack_samples` で表現する。**`Patch.attack_ms` は OneShot 専用のため Loop では使えない**＝同じく `core/synth.py` の `Patch.__post_init__` 制約） | |
-| `ORCH_CELLO` | `ORCH_VIOLIN` と同じ倍音則を `shift=-12` で。`Finish=Loop(length, attack_samples=N')`（`N' > N`、より重い弓の起動を長めの `attack_samples` で表現） | |
-| `ORCH_TIMPANI` | `ToneLayer(基音+3倍音,decay_alpha=各違う)` + 微小 `PitchSweepLayer`（打面の立ち上がりピッチドロップ）。`Finish=OneShot(1.1s)`、`pitched=True` | march の `BD` と違い明確な音程を持つ点が核心の差 |
-| `ORCH_CYMBAL_SWELL` | `NoiseLayer(filter=hp, rise_power=1.5)`（立ち上がりクレッシェンド）。`Finish=OneShot(2.0s)` | ロール/スウェル専用。個々の打点ではなく持続的な高揚に使う |
-| `ORCH_TRUMPET` | march `MARCH_BRASS_SECTION` を `dataclasses.replace()` で `attack_ms` を短縮（金管らしい鋭いアタック）した派生 | |
+| `orch_violin` | `ToneLayer(K=120*h, h=1..8, weight 1/h^0.8)`。`Finish=Loop(3800, attack_samples=300)` | K=120*h・L=3800 は `fb_supersaw`/`maqam_nay` と同じ「261.6Hz基準・0.49%偏差」の実績値を再利用。ヴィオラ/チェロ/コントラバスはこの Patch を `shift` のみ変えて `dataclasses.replace()` で派生させる（弦楽器族は音色が近いため、新規 Patch を都度組まない） |
+| `orch_viola` | `orch_violin` を `shift=-7` で派生 | |
+| `orch_cello` | `orch_violin` を `shift=-12` で派生 | |
+| `orch_bass_str` | `orch_violin` を `shift=-24` で派生 | |
+| `orch_trumpet` | march `march_brass_section` を `Loop.attack_samples` 短縮（100→20）した派生 | **実装時の修正**: 当初案の「`attack_ms` を短縮」は `Finish=Loop` では使えないフィールド（`core/synth.py` 制約）のため、`Loop.attack_samples` の短縮に変更 |
+| `orch_timpani` | `ToneLayer(基音+2倍音,各 decay_alpha違う)` + `PitchSweepLayer(90→65Hz,weight0.2)`（打面のピッチドロップ）。`Finish=OneShot(1.1s)`、`shift=-24` | march の bd と違い明確な音程を持つ |
 
-### 3.3. 進行
+`ORCH_CYMBAL_SWELL` は当初案どおり新規合成しない。ただし「`orchestral` の `ORCH_CYMBAL_SWELL` を流用予定」としていた free-jazz 側の当初案が実装順序の都合で先に `free_cymbal_swell` として実装済みだったため、**逆に orchestral 側が `free_cymbal_swell` を流用する**形になった（`synth.render(synth_presets.FREE_CYMBAL_SWELL)`）。
 
-機能和声（I-IV-V-vi 系）だが5〜6声（VLN1/VLN2/VLA/VC/CB＋WW or BRASS）でボイシングする必要があるため、`Registers` を6段に拡張した独自の `OrchRegisters`（`bass`/`tenor`/`alto`/`soprano1`/`soprano2`/`descant` の6音域）を `profiles/orchestral.py` にローカル定義し、`harmony.voice()` は使わず**手書きボイシング関数**（nostalgic の `explicit=True` 流儀）で `ChordDef` を組み立てる（`harmony.voice()` は4音域=`Registers`固定のため、6音域には直接使えない）。
+### 3.3. 進行と6声のボイシング
 
-**声部ごとの目標音の受け渡し方（設計レビューで修正）**: 当初案は「`PatternPlan.extra` に声部リストを積む」としていたが、`PatternPlan.extra`／`PatternCtx.extra` は**pattern 単位**（1つの `PatternPlan` 内の全 measure で共有）のデータであり、和音は measure ごとに変わるため、6声の目標音（measure ごとに異なる）を pattern 単位の `extra` に置くことはできない（`ChordDef` 自体にも汎用の `extra` フィールドは無い）。正しい設計は、march/swing-jazz/prog-rock が既に使っている**「`begin_pattern` で `plan()` と同じ純粋関数を呼び直し、pattern 内で共有する状態として保持する」パターン**（`GenreProfile.begin_pattern(pctx, rng) -> Any` の既存契約）をそのまま踏襲すること:
+機能和声（I-IV-V-vi）を6声（bass=CB/tenor=VC/alto=VLA/soprano1=VLN2/soprano2=VLN1(旋律)/descant=BRASS）
+でボイシングする。`harmony.voice()`（4音域固定）で bass(CB)/harmony(VC=tenor代用)/chord_tones(VLN1候補) を
+求め、残り3声（alto/soprano1/descant）は **`mctx.chord.chord_tones` のピッチクラス集合から都度導出**
+する（`{t % 12 for t in chord.chord_tones}` をソートし、`lowest_note_with_pc()` で各声部の音域に配置）:
 
 ```python
-def voice_orch_progression(name: str, tonic_pc: int) -> list[OrchVoicing]:
-    """plan() が ChordSlot 用の label 等を作るのに使い、begin_pattern() が同じ引数で
-    呼び直して6声の目標音テーブルを再構築するのに使う、純粋関数（march の
-    voice_march_progression と同型）。"""
-    ...
-
-@dataclass
-class OrchState:
-    voicings: list[OrchVoicing]   # 現在の pattern の measure_idx でそのまま引ける
-    extra: dict = field(default_factory=dict)
-
-def begin_pattern(self, pctx, rng):
-    tonic = (pctx.key_pc or 0) + pctx.key_offset
-    return OrchState(voicings=voice_orch_progression(pctx.kind, tonic))
-
-def compose_measure(self, mctx, state, rng, buf):
-    voicing = state.voicings[mctx.measure_idx]   # 6声の目標音
-    ...
+def _extra_voices(chord: ChordDef) -> tuple[int, int, int, int]:
+    pcs = sorted({t % 12 for t in chord.chord_tones}) or [chord.bass % 12]
+    alto = lowest_note_with_pc(pcs[1 % len(pcs)], *ALTO_REG)
+    sop1 = lowest_note_with_pc(pcs[2 % len(pcs)], *SOP1_REG)
+    descant = lowest_note_with_pc(pcs[0], *DESCANT_REG)
+    sop2 = chord.chord_tones[-1] if chord.chord_tones else chord.bass
+    return alto, sop1, descant, sop2
 ```
-これは既存の core 契約（`begin_pattern`/`state`）だけで完結し、**core 変更は不要**（当初案の結論自体は正しかったが、根拠にしていた仕組みが誤っていた）。
+
+**設計レビューで修正・さらに実装で簡略化**: 当初案は「`PatternPlan.extra` に声部リストを積む」としていたが、
+`extra` は pattern 単位（measure ごとに変わる和音データを置けない）のため誤りだった。設計レビューでは
+「`begin_pattern`/`state` で `plan()` と同じ関数を呼び直す」方式に修正したが、**実装時にさらに簡略化**
+できることが判明した: 6声の目標音は全て `mctx.chord.chord_tones` のピッチクラス集合だけから毎回導出
+できるため、`begin_pattern`/`state` すら不要（`OrchState`/`voice_orch_progression()` は作らなかった）。
+6音域（`BASS_REG=(-12,-1)`/`TENOR_REG=(0,11)`/`ALTO_REG=(7,18)`/`SOP1_REG=(12,23)`/`SOP2_REG=(19,30)`/
+`DESCANT_REG=(24,35)`、各span=11）はモジュール定数として直接定義した（`OrchRegisters` という専用型は
+作らず、6つのタプル定数で十分だった）。
 
 ### 3.4. 曲構成
 
-劇伴的な起伏（intro → theme → development → climax → resolution）。`intensity` を 0.3→0.5→0.7→1.0→0.4 と推移させ、`composer.ramp`/`fade_cells` で持続音のクレッシェンド/デクレッシェンドを演出する。`order` は5 pattern を1回ずつ（ループしない通作形式。既存ジャンルが基本ループ主体だったのに対し明確な差別化）。
+劇伴的な起伏（intro → theme → development → climax → resolution）。`intensity` を 0.3→0.5→0.7→1.0→0.4
+と推移させる。`order=[0,1,2,3,4]`（5 pattern を1回ずつ、ループしない通作形式）。各セクションで参加楽器を
+増減させる（intro=弦楽器のみ→theme=+木管→development=+ホルン→climax=全8ch・トランペット・ティンパニ・
+シンバルスウェル→resolution=弦楽器のみで着地）。**実装時の簡略化**: 当初案の `composer.fade_cells` による
+クレッシェンド/デクレッシェンドは使わず、`intensity` によるセクション単位の音量スケーリングのみとした
+（measure内での連続的な音量変化until は行わない。試聴調整の余地として §10 に残す）。
 
 ### 3.5. 使用する core 拡張
 
-`target_format="xm"`、`channel_plan` は8要素。`engine.validate_profile` の分岐（§4.6②）によりチェックされる。`SampleSpec.pan` を上表の通り設定。**EXT-6 の他要素（エンベロープ、複数サンプルキーマップ）は使わない**（§4.6 のスコープ通り）。
+`target_format="xm"`、`channel_plan` は8要素。`engine.validate_profile` の分岐（§4.6②）によりチェックされる。`SampleSpec.pan` を上表の通り設定。**EXT-6 の他要素（エンベロープ、複数サンプルキーマップ）は使わない**（§4.6 のスコープ通り）。climax（全8ch同時強奏）は `verify_xm` の V15（パン加重した左右合計音量が上限超過）を WARN で報告する（300 seed 全てで発生。ERROR ではなく、実際のオーケストラのトゥッティ強奏を正確に反映した結果であり許容する）。
 
 ---
 
@@ -421,7 +429,7 @@ post_processors = (lambda song, plan: mixer.apply_sidechain(song, SIDECHAIN_RULE
 | `FREE_PIANO_CLUSTER` | `ToneLayer` 5層、`mult` を近接した比（1.0, 1.06, 1.13, 1.19, 1.26＝ほぼ半音刻み、各 decay_alpha 10〜20）で密集させたトーンクラスター。`Finish=OneShot(0.6s)` | 通常のコード（3度堆積）ではなく隣接音の密集。OneShot のため `mult` は整数サイクル数制約を受けない（Loop との違い）。実装済み（`synth_presets.FREE_PIANO_CLUSTER`）の値と一致 |
 | `FREE_ARCO_BASS` | `ToneLayer(K=60,weight1.0)` + `ToneLayer(K=61,weight0.8)`（隣接整数デチューン、`L=3800`）。`Finish=Loop(3800,0)`、`shift=-12` | 持続的なアルコ（弓弾き）表現。**擦弦ノイズは `NoiseLayer` ではなくデチューンのうなりで近似**（`Finish=Loop` は `ToneLayer` のみ許可、かつ `mult` は整数サイクル数固定という `core/synth.py` 制約のため。`MAQAM_NAY`・`fb_supersaw` と同じ流儀）。実装済みの値と一致 |
 | `FREE_SAX_SCREECH` | `ToneLayer(高次倍音, h=3..12, weight 1/h, 各 decay_alpha=6+h)` + `NoiseLayer(filter=hp,decay_alpha=10,weight=0.5)`。`Finish=OneShot(0.5s)` | アルティッシモの絶叫的音色。実装済みの値と一致 |
-| `FREE_CYMBAL_SWELL` | `NoiseLayer(filter=hp, rise_power=1.5)`。`Finish=OneShot(2.0s)` | 立ち上がりクレッシェンドのスウェル。**実装時の修正**: 当初案の「`orchestral` の `ORCH_CYMBAL_SWELL` を流用」は、`orchestral` が Phase 4e 時点でまだ未実装のため実現できず、直接新規プリセットとして実装した（`orchestral` 実装時に同一内容を `ORCH_CYMBAL_SWELL` として登録すれば実質的な重複になるため、その時点で `FREE_CYMBAL_SWELL` を参照する形に整理するか検討する） |
+| `FREE_CYMBAL_SWELL` | `NoiseLayer(filter=hp, rise_power=1.5)`。`Finish=OneShot(2.0s)` | 立ち上がりクレッシェンドのスウェル。**実装時の修正**: 当初案の「`orchestral` の `ORCH_CYMBAL_SWELL` を流用」は、free-jazz 実装時点（Phase 4c）で `orchestral`（Phase 4e）がまだ未実装だったため実現できず、free-jazz 側が先に独立プリセットとして実装した。**その後 Phase 4e で orchestral を実装した際、逆に `synth.render(synth_presets.FREE_CYMBAL_SWELL)` を直接流用する形で解決した**（新規 `ORCH_CYMBAL_SWELL` は作らなかった。§3.2 参照） |
 
 ### 8.2. 和声（手組み `ChordDef`。`CHORD_QUALITIES` は不使用。実装済み・`profiles/free_jazz.py` と一致）
 
@@ -482,7 +490,7 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 
 ## 9. 新規 `synth_presets.py` エントリ一覧（実装時にそのまま追加する）
 
-各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**`SWING_*`（5）／`PROG_*`（5）／`TRAP_*`（5）／`MAQAM_*`（5）／`FB_*`（5）／`FREE_*`（4）／`MIN_*`（4）は実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計54）。残り1ジャンル（orchestral）で**約5〜6プリセット**が追加見込み（実装後の合計は60程度）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
+各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**全8ジャンル分（`SWING_*`5／`PROG_*`5／`TRAP_*`5／`MAQAM_*`5／`FB_*`5／`FREE_*`4／`MIN_*`4／`ORCH_*`6）が実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計60。既存21と合わせた最終合計）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
 
 ---
 
@@ -495,5 +503,6 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 - maqam: `RAST_ON_G` 以外の maqam（Bayati 等）を追加するかどうかは**未実装のまま**（今回は Rast 1種のみを実装対象とした。`profiles/maqam.py` に他 maqam を追加する拡張は将来課題）。`_maqam_phrase()` の跳躍確率0.15等は試聴による再調整の余地あり。
 - ~~minimalism: フェーズ段階数と各チャンネルの固定音型~~ → **実装済み**（16段階、`PIANO_PATTERN`/`MARIMBA_PATTERN`/`VIBES_PATTERN`/`WOOD_PATTERN`。`profiles/minimalism.py`）。音符列は試聴による再調整の余地あり。
 - ~~free-jazz: クラスター和音の音程選択肢、密度確率の具体的な数値テーブル~~ → **実装済み**（`(0,1,2,-1,-2,6,7)`、`DENSITY={"bass":0.18,"piano":0.25,"perc":0.08}`、`SAX_DENSITY_CLIMAX=0.12`。`profiles/free_jazz.py`）。値は試聴による再調整の余地あり。
+- ~~orchestral: 6声の具体的な音域・進行~~ → **実装済み**（I-IV-V-vi、6音域は §3.3 参照。`profiles/orchestral.py`）。ボイシングの具体的な度数配分（`_extra_voices()` の `pcs[1]`/`pcs[2]`/`pcs[0]` 固定割当）は試聴による再調整の余地あり。**orchestral は EXT-6（XM）自体が実プレイヤーでの再生確認が未了**（CORE_EXTENSION_DESIGN.md §11。他7ジャンルと異なり「試聴して数値を詰める」以前に「正しく再生されるか」から確認が必要）。
 
-いずれも `CORE_EXTENSION_DESIGN.md` §11 の「実装時の要検証事項」と同じ性質（設計としては完結しており、実装→試聴→微調整のサイクルで詰める値）であり、実装開始のブロッカーではない。
+いずれも `CORE_EXTENSION_DESIGN.md` §11 の「実装時の要検証事項」と同じ性質（設計としては完結しており、実装→試聴→微調整のサイクルで詰める値）であり、実装開始のブロッカーではない。**8ジャンル全ての実装が完了した**（2026-09-23）。

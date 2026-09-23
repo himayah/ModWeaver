@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-ProTracker%20MOD%20(4ch)-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式トラッカー音楽ファイル（`.mod`）を波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）など複数ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式（および FastTracker II `.xm` 形式）トラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）、ミニマル（`minimalism`）、フルオーケストラ（`orchestral`、8chマルチチャンネル `.xm` 出力）など、計12ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -23,8 +23,8 @@
   - **Twilight Ambient Pad**: 整数周期設計によりクリックノイズが一切生じない、温かいアナログシンセ・ストリングス（完全シームレスループ）。
   - **Warm Mellow Bass**: 丸く深みのあるアコースティック／Lo-Fiサブベース。
   - **Vintage Lo-Fi Drums**: ピッチ降下キック、温かいレトロスネア、繊細なクローズドハイハット。
-- **標準ProTracker 4ch MOD準拠**:
-  生成されたバイナリは Amiga ProTracker（`M.K.` マジックタグ）完全準拠であり、現代のあらゆるトラッカーソフトやメディアプレイヤーでネイティブ再生できます。
+- **標準ProTracker 4ch MOD準拠（一部ジャンルは FastTracker II `.xm` 8ch出力）**:
+  ほとんどのジャンルは Amiga ProTracker（`M.K.` マジックタグ）4ch MOD 完全準拠で、現代のあらゆるトラッカーソフトやメディアプレイヤーでネイティブ再生できます。`orchestral` のみ4chでは表現しきれない8パート編成のため FastTracker II `.xm` 形式（8ch）で出力します（`.xm` 出力は独立パーサでの自己検証まで実施済みですが、実トラッカーソフトでの再生確認は未了です）。
 
 ---
 
@@ -83,6 +83,7 @@ python modweaver.py --genre future-bass
 python modweaver.py --genre maqam
 python modweaver.py --genre free-jazz
 python modweaver.py --genre minimalism
+python modweaver.py --genre orchestral   # .xm（FastTracker II）形式で出力される
 ```
 
 #### 指定できるジャンル一覧を確認する:
@@ -117,6 +118,7 @@ python modweaver.py --list-genres
 | `maqam` | – | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
 | `free-jazz` | – | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 | `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
+| `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル（`.xm`形式）、弦+木管+金管+ティンパニ |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
@@ -179,13 +181,12 @@ python modweaver.py --list-genres
 ├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
 ├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
 ├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）
-├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a（EXT-1/EXT-2）実装済み、
-│                             # Phase 4b以降は設計のみ
-├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。7ジャンル実装済み、orchestralのみ設計のみ
+├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a〜4e（EXT-1〜6）全て実装済み
+├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。8ジャンル全て実装済み
 └── README.md          # 本ドキュメント
 ```
 
-より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。第一段階（nostalgic/suspense/march）の実装詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8、第二段階の core 拡張（EXT-1〜6）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)、各ジャンル（swing-jazz/prog-rock 等）の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) をご参照ください。
+より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。第一段階（nostalgic/suspense/march）の実装詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8、第二段階の core 拡張（EXT-1〜6、全て実装済み）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)、各ジャンル（swing-jazz/prog-rock/orchestral 等、8ジャンル全て実装済み）の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) をご参照ください。
 
 ---
 

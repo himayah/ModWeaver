@@ -11,6 +11,8 @@ nostalgic / suspense / march を ``Patch`` 方式へ1ジャンルずつ移行す
 """
 from __future__ import annotations
 
+import dataclasses
+
 from . import dsp
 from .synth import FilterSpec, Loop, NoiseLayer, OneShot, Patch, PitchSweepLayer, ToneLayer, WeightedLayer
 
@@ -818,4 +820,63 @@ MIN_WOODBLOCK = register(
     ),
     "6row周期（最長周期）のウッドブロック・アクセント。単一倍音、非常に速い減衰。"
     "minimalism の woodblock 由来。",
+)
+
+# ------------------------------------------------------------
+# orchestral（GENRE_DESIGN_V2.md §3。EXT-6 マルチチャンネル/XM の実証ジャンル）
+# ------------------------------------------------------------
+
+ORCH_VIOLIN = register(
+    "orch_violin",
+    Patch(
+        "OrchViolin",
+        (WeightedLayer(ToneLayer(tuple((120.0 * h, 1.0 / h ** 0.8, None) for h in range(1, 9)))),),
+        Loop(3800, 300),
+        pitched=True, rate_note=24, shift=0, volume=46,
+    ),
+    "第1ヴァイオリン。K=120*h(h=1..8), L=3800（261.6Hz基準、0.49%偏差）、弓の起動をアタック窓300"
+    "サンプルで表現。orchestral の violin 由来。ヴィオラ/チェロ/コントラバスはこの Patch を"
+    "``shift`` のみ変えて `dataclasses.replace()` で派生させる（弦楽器族の音色が近いため）。",
+)
+
+ORCH_VIOLA = register(
+    "orch_viola",
+    dataclasses.replace(ORCH_VIOLIN, name="OrchViola", shift=-7, volume=44),
+    "ヴィオラ。orch_violin を shift=-7 で派生。orchestral の viola 由来。",
+)
+
+ORCH_CELLO = register(
+    "orch_cello",
+    dataclasses.replace(ORCH_VIOLIN, name="OrchCello", shift=-12, volume=48),
+    "チェロ。orch_violin を shift=-12 で派生。orchestral の cello 由来。",
+)
+
+ORCH_BASS_STR = register(
+    "orch_bass_str",
+    dataclasses.replace(ORCH_VIOLIN, name="OrchBassStr", shift=-24, volume=52),
+    "コントラバス。orch_violin を shift=-24 で派生。orchestral の bass_str 由来。",
+)
+
+ORCH_TRUMPET = register(
+    "orch_trumpet",
+    dataclasses.replace(MARCH_BRASS_SECTION, name="OrchTrumpet", finish=Loop(190, 20)),
+    "トランペット。march の brass_section を `Loop.attack_samples` を短縮（100→20）して鋭いアタックに"
+    "した派生（``Patch.attack_ms`` は Loop では使えないため `Loop.attack_samples` で表現する）。"
+    "orchestral の trumpet 由来。金管は march の horn/section 資産を流用・拡張する設計方針どおり。",
+)
+
+ORCH_TIMPANI = register(
+    "orch_timpani",
+    Patch(
+        "OrchTimpani",
+        (
+            WeightedLayer(ToneLayer(((1.0, 1.0, 8.0), (2.0, 0.4, 12.0), (3.0, 0.2, 16.0)))),
+            WeightedLayer(PitchSweepLayer(freq_start=90.0, freq_end=65.0, pitch_decay=35.0, decay_alpha=10.0),
+                          weight=0.2),
+        ),
+        OneShot(1.1),
+        pitched=True, saturate=1.15, rate_note=24, shift=-24, volume=54, noise_seed=901,
+    ),
+    "音程を持つティンパニ。基音+2倍音（各異なる速さで減衰）+ 打面の微小ピッチドロップ。"
+    "march の bd と違い明確な音程を持つ点が核心の差。orchestral の timpani 由来。",
 )

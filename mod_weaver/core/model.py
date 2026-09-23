@@ -260,6 +260,7 @@ class SampleSpec:
     shift: int = 0                 # n = t + shift（§5.1）
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
     finetune: int = 0
+    pan: int = 128                 # EXT-6: 0=左、128=中央、255=右。MOD の serialize() は参照しない
 
     @property
     def length_words(self) -> int:
@@ -285,6 +286,8 @@ class SampleSpec:
             raise SampleConstraintError(f"sample {n!r}: rate_note out of range: {self.rate_note}")
         if not -8 <= self.finetune <= 7:
             raise SampleConstraintError(f"sample {n!r}: finetune out of range: {self.finetune}")
+        if not 0 <= self.pan <= 255:
+            raise SampleConstraintError(f"sample {n!r}: pan out of range: {self.pan}")
         if self.loop is not None:
             start, length = self.loop
             if start < 0 or length <= 1 or start + length > self.length_words:

@@ -33,6 +33,10 @@ class SampleConstraintError(ModGenError):
     ``PlanError`` と使い分ける）。"""
 
 
+class TempoRangeError(ModGenError):
+    """``--tempo`` の要求範囲がジャンルの許容範囲（``GenreProfile.tempo_range``）と重ならない。"""
+
+
 class PlanError(ModGenError):
     """64 row 不一致、order 不正、pattern 数超過、tempo が tempo_choices 外。"""
 

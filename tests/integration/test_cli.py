@@ -143,3 +143,38 @@ def test_python_dash_m_forms_produce_identical_output(tmp_path):
 def test_exit_code_of_module_invocation_for_unknown_genre(tmp_path):
     r = subprocess.run([sys.executable, "-m", "mod_weaver", "-g", "zzz"], capture_output=True, text=True, cwd=ROOT)
     assert r.returncode == 2
+
+
+# ---------------- --tempo（FORMAT_TEMPO_DESIGN §3） ----------------
+
+def test_tempo_single_value(tmp_path, capsys):
+    out = tmp_path / "t.mod"
+    code, stdout, err = run_cli(["-s", "1", "-t", "123", "-o", str(out)], capsys)
+    assert code == 0 and err == ""
+    assert "Tempo       : BPM 123\n" in stdout
+    assert "--genre nostalgic --tempo 123 --seed 1" in stdout
+
+
+def test_tempo_range_picks_within_and_repro_uses_resolved_value(tmp_path, capsys):
+    code, stdout, _ = run_cli(["-s", "5", "--tempo", "80-100", "-o", str(tmp_path / "r.mod")], capsys)
+    assert code == 0
+    line = next(l for l in stdout.splitlines() if l.startswith("Tempo"))
+    bpm = int(line.split("BPM")[1].split()[0])
+    assert 80 <= bpm <= 100 and "(requested 80-100)" in line
+    assert f"--tempo {bpm} --seed 5" in stdout
+
+
+def test_tempo_omitted_keeps_repro_unchanged(tmp_path, capsys):
+    _, stdout, _ = run_cli(["-s", "5", "-o", str(tmp_path / "r.mod")], capsys)
+    assert "--tempo" not in stdout
+
+
+@pytest.mark.parametrize("bad", ["fast", "100-80", "20", "300", "80-"])
+def test_tempo_invalid_syntax_exit_2(tmp_path, capsys, bad):
+    code, _, err = run_cli(["-t", bad, "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "tempo" in err
+
+
+def test_tempo_outside_genre_range_exit_2(tmp_path, capsys):
+    code, _, err = run_cli(["-g", "free-jazz", "-t", "250", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "free-jazz" in err and not (tmp_path / "x.mod").exists()

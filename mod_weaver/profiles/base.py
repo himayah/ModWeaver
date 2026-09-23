@@ -28,7 +28,10 @@ class GenreProfile(ABC):
     description: str
     title: str                         # 出力ファイルのタイトル欄（ASCII ≤20。mod/xm 共通）
     default_filename: str
-    tempo_choices: tuple[int, ...]     # 離散値
+    tempo_choices: tuple[int, ...]     # 離散値。値は4分音符の BPM（=tracker の Fxx。1拍=24 tick）
+    tempo_range: tuple[int, int] = (32, 255)
+    # ↑ --tempo で上書きできる BPM の範囲（両端含む）。BPM から row 数を計算しているジャンル等、極端な
+    #   テンポで破綻するものだけ狭める（FORMAT_TEMPO_DESIGN §3.3。値は総当たりの実測で決める）
     rows_per_measure: int = 16         # 64 の約数
     channel_plan: ChannelPlan
     tempo_policy: str = "engine"       # "engine" | "profile"

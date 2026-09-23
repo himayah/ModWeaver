@@ -1,6 +1,6 @@
 """コマンドライン入口（設計書 §9、§10）。
 
-終了コード: 0=成功 / 2=引数エラー・未登録 genre / 3=生成・検査エラー / 4=I/O エラー / 1=想定外例外。
+終了コード: 0=成功 / 2=引数エラー・未登録 genre・ジャンルが対応しないテンポ / 3=生成・検査エラー / 4=I/O エラー / 1=想定外例外。
 ログは stderr（WARNING 以上）、バナーは stdout。
 """
 from __future__ import annotations
@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from . import profiles
-from .engine import SEED_RANGE, Result, generate
-from .errors import ModGenError, OutputError, ProfileNotFoundError
+from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
+from .errors import ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
 
 DEFAULT_GENRE = "nostalgic"
 LINE = "=" * 50
@@ -55,6 +55,13 @@ def genre_listing() -> str:
     return "\n".join(lines)
 
 
+def _tempo_arg(text: str) -> TempoRequest:
+    try:
+        return TempoRequest.parse(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
 def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     ids = ", ".join(p.id for p in profiles.list_profiles())
     parser = argparse.ArgumentParser(
@@ -70,6 +77,9 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     parser.add_argument("--output", "-o", type=str, default=None,
                         help="output file path (default: <genre>/<genre>_<seed>.<mod|xm>, "
                              "extension depends on the genre's target format)")
+    parser.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
+                        help=f"tempo in quarter-note BPM ({TEMPO_MIN}-{TEMPO_MAX}); a range such as 80-100 "
+                             "picks a random BPM within it (default: chosen by the genre)")
     parser.add_argument("--list-genres", action="store_true",
                         help="print all genre ids, aliases and descriptions, then exit")
     return parser
@@ -81,7 +91,9 @@ def print_banner(profile, result: Result, repro: str) -> None:
     print(LINE)
     print(f"Genre       : {profile.id}")
     print(f"Seed        : {result.seed}")
-    print(f"Tempo       : BPM {result.plan.bpm}")
+    requested = result.tempo_request
+    note = f" (requested {requested})" if requested is not None and requested.lo != requested.hi else ""
+    print(f"Tempo       : BPM {result.plan.bpm}{note}")
     for line in result.plan.summary:
         print(line)
     print(THIN)
@@ -120,8 +132,8 @@ def main(
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
-        result = generate(profile, seed, out)
-    except ProfileNotFoundError as e:
+        result = generate(profile, seed, out, tempo=args.tempo)
+    except (ProfileNotFoundError, TempoRangeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except OutputError as e:
@@ -136,6 +148,8 @@ def main(
 
     if repro is None:
         repro = f"{invocation or 'python -m mod_weaver.cli'} --genre {profile.id}"
+    if args.tempo is not None:
+        repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
     print_banner(profile, result, repro)
     return 0
 

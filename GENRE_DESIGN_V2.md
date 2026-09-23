@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `CORE_EXTENSION_DESIGN.md` §2 の8ジャンル（`swing-jazz`/`prog-rock`/`orchestral`/`trap`/`maqam`/`minimalism`/`future-bass`/`free-jazz`）の具体的なプロファイル設計 |
 | 前提ドキュメント | [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)（EXT-1〜6 の core 仕様）、[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) §7〜8（Profile 契約・既存4ジャンルの設計。本書は同じ様式で書く） |
-| ステータス | **§1 `swing-jazz`・§2 `prog-rock`・§4 `trap`・§5 `maqam`・§7 `future-bass`・§8 `free-jazz` は実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,maqam,future_bass,free_jazz}.py`。全て300 seed で検査クリーンを確認済み）。§3・§6（`orchestral`/`minimalism`）は詳細設計のみで未実装。各節は march.py と同じ粒度（音色の DSP 構成、`ChordSpec` 進行、`ChannelPlan`、曲構成、文法）で「実装すればそのまま動く」レベルまで具体化している。試聴による微調整が前提の値には §10 に一覧化した上で明示している。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md の各版の改訂履歴を参照。**§3〜§8 の再レビュー（2026-09-23、実装前）で見つけた設計不整合を修正済み**: `Finish=Loop` の禁止パターン（`attack_ms`/`post_filter`/`NoiseLayer` 混在、比率でのデチューン指定が非整数 K になる問題。§3 `ORCH_VIOLIN`/`ORCH_CELLO`、§5 `MAQAM_NAY`（実装時に隣接整数 K で確認済み）、§7 `FB_SUPERSAW`（同）、§8 `FREE_ARCO_BASS`（同））、orchestral の6声データ受け渡し方法（§3.3 で `begin_pattern`/`state` 方式に修正）、maqam の `MicroScale` 相対セント→絶対セント変換の欠落（`MicroScale.absolute_cents()` を core 側に追加）。**trap 実装時に判明した追加修正**: 進行を4和音から2和音ループへ簡略化（§4.3）、`PERIODS` の添字は tracker note（§4.5）。**future-bass 実装時に判明した追加修正**: kick/clap のチャンネル優先度共有問題（§7.6）。**maqam 実装時に判明した追加修正**: なし（§5 の設計はそのまま実装できた。EXT-3 設計時に見つけた `absolute_cents()` の欠落は core 側で先に解決済みだったため）。**free-jazz 実装時に判明した追加修正**: `ChordDef.chord_tones` を全楽器で共有すると shift の違いで無効な音域になる楽器が出るため、`chord.bass`（単一音、arco_bass 専用）と `chord.chord_tones`（共有音域、shift=0 の楽器専用）を役割分担させた（§8.2） |
+| ステータス | **§1 `swing-jazz`・§2 `prog-rock`・§4 `trap`・§5 `maqam`・§6 `minimalism`・§7 `future-bass`・§8 `free-jazz` は実装済み**（`mod_weaver/profiles/{swing_jazz,prog_rock,trap,maqam,minimalism,future_bass,free_jazz}.py`。全て300 seed で検査クリーンを確認済み）。§3（`orchestral`）のみ詳細設計で未実装。**minimalism 実装時に判明した追加修正**: 4チャンネル全てが固定パターンで row0 に onset を持つと `apply_tempo` の row0 空きチャンネル要求と衝突するため、最長周期（woodblock、6row）のアクセントを意図的に row1 に置いた（§6.6）。各節は march.py と同じ粒度（音色の DSP 構成、`ChordSpec` 進行、`ChannelPlan`、曲構成、文法）で「実装すればそのまま動く」レベルまで具体化している。試聴による微調整が前提の値には §10 に一覧化した上で明示している。実装時に見つかった設計との差分は各章の脚注、および CORE_EXTENSION_DESIGN.md の各版の改訂履歴を参照。**§3〜§8 の再レビュー（2026-09-23、実装前）で見つけた設計不整合を修正済み**: `Finish=Loop` の禁止パターン（`attack_ms`/`post_filter`/`NoiseLayer` 混在、比率でのデチューン指定が非整数 K になる問題。§3 `ORCH_VIOLIN`/`ORCH_CELLO`、§5 `MAQAM_NAY`（実装時に隣接整数 K で確認済み）、§7 `FB_SUPERSAW`（同）、§8 `FREE_ARCO_BASS`（同））、orchestral の6声データ受け渡し方法（§3.3 で `begin_pattern`/`state` 方式に修正）、maqam の `MicroScale` 相対セント→絶対セント変換の欠落（`MicroScale.absolute_cents()` を core 側に追加）。**trap 実装時に判明した追加修正**: 進行を4和音から2和音ループへ簡略化（§4.3）、`PERIODS` の添字は tracker note（§4.5）。**future-bass 実装時に判明した追加修正**: kick/clap のチャンネル優先度共有問題（§7.6）。**maqam 実装時に判明した追加修正**: なし（§5 の設計はそのまま実装できた。EXT-3 設計時に見つけた `absolute_cents()` の欠落は core 側で先に解決済みだったため）。**free-jazz 実装時に判明した追加修正**: `ChordDef.chord_tones` を全楽器で共有すると shift の違いで無効な音域になる楽器が出るため、`chord.bass`（単一音、arco_bass 専用）と `chord.chord_tones`（共有音域、shift=0 の楽器専用）を役割分担させた（§8.2） |
 | 読み方 | 各節は EXTENSION_DESIGN.md §8.5（march）と同一の構成: ①音色キット ②ChannelPlan ③進行 ④曲構成 ⑤文法 ⑥使用する core 拡張とその設定値。`core/synth.py` の `Patch`/`Layer` 語彙、`core/composer.py` の `MelodyGenerator`/`RhythmMotif`/`articulate` 語彙、`core/harmony.py` の `Registers`/`voice()` 語彙は既存4ジャンルと共通のまま使う（新規 core 追加は行わない。追加が要る箇所は個別に明記） |
 
 ---
@@ -300,19 +300,21 @@ CHANNEL_PLAN = (
 
 | 名前 | 構成 | 備考 |
 |:---|:---|:---|
-| `MIN_MARIMBA` | `ToneLayer(基音+2倍音,decay_alpha=中)` + 極小 `PitchSweepLayer`（マレットアタックの微小ピッチ）。`Finish=OneShot(0.35s)` | |
-| `MIN_VIBRAPHONE` | `ToneLayer(基音+4倍音,decay_alpha=小=長い余韻)`。`Finish=OneShot(1.2s)` | |
-| `MIN_PIANO_PULSE` | `ToneLayer(h=1..5 減衰速め)`。`Finish=OneShot(0.25s)` | 一番速い周期（16row）を担当するため短い減衰にする |
-| `MIN_WOODBLOCK` | `ToneLayer(単一倍音,decay_alpha=非常に大)`。`Finish=OneShot(0.08s)` | 最長周期チャンネルのアクセント |
+| `MIN_PIANO_PULSE` | `ToneLayer(h=1..5, weight 1/h, 各 decay_alpha=16+4h)`。`Finish=OneShot(0.25s)` | 一番速い周期（16row）を担当するため短い減衰にする。実装済み（`synth_presets.MIN_PIANO_PULSE`）の値と一致 |
+| `MIN_MARIMBA` | `ToneLayer(基音+2倍音)` + `PitchSweepLayer(520→440Hz,weight0.1)`（マレットアタックの微小ピッチ）。`Finish=OneShot(0.35s)` | 実装済みの値と一致 |
+| `MIN_VIBRAPHONE` | `ToneLayer(h=1..4, weight 1/h, 各 decay_alpha=3+h=長い余韻)`。`Finish=OneShot(1.2s)` | 実装済みの値と一致 |
+| `MIN_WOODBLOCK` | `ToneLayer(単一倍音,decay_alpha=70=非常に大)`。`Finish=OneShot(0.08s)`、`pitched=False` | 最長周期チャンネルのアクセント。`pitched=False`（音高を選ばない固定アクセント）。実装済みの値と一致 |
 
 ### 6.2. ChannelPlan・周期設計
 
 ```
-CH1(16row周期, MIN_PIANO_PULSE), CH2(12row周期, MIN_MARIMBA),
-CH3(8row周期, MIN_VIBRAPHONE), CH4(6row周期, MIN_WOODBLOCK)
+CH_PIANO(16row周期, piano_pulse), CH_MARIMBA(12row周期, marimba),
+CH_VIBES(8row周期, vibraphone), CH_WOOD(6row周期, woodblock)
 LCM(16,12,8,6) = 48 row  (<=64。variable_meter=True で D00 break)
 ```
-4チャンネルとも `allowed` は自チャンネル固定の単一サンプル（`priority` 不要、常に単一楽器）。
+4チャンネルとも `allowed` は自チャンネル固定の単一サンプル（`priority` 不要、常に単一楽器）。実装済み
+（`profiles/minimalism.py` の `CHANNEL_PLAN`）の値と一致（チャンネル定数名は `CH1..CH4` ではなく
+`CH_PIANO`/`CH_MARIMBA`/`CH_VIBES`/`CH_WOOD` に変更。他ジャンルの命名規則 `CH_<役割>` と揃えた）。
 
 ### 6.3. 進行
 
@@ -322,26 +324,33 @@ LCM(16,12,8,6) = 48 row  (<=64。variable_meter=True で D00 break)
 
 各チャンネルは固定の「セル（cycle_rows 分の固定パターン）」を持つが、CH1（16row周期＝最も遅い）のセル内容を **フェーズ段階が進むごとに1 row ずつ右シフト**させる（`cycle_rows` 分の配列を `deque.rotate` 相当で回転させたものを毎回使う、または `polymetric_row(row, cycle_rows)` の結果に対しさらに `- phase_offset` した位置のセルを参照する）。フェーズ段階を `phase0..phase15`（16段階、CH1の周期16と一致させて1周させる）とし、`order` はこれを順番に並べる。曲全体で「ズレて→揃って戻る」という典型的なフェイズ・ミュージックの聴取体験を作る。
 
-### 6.5. 文法
+### 6.5. 文法（実装済み。`profiles/minimalism.py` の値と一致）
 
 ```python
+# TRACKS = ((ch, cycle_rows, instrument_key, phase_shifted, pattern_dict), ...) モジュール定数
 def compose_measure(self, mctx, state, rng, buf):
     phase = int(mctx.pattern.kind.removeprefix("phase"))
-    for (ch, cycle_rows, cell_fn) in self.tracks:      # tracks はプロファイルのローカル定義
-        shift = phase if ch == CH1 else 0               # CH1 のみフェーズオフセットを掛ける
-        for row in range(mctx.measure_rows):            # measure_rows = LCM = 48
+    for ch, cycle_rows, key, shifted, pattern in TRACKS:
+        shift = phase if shifted else 0                  # CH_PIANO のみフェーズオフセットを掛ける
+        inst = mctx.instruments[key]
+        for row in range(mctx.measure_rows):              # measure_rows = LCM = 48
             local_row = structure.polymetric_row(row - shift, cycle_rows)
-            cell = cell_fn(local_row)                    # 各チャンネル固有の固定パターン関数
-            if cell is not None:
-                buf.put(row, ch, cell)
+            hit = pattern.get(local_row)                   # dict[int, (note_or_None, vol)]
+            if hit is not None:
+                note, vol = hit
+                buf.put(row, ch, inst.cell(note, vol=vol))
 ```
-`cell_fn` はチャンネルごとにローカル定義した固定の「このセル内 row → Cell（またはNone）」マップ（ライヒの "Piano Phase" のような、決まった音型の反復）。乱数は使わない（ミニマルは決定論的な反復が本質のため、`rng` はほぼ未使用というジャンル特有の判断）。
+`pattern`（`PIANO_PATTERN`/`MARIMBA_PATTERN`/`VIBES_PATTERN`/`WOOD_PATTERN`）はチャンネルごとに
+モジュールレベルで定義した固定の「周期内 row → (logical note, vol)」辞書（ライヒの "Piano Phase"
+のような、決まった音型の反復）。乱数は使わない（ミニマルは決定論的な反復が本質のため、`rng` は
+未使用というジャンル特有の判断。当初案の `cell_fn`（関数）ではなく `dict` にしたのは、固定の
+row→値対応であれば関数より単純で読みやすいため）。
 
-### 6.6. 使用する core 拡張
+### 6.6. 使用する core 拡張（実装済み。`profiles/minimalism.py` の値と一致）
 
 `ChordSlot.rows=48`（1 pattern=1 measure という特殊な使い方）、`GenreProfile.variable_meter=True`、`core/structure.polymetric_row()`。他 EXT は不使用。
 
-**row 0／最終 row（row 47）の空きチャンネル契約**（prog-rock の実装で確立した制約と同型。CORE_EXTENSION_DESIGN §4.2）: `tempo_policy="engine"`（既定のまま）の場合、`apply_tempo` が row 0 に1チャンネルの空きを要求する。また `variable_meter=True` により row 47（LCM-1）に `D00` が自動挿入されるため、そこにも1チャンネルの空きが要る。4チャンネルの `cell_fn` を設計する際、少なくとも1チャンネルは phase=0 の row 0／row 47 で休符になるよう周期をずらす（例: `CH4`＝周期6の `MIN_WOODBLOCK` を「row 0 ではなく row 1 から開始する」ようオフセットを付ける等）。既存の `swing-jazz`／`prog-rock` と同じく、密な編成でこの余地が無い row があっても `apply_tempo`／`D00` 挿入自体は `ChannelConflictError` を送出して止まる設計（`apply_swing`/`render_tempo_curve` と異なり構造的に必須のため graceful skip はしない。§4.0.2）なので、cell_fn 設計時に実際に確認する。
+**row 0／最終 row（row 47）の空きチャンネル契約**（prog-rock の実装で確立した制約と同型。CORE_EXTENSION_DESIGN §4.2）: `tempo_policy="engine"`（既定のまま）の場合、`apply_tempo` が row 0 に1チャンネルの空きを要求する。また `variable_meter=True` により row 47（LCM-1）に `D00` が自動挿入されるため、そこにも1チャンネルの空きが要る。**実装で確認**: `CH_WOOD`（周期6の `woodblock`、唯一のアクセントを持つ）の onset を row 0 ではなく row 1 に置くことで、全 phase を通して row 0 に必ず `CH_WOOD` の空きが残る（`CH_MARIMBA`/`CH_VIBES` は固定パターンにより row 0 に必ず onset があるため候補になれない）。row 47 は `CH_MARIMBA`（周期12: `47%12=11`）／`CH_VIBES`（周期8: `47%8=7`）／`CH_WOOD`（周期6: `47%6=5`）のいずれも固定パターンの onset row と一致しないため、`CH_PIANO` の phase に関わらず常に3チャンネル空く。既存の `swing-jazz`／`prog-rock` と同じく、密な編成でこの余地が無い row があっても `apply_tempo`／`D00` 挿入自体は `ChannelConflictError` を送出して止まる設計（`apply_swing`/`render_tempo_curve` と異なり構造的に必須のため graceful skip はしない。§4.0.2）だが、上記の設計により全16 phase・全 seed で実際に衝突しないことを確認済み（300 seed で検査クリーン）。
 
 ---
 
@@ -473,7 +482,7 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 
 ## 9. 新規 `synth_presets.py` エントリ一覧（実装時にそのまま追加する）
 
-各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**`SWING_*`（5）／`PROG_*`（5）／`TRAP_*`（5）／`MAQAM_*`（5）／`FB_*`（5）／`FREE_*`（4）は実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計50）。残り2ジャンル（orchestral/minimalism）で1ジャンルあたり平均5音色×2ジャンル＝**約10プリセット**が追加見込み（実装後の合計は60程度）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
+各ジャンル節の「音色キット」表に挙げた `Patch` を、既存の `MARCH_*`/`SUSPENSE_*`/`NOSTALGIC_*` と同じ命名規則で `SWING_*`／`PROG_*`／`ORCH_*`／`TRAP_*`／`MAQAM_*`／`MIN_*`／`FB_*`／`FREE_*` として `PRESETS`/`DESCRIPTIONS` に追加する。**`SWING_*`（5）／`PROG_*`（5）／`TRAP_*`（5）／`MAQAM_*`（5）／`FB_*`（5）／`FREE_*`（4）／`MIN_*`（4）は実装済み**（`core/synth_presets.py`。現在 `PRESETS` は計54）。残り1ジャンル（orchestral）で**約5〜6プリセット**が追加見込み（実装後の合計は60程度）。`core/synth.py` 自体（`Layer`/`Finish`/`Patch`）に新規追加すべきフィールド・型は、8ジャンル全ての設計を通しても**見つからなかった**（既存の3 Layer型・2 Finish型の組み合わせで全て表現できた。§8.1 の直交設計が8ジャンル分のバリエーションを十分にカバーすることの追加確認になった）。ただし `Finish=Loop` は `ToneLayer` のみ・`mult` は整数サイクル数のみ・`Patch.attack_ms`/`post_filter`/`decay_alpha`/`tail_fade_ms` は `OneShot` 専用という `core/synth.py` の制約に反する設計が本書の初稿には複数残っていた（`ORCH_VIOLIN`/`ORCH_CELLO`/`MAQAM_NAY`/`FB_SUPERSAW`/`FREE_ARCO_BASS`。§3・§5・§7・§8 で修正済み、`FB_SUPERSAW` は実装時に隣接整数 K の技法で実際に解決を確認）。持続音の「息／擦弦ノイズ感」は `NoiseLayer` を混ぜず、既存 `TENSION_STRINGS`/`NOSTALGIC_FLUTE` と同じ「近接デチューンのうなり」で代替するのが Loop 音色の正しい流儀である。
 
 ---
 
@@ -484,7 +493,7 @@ CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0,1,2,3
 - ~~trap: ハイハットロールの発生確率・密度、808グライドの正確な speed 値~~ → **実装済み**（ロール確率0.6、`portamento_param(rows=1)`。`profiles/trap.py`）。値は試聴による再調整の余地あり。
 - ~~future-bass: `duck_ratio`/`release_rows` の初期値~~ → **実装済み**（`duck_ratio=0.25`(bass)/`0.35`(chord)、`release_rows=3`/`4`。`profiles/future_bass.py` の `SIDECHAIN_RULES`）。値は試聴による再調整の余地あり。
 - maqam: `RAST_ON_G` 以外の maqam（Bayati 等）を追加するかどうかは**未実装のまま**（今回は Rast 1種のみを実装対象とした。`profiles/maqam.py` に他 maqam を追加する拡張は将来課題）。`_maqam_phrase()` の跳躍確率0.15等は試聴による再調整の余地あり。
-- minimalism: フェーズ段階数（暫定16）と各チャンネルの固定音型（"Piano Phase" 的な具体的音符列）。
+- ~~minimalism: フェーズ段階数と各チャンネルの固定音型~~ → **実装済み**（16段階、`PIANO_PATTERN`/`MARIMBA_PATTERN`/`VIBES_PATTERN`/`WOOD_PATTERN`。`profiles/minimalism.py`）。音符列は試聴による再調整の余地あり。
 - ~~free-jazz: クラスター和音の音程選択肢、密度確率の具体的な数値テーブル~~ → **実装済み**（`(0,1,2,-1,-2,6,7)`、`DENSITY={"bass":0.18,"piano":0.25,"perc":0.08}`、`SAX_DENSITY_CLIMAX=0.12`。`profiles/free_jazz.py`）。値は試聴による再調整の余地あり。
 
 いずれも `CORE_EXTENSION_DESIGN.md` §11 の「実装時の要検証事項」と同じ性質（設計としては完結しており、実装→試聴→微調整のサイクルで詰める値）であり、実装開始のブロッカーではない。

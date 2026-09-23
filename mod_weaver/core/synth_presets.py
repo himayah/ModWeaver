@@ -766,3 +766,56 @@ FREE_CYMBAL_SWELL = register(
     "立ち上がりクレッシェンドのシンバル・スウェル。個々の打点ではなく持続的な高揚に使う。"
     "free-jazz の cymbal_swell 由来。",
 )
+
+# ------------------------------------------------------------
+# minimalism（GENRE_DESIGN_V2.md §6。EXT-2② ポリメトリックの実証ジャンル）
+# ------------------------------------------------------------
+
+MIN_PIANO_PULSE = register(
+    "min_piano_pulse",
+    Patch(
+        "MinPianoPulse",
+        (WeightedLayer(ToneLayer(tuple((float(h), 1.0 / h, 16.0 + 4.0 * h) for h in range(1, 6)))),),
+        OneShot(0.25),
+        pitched=True, saturate=1.05, rate_note=24, shift=0, volume=48, noise_seed=801,
+    ),
+    "16row周期（最速）を担当するピアノ・パルス。基音+4倍音、速めの減衰。minimalism の piano_pulse 由来。",
+)
+
+MIN_MARIMBA = register(
+    "min_marimba",
+    Patch(
+        "MinMarimba",
+        (
+            WeightedLayer(ToneLayer(((1.0, 1.0, 12.0), (2.0, 0.3, 18.0)))),
+            WeightedLayer(PitchSweepLayer(freq_start=520.0, freq_end=440.0, pitch_decay=90.0, decay_alpha=40.0),
+                          weight=0.1),
+        ),
+        OneShot(0.35),
+        pitched=True, saturate=1.1, rate_note=24, shift=0, volume=50, noise_seed=802,
+    ),
+    "12row周期のマリンバ。基音+2倍音＋マレットアタックの微小ピッチドロップ。minimalism の marimba 由来。",
+)
+
+MIN_VIBRAPHONE = register(
+    "min_vibraphone",
+    Patch(
+        "MinVibraphone",
+        (WeightedLayer(ToneLayer(tuple((float(h), 1.0 / h, 3.0 + h) for h in range(1, 5)))),),
+        OneShot(1.2),
+        pitched=True, saturate=1.0, rate_note=24, shift=0, volume=44,
+    ),
+    "8row周期のヴィブラフォン。基音+3倍音、長い余韻（decay_alpha が小さい）。minimalism の vibraphone 由来。",
+)
+
+MIN_WOODBLOCK = register(
+    "min_woodblock",
+    Patch(
+        "MinWoodblock",
+        (WeightedLayer(ToneLayer(((1.0, 1.0, 70.0),))),),
+        OneShot(0.08),
+        pitched=False, saturate=1.2, rate_note=24, volume=42,
+    ),
+    "6row周期（最長周期）のウッドブロック・アクセント。単一倍音、非常に速い減衰。"
+    "minimalism の woodblock 由来。",
+)

@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `mod_weaver` core レイヤーの次期拡張（v2.0） |
 | 前提ドキュメント | [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)（Design v1.2 / 第一段階実装仕様。march 実装完了により第一段階は完了） |
-| ステータス | **Phase 4a・4b・4c 実装済み**（§7 ロードマップ）。Phase 4a: §4.0 共通基盤・EXT-1（`core/groove.py`）・EXT-2（`core/structure.py`）を実装し `swing-jazz`／`prog-rock` を追加。Phase 4b: EXT-4（`core/mixer.py`）・EXT-5①②（`core/automation.py`）を実装し `future-bass`／`trap` を追加。Phase 4c: EXT-3（`core/pitch.py` への `MicroScale`／`resolve_micronote`／`fine_portamento_param` 追加）を実装し、Phase 4b で実装済みだった `automation.render_tempo_curve`（EXT-5①）に初めての利用者が付き、`maqam`／`free-jazz` を追加。既存8ジャンルは無変更・989→1551件のテストは全緑、回帰なし（§9・§10 の「後方互換」の主張は実測で確認済み）。Phase 4d〜4e（EXT-2②／EXT-6、残り2ジャンル: minimalism/orchestral）は本書の設計のまま未実装。実装で判明した設計の修正は §4.1①・§4.5①②末尾に追記済み。ジャンルモジュール自体の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) を参照 |
+| ステータス | **Phase 4a〜4d 実装済み**（§7 ロードマップ）。Phase 4a: §4.0 共通基盤・EXT-1（`core/groove.py`）・EXT-2①（`core/structure.py`）を実装し `swing-jazz`／`prog-rock` を追加。Phase 4b: EXT-4（`core/mixer.py`）・EXT-5①②（`core/automation.py`）を実装し `future-bass`／`trap` を追加。Phase 4c: EXT-3（`core/pitch.py` への `MicroScale`／`resolve_micronote`／`fine_portamento_param` 追加）を実装し `maqam`／`free-jazz` を追加。Phase 4d: EXT-2②（Phase 4a で実装済みだった `structure.polymetric_row()` に初めての利用者が付いた。core 変更なし）で `minimalism` を追加。既存9ジャンルは無変更・989→1616件のテストは全緑、回帰なし（§9・§10 の「後方互換」の主張は実測で確認済み）。Phase 4e（EXT-6、残り1ジャンル: orchestral）のみ本書の設計のまま未実装。実装で判明した設計の修正は §4.1①・§4.5①②末尾に追記済み。ジャンルモジュール自体の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) を参照 |
 | 目的 | 現行 core の制約（4ch、16分固定格子、64 row約数、12平均律、静的チャンネル独立）を超え、ジャズ、変拍子、現代ベースミュージック、民族音楽等への拡張を可能にする |
 
 ---
@@ -15,7 +15,8 @@
 - v2.0（詳細設計版、2026-09-23）: EXT-1〜6 を「実装可能な粒度」まで詳細設計。設計の過程で判明した簡略化（後述）により、当初 draft で想定していたより新規コード量は小さくなった。既存 core（`model.py`/`engine.py`/`writer.py`/`verify.py`/`profiles/base.py`）への具体的な差分（§9）と、既存4ジャンル（nostalgic / suspense-slow / suspense-chase / march）への影響レビュー（§10）を追加。ジャンルモジュール自体の詳細設計は分量の都合で [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) に分離。
 - **v2.1（Phase 4a 実装版、2026-09-23）**: §4.0 共通基盤（`CellGrid.insert_command`／`ChordSlot.rows`／`MeasureCtx.measure_rows`／`GenreProfile.variable_meter`）・EXT-1（`core/groove.py`）・EXT-2（`core/structure.py`＋engine 側の可変小節対応）を実装し、`swing-jazz`／`prog-rock` の2ジャンルを追加。§9・§10 で主張していた「既存4ジャンルは無変更・後方互換」を実測（989→1194件のテスト全緑、既存ジャンルの出力バイト列は不変）で確認済み。実装時に判明した設計の修正1件（§4.1① 末尾に追記: 密な編成では row 0 以外でも空きチャンネルが無い row が起こりうるため `apply_swing` は衝突時に例外を送出せず静かにスキップする）。
 - **v2.2（Phase 4b 実装版、2026-09-23）**: EXT-4（`core/mixer.py`）・EXT-5①②（`core/automation.py`。`render_tempo_curve` は Phase 4c の free-jazz/maqam まで未使用だが Phase 4b で先行実装、`portamento_param` は trap で使用）を実装し、`future-bass`／`trap` の2ジャンルを追加（1194→1387件のテスト全緑）。実装時に判明した設計の修正2件: ① `automation.portamento_param`/`fine_portamento_param` に渡す period は **tracker note**（`t = 論理note - shift`）の `PERIODS` 添字でなければならず、論理 note をそのまま渡す当初案の例は誤りだった（§4.5②末尾に追記。`trap` の808実装で発覚）。② `future-bass` の kick/clap はチャンネル優先度を共有するため、backbeat では clap が kick を置換してしまい、`SidechainRule.trigger_sample=KICK` 単独では4拍のうち2拍しかダッキングされない（GENRE_DESIGN_V2.md §7.6 に追記: kick と clap の両方をトリガに登録して解決）。
-- **v2.3（Phase 4c 実装版、2026-09-23）**: EXT-3（`core/pitch.py` に `MicroScale`／`resolve_micronote`／`fine_portamento_param`／`FINETUNE_CENTS` を追加）を実装し、Phase 4b で先行実装済みだった `automation.render_tempo_curve`（EXT-5①）に初めての利用者（`free-jazz`）が付いた。`maqam`／`free-jazz` の2ジャンルを追加（1387→1551件のテスト全緑）。両ジャンルとも `harmony.voice()`／`CHORD_QUALITIES` を経由しない手組み `ChordDef`（march/nostalgic の `explicit=True` 流儀）を採用し、EXT-3・EXT-5 以外の core 変更は不要だった（設計通り）。実装時に判明した知見: `free-jazz` の複数楽器で異なる `shift` を持つ場合、`ChordDef.chord_tones` を1つの音域に共有させると shift の違う楽器では無効な音域になる（`chord.bass`／`chord.harmony`（単一音）と `chord.chord_tones`（共有音域の楽器専用）を役割分担させて解決。両ジャンルの設計自体は変更不要、実装時の楽器割当の作法として §8.2 に反映）。§7 ロードマップの Phase 4d 以降は本版の設計のまま未実装。
+- **v2.3（Phase 4c 実装版、2026-09-23）**: EXT-3（`core/pitch.py` に `MicroScale`／`resolve_micronote`／`fine_portamento_param`／`FINETUNE_CENTS` を追加）を実装し、Phase 4b で先行実装済みだった `automation.render_tempo_curve`（EXT-5①）に初めての利用者（`free-jazz`）が付いた。`maqam`／`free-jazz` の2ジャンルを追加（1387→1551件のテスト全緑）。両ジャンルとも `harmony.voice()`／`CHORD_QUALITIES` を経由しない手組み `ChordDef`（march/nostalgic の `explicit=True` 流儀）を採用し、EXT-3・EXT-5 以外の core 変更は不要だった（設計通り）。実装時に判明した知見: `free-jazz` の複数楽器で異なる `shift` を持つ場合、`ChordDef.chord_tones` を1つの音域に共有させると shift の違う楽器では無効な音域になる（`chord.bass`／`chord.harmony`（単一音）と `chord.chord_tones`（共有音域の楽器専用）を役割分担させて解決。両ジャンルの設計自体は変更不要、実装時の楽器割当の作法として §8.2 に反映）。
+- **v2.4（Phase 4d 実装版、2026-09-23）**: EXT-2②（`core/structure.py` は Phase 4a で既に実装済みだった `polymetric_row()` に、初めての利用者 `minimalism` が付いた。core 自体への変更は0）で `minimalism` を追加（1551→1616件のテスト全緑）。実装時に判明した知見: 4チャンネル全てが固定パターンで row 0 に onset を持つ設計だと `apply_tempo`（row0 に1チャンネルの空きが必要）と衝突するため、最長周期チャンネル（woodblock、周期6row）の唯一のアクセントを意図的に row0 でなく row1 に置くことで row0 を常に1チャンネル空けた（§6.6 に既に記載していた「row0/row47 の空きチャンネル契約」の具体的な満たし方）。§7 ロードマップの Phase 4e のみ本版の設計のまま未実装。
 
 ### 設計を進める過程で判明した簡略化（要点）
 
@@ -712,14 +713,14 @@ FastTracker II `.xm` 形式（バイナリレイアウトは公開仕様に準�
 
 ## 7. 段階的ロードマップ（Phase 4 以降）
 
-第一段階（Phase 1〜3）の完了・安定稼働後、以下のステップで順次拡張を検証・実装する。設計（本書・GENRE_DESIGN_V2.md）は全 Phase 分が完了済み。**Phase 4a・4b・4c は実装済み**（下表）、Phase 4d〜4e は設計のみで実装は未着手。
+第一段階（Phase 1〜3）の完了・安定稼働後、以下のステップで順次拡張を検証・実装する。設計（本書・GENRE_DESIGN_V2.md）は全 Phase 分が完了済み。**Phase 4a〜4d は実装済み**（下表）、Phase 4e のみ設計のみで実装は未着手。
 
 | マイルストーン | 拡張内容 | 実証ジャンル | 前提として先に要る core 変更 | 状態 |
 |:---|:---|:---|:---|:---|
 | **Phase 4a** | EXT-1（スウィング＆3連符）＋ EXT-2（可変小節＆Pattern Break） | `swing-jazz`<br>`prog-rock` | §4.0（`CellGrid.insert_command`／`ChordSlot.rows`／`variable_meter`） | **実装済み** |
 | **Phase 4b** | EXT-4（サイドチェイン＆スライス）＋ EXT-1（サブステップ） | `future-bass`<br>`trap` | Phase 4a の `CellGrid.insert_command`（trap の EXT-5 グライドは Phase 4c 先取りで実装済み） | **実装済み** |
 | **Phase 4c** | EXT-3（マイクロチューニング）＋ EXT-5（テンポオートメーション） | `maqam`<br>`free-jazz` | なし（§4.3・§4.5 は独立。EXT-5 は Phase 4b で実装済み） | **実装済み** |
-| **Phase 4d** | EXT-2②（ポリメトリック） | `minimalism` | Phase 4a の `ChordSlot.rows` | 未実装 |
+| **Phase 4d** | EXT-2②（ポリメトリック） | `minimalism` | Phase 4a の `ChordSlot.rows` | **実装済み** |
 | **Phase 4e** | EXT-6（FastTracker II `.xm` シリアライザ/パーサ） | `orchestral` | なし（独立。ただし工数最大・§11 の検証事項あり） | 未実装 |
 
 実装順を Phase 4a→4e の順にした理由: (1) `CellGrid.insert_command` の抽出は最初に行い以後の全 EXT がそれに乗る、(2) EXT-6（XM）はコード量・検証コストが最大かつ他 EXT と依存関係がないため最後に回してリスクを隔離する。
@@ -855,16 +856,19 @@ Phase 4a で追加された `swing-jazz`／`prog-rock` も、Phase 4b 以降に�
 
 Phase 4c で `core/pitch.py` に `MicroScale`／`resolve_micronote()`／`fine_portamento_param()`／`FINETUNE_CENTS` を追加したが、いずれのジャンルも `finetune`／マイクロトーン機能を使わない（`maqam` のみが使用）ため既存7ジャンルへの影響は**なし（実測確認済み）**。1387（Phase 4b 後）→**1551（Phase 4c 後）**件のテストが全緑であり、既存7ジャンル（Phase 4a・4b で追加された4ジャンルを含む）のコード自体は Phase 4c で1行も変更していない。
 
-### 10.7. Phase 4d〜4e（EXT-2②・EXT-6）が既存10ジャンルに与える影響
+### 10.7. Phase 4d で EXT-2② に付いた初利用者が既存9ジャンルに与えた影響（実測）
 
-Phase 4c で追加された `maqam`／`free-jazz` も同様に「既存ジャンル」として保護対象に加わる。残る EXT-2②・EXT-6（設計のみ、§4.2②・§4.6）を個別に確認する：
+Phase 4d は `core/structure.polymetric_row()`（Phase 4a で実装済みだったが Phase 4b・4c では未使用のまま）に `minimalism` という初めての利用者が付いただけで、**`core/structure.py` 自体への変更は一切無い**。既存9ジャンル（Phase 4a〜4c で追加された6ジャンルを含む）への影響は**なし（実測確認済み）**。1551（Phase 4c 後）→**1616（Phase 4d 後）**件のテストが全緑であり、既存9ジャンルのコード自体は Phase 4d で1行も変更していない。
+
+### 10.8. Phase 4e（EXT-6）が既存10ジャンルに与える影響
+
+Phase 4d で追加された `minimalism` も同様に「既存ジャンル」として保護対象に加わる。残る EXT-6（設計のみ、§4.6）を確認する：
 
 | EXT | 追加内容 | 既存10ジャンルへの影響 |
 |:---|:---|:---|
-| EXT-2②（`core/structure.py` は既に `polymetric_row()` を持つ。minimalism で初使用予定） | 既存の関数追加のみ（Phase 4a で実装済み、未使用のまま） | **なし**。既に実装済みの関数を呼ぶジャンルが増えるだけで、関数自体への変更は伴わない。 |
 | EXT-6（`SampleSpec.pan`／`writer.py`/`verify.py` の `"xm"` 登録） | `pan: int = 128` 追加、`WRITERS["xm"]`/`VERIFIERS["xm"]` 登録 | **なし**。全ジャンルとも `target_format="mod"`（既定値のまま）。`SampleSpec.pan` は末尾に既定値付きで追加のため、各ジャンルの `build_samples()` は無改修で動く。`WRITERS`/`VERIFIERS` への `"xm"` キー追加は `"mod"` キーの参照に影響しない。 |
 
-結論: **EXT-2②・EXT-6 はいずれも既存関数の初利用または既存データクラスへの末尾デフォルト付きフィールド追加のみであり、既存10ジャンル全てに対してコード変更・出力変化ともに無い**（Phase 4a〜4c で確立した「Opt-in・追加のみ」の設計原則が今後も一貫して守られる）。
+結論: **EXT-6 は既存データクラスへの末尾デフォルト付きフィールド追加と新規シリアライザ/パーサ登録のみであり、既存10ジャンル全てに対してコード変更・出力変化ともに無い**（Phase 4a〜4d で確立した「Opt-in・追加のみ」の設計原則が Phase 4e でも一貫して守られる見込み）。
 
 ---
 

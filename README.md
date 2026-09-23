@@ -82,6 +82,7 @@ python modweaver.py --genre trap
 python modweaver.py --genre future-bass
 python modweaver.py --genre maqam
 python modweaver.py --genre free-jazz
+python modweaver.py --genre minimalism
 ```
 
 #### 指定できるジャンル一覧を確認する:
@@ -115,6 +116,7 @@ python modweaver.py --list-genres
 | `future-bass` | – | フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV |
 | `maqam` | – | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
 | `free-jazz` | – | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
+| `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
@@ -172,14 +174,14 @@ python modweaver.py --list-genres
 │   │                   #        可変小節(EXT-2)・writer/verify
 │   └── profiles/      # 可変層: ジャンルごとの GenreProfile
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
-│                       #        trap / future-bass / maqam / free-jazz）
+│                       #        trap / future-bass / maqam / free-jazz / minimalism）
 ├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
 ├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
 ├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）
 ├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a（EXT-1/EXT-2）実装済み、
 │                             # Phase 4b以降は設計のみ
-├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。6ジャンル実装済み、orchestral/minimalismは設計のみ
+├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。7ジャンル実装済み、orchestralのみ設計のみ
 └── README.md          # 本ドキュメント
 ```
 

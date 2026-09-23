@@ -36,6 +36,7 @@ from ..core.model import (
     SongPlan,
 )
 from . import nostalgic_samples as smp
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -176,6 +177,17 @@ class _State:
     melody_prev: Optional[int] = None
 
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "kick": GmVoice(drum_note=36),
+    "snare": GmVoice(drum_note=38),
+    "hihat": GmVoice(drum_note=42),
+    "bass": GmVoice(program=33),
+    "musicbox": GmVoice(program=10),
+    "pad": GmVoice(program=89),
+    "flute": GmVoice(program=73),
+}
+
+
 @register_profile
 class NostalgicProfile(GenreProfile):
     id = "nostalgic"
@@ -186,6 +198,7 @@ class NostalgicProfile(GenreProfile):
     tempo_choices = TEMPO_CHOICES
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "profile"
     rng_mode = "single"
     strict_buffers = False

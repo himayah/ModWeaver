@@ -25,6 +25,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -120,6 +121,15 @@ class FutureBassState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "kick": GmVoice(drum_note=36),
+    "sub": GmVoice(program=38),
+    "saw": GmVoice(program=81),
+    "vox": GmVoice(program=53),
+    "clap": GmVoice(drum_note=39),
+}
+
+
 @register_profile
 class FutureBassProfile(GenreProfile):
     id = "future-bass"
@@ -130,6 +140,7 @@ class FutureBassProfile(GenreProfile):
     tempo_choices = (148, 150, 152, 155, 160)
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

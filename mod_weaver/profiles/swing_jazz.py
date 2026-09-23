@@ -30,6 +30,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale, fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -159,6 +160,15 @@ class SwingState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "ride": GmVoice(drum_note=51),
+    "brush": GmVoice(drum_note=38),
+    "bass": GmVoice(program=32),
+    "piano": GmVoice(program=0),
+    "sax": GmVoice(program=65),
+}
+
+
 @register_profile
 class SwingJazzProfile(GenreProfile):
     id = "swing-jazz"
@@ -169,6 +179,7 @@ class SwingJazzProfile(GenreProfile):
     tempo_choices = (152, 156, 160, 164, 168)
     rows_per_measure = 8                  # 1 row = 8分音符（swing timebase。EXT-1）
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

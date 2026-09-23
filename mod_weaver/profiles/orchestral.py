@@ -29,6 +29,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, Scale, lowest_note_with_pc
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -119,6 +120,20 @@ def build_orchestral_samples() -> dict[str, SampleSpec]:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "vln1": GmVoice(program=40),
+    "vln2": GmVoice(program=40),
+    "vla": GmVoice(program=41),
+    "vc": GmVoice(program=42),
+    "cb": GmVoice(program=43),
+    "ww": GmVoice(program=73),
+    "horn": GmVoice(program=60),
+    "trumpet": GmVoice(program=56),
+    "timpani": GmVoice(program=47),
+    "cymbal": GmVoice(program=119),
+}
+
+
 @register_profile
 class OrchestralProfile(GenreProfile):
     id = "orchestral"
@@ -129,6 +144,7 @@ class OrchestralProfile(GenreProfile):
     tempo_choices = (76, 80, 84, 88)
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

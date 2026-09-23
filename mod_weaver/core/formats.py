@@ -28,7 +28,7 @@ class WriteOptions:
     channel_pans: tuple[int, ...]              # 0=左、128=中央、255=右（チャンネルごと）
     initial_bpm: int = 125                      # ヘッダの初期テンポ（先頭 row の Fxx を読まないプレイヤー対策）
     instrument_names: tuple[str, ...] = ()      # build_samples() の挿入順＝sample 番号順（MIDI の音色表引き用）
-    gm_voices: Mapping[str, object] = field(default_factory=dict)   # 楽器名 → midi.GmVoice
+    gm_voices: Mapping[str, object] = field(default_factory=dict)   # 楽器名 → midi.GmVoice（MIDI のみ使用）
     rows_per_measure: int = 16                  # MIDI の拍子（可変拍子は measure_rows で上書き）
     measure_rows: tuple[tuple[int, ...], ...] = ()   # pattern ごとの小節長（row）列。空なら rows_per_measure 固定
 
@@ -82,7 +82,7 @@ def sample_has_default_pan(spec: SampleSpec) -> bool:
 
 def _registry() -> dict[str, OutputFormat]:
     # 各形式モジュールは formats を import するため、循環を避けて遅延 import する。
-    from . import it, s3m, verify, writer
+    from . import it, midi, s3m, verify, writer
 
     formats = [
         OutputFormat("mod", ".mod", writer.MOD_MAX_CHANNELS, writer.serialize_with_options, verify.verify,
@@ -91,6 +91,8 @@ def _registry() -> dict[str, OutputFormat]:
                      "FastTracker II Extended Module"),
         OutputFormat("s3m", ".s3m", s3m.MAX_CHANNELS, s3m.serialize_s3m, s3m.verify_s3m, "Scream Tracker 3"),
         OutputFormat("it", ".it", it.MAX_CHANNELS, it.serialize_it, it.verify_it, "Impulse Tracker"),
+        OutputFormat("midi", ".mid", midi.MAX_CHANNELS, midi.serialize_midi, midi.verify_midi,
+                     "Standard MIDI File (General MIDI)"),
     ]
     return {f.name: f for f in formats}
 

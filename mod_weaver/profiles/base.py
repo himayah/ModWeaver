@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import random
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Union
+from types import MappingProxyType
+from typing import Any, Callable, Mapping, Optional, Union
 
 from ..core.model import (
     ChannelPlan,
@@ -42,6 +43,9 @@ class GenreProfile(ABC):
     channel_pans: Optional[tuple[int, ...]] = None
     # ↑ MOD 以外の形式でのチャンネルごとのパン（0=左、128=中央、255=右）。None なら core/formats.py の
     #   channel_pans() が決める（全サンプル既定パンなら Amiga 風 LRRL、明示パンがあればサンプルから）
+    gm_voices: Mapping[str, Any] = MappingProxyType({})
+    # ↑ --format midi 用の GM 音色表（build_samples() のキー → core.midi.GmVoice）。全楽器の宣言が必須
+    #   （推測はしない。tests/unit/test_midi.py が全ジャンルの網羅を検査する）
     post_processors: tuple[Callable[[Song, SongPlan], None], ...] = ()
     # ↑ 全 pattern 作成後・テンポ挿入前に順に適用する後処理（サイドチェイン等の装飾用）
     variable_meter: bool = False        # EXT-2: True で pattern 合計行数 < 64 rows を許容し D00 を自動挿入する

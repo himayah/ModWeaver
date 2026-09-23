@@ -33,6 +33,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import MODES, PERIODS, Scale, fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -119,6 +120,15 @@ class TrapState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "k808": GmVoice(program=38),
+    "snare": GmVoice(drum_note=40),
+    "hat_c": GmVoice(drum_note=42),
+    "hat_o": GmVoice(drum_note=46),
+    "lead": GmVoice(program=80),
+}
+
+
 @register_profile
 class TrapProfile(GenreProfile):
     id = "trap"
@@ -129,6 +139,7 @@ class TrapProfile(GenreProfile):
     tempo_choices = (140, 145, 150, 155)      # 32分格子なので実質ハーフタイム（70-77bpm相当）で感じる
     rows_per_measure = 32
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

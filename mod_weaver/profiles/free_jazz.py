@@ -30,6 +30,7 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import fold_into_range
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -139,6 +140,14 @@ class FreeJazzState:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "piano_cluster": GmVoice(program=0),
+    "arco_bass": GmVoice(program=43),
+    "sax_screech": GmVoice(program=66),
+    "cymbal_swell": GmVoice(program=119),
+}
+
+
 @register_profile
 class FreeJazzProfile(GenreProfile):
     id = "free-jazz"
@@ -150,6 +159,7 @@ class FreeJazzProfile(GenreProfile):
     tempo_range = TEMPO_RANGE
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "profile"          # apply_tempo をスキップ（TempoCurve が BPM を管理する）
     rng_mode = "streams"
     strict_buffers = True

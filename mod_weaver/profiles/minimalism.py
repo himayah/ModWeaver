@@ -25,6 +25,7 @@ from ..core.model import (
     SampleSpec,
     SongPlan,
 )
+from ..core.midi import GmVoice
 from .base import GenreProfile
 from .registry import register_profile
 
@@ -91,6 +92,14 @@ def build_minimalism_samples() -> dict[str, SampleSpec]:
 # プロファイル本体
 # ============================================================
 
+GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
+    "piano_pulse": GmVoice(program=0),
+    "marimba": GmVoice(program=12),
+    "vibraphone": GmVoice(program=11),
+    "woodblock": GmVoice(drum_note=76),
+}
+
+
 @register_profile
 class MinimalismProfile(GenreProfile):
     id = "minimalism"
@@ -101,6 +110,7 @@ class MinimalismProfile(GenreProfile):
     tempo_choices = (108, 112, 116, 120)
     rows_per_measure = LCM_ROWS            # ChordSlot.rows で上書きするため既定値として使うのみ
     channel_plan = CHANNEL_PLAN
+    gm_voices = GM_VOICES
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

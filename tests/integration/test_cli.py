@@ -119,6 +119,48 @@ def test_any_argument_still_generates_default_genre(tmp_path, capsys, monkeypatc
     assert code == 0 and "Genre       : nostalgic" in stdout and (tmp_path / "nostalgic" / "nostalgic_3.mod").exists()
 
 
+@pytest.mark.parametrize("name", ["random", "r"])
+def test_random_genre_generates_registered_genre(tmp_path, capsys, monkeypatch, name):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = run_cli(["-g", name, "-s", "11"], capsys)   # stderr は選ばれたジャンル次第で検査 WARNING が出うる
+    assert code == 0
+    genre_line = next(l for l in stdout.splitlines() if l.startswith("Genre"))
+    gid = genre_line.split(":")[1].split()[0]
+    assert genre_line.endswith(" (random)") and gid in [p.id for p in cli.profiles.list_profiles()]
+    assert f"--genre {gid} --seed 11" in stdout                          # 再現コマンドは決まったジャンル
+    assert (tmp_path / gid / f"{gid}_11.mod").exists()
+
+
+def test_random_genre_picks_among_canonical_ids(tmp_path, capsys, monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or "trap")
+    code, stdout, _ = run_cli(["-g", "r", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 0 and "Genre       : trap (random)" in stdout
+    assert seen == [[p.id for p in cli.profiles.list_profiles()]]       # 別名（suspense）は含まない
+
+
+def test_random_genre_with_tempo_excludes_genres_that_cannot_play_it(tmp_path, capsys, monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or c[0])
+    code, stdout, err = run_cli(["-g", "random", "-t", "200", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 0 and "Tempo       : BPM 200" in stdout and err == ""
+    ids = [p.id for p in cli.profiles.list_profiles()]
+    assert "free-jazz" in ids and seen == [[i for i in ids if i != "free-jazz"]]   # free-jazz は 44-163
+
+
+def test_random_genre_with_unsupported_tempo_exit_2(tmp_path, capsys, monkeypatch):
+    fj = cli.profiles.get_profile("free-jazz").__class__
+    monkeypatch.setattr(cli.profiles, "list_profiles", lambda: [fj])
+    code, out, err = run_cli(["-g", "r", "-t", "200", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "no genre supports tempo 200" in err and out == ""
+    assert not (tmp_path / "x.mod").exists()
+
+
+def test_random_names_match_registry_reserved_names():
+    from mod_weaver.profiles import registry
+    assert set(cli.RANDOM_GENRE) == registry.RESERVED_NAMES
+
+
 def test_unknown_genre_exit_2(tmp_path, capsys):
     code, out, err = run_cli(["--genre", "bogus", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "unknown genre" in err and "nostalgic" in err and out == ""

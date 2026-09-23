@@ -20,6 +20,7 @@ from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, gene
 from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
 
 DEFAULT_GENRE = "nostalgic"
+RANDOM_GENRE = ("random", "r")   # --genre に指定するとジャンルをランダムに選ぶ（registry.RESERVED_NAMES と同じ）
 LINE = "=" * 50
 THIN = "-" * 50
 
@@ -55,6 +56,19 @@ def genre_listing() -> str:
     return "\n".join(lines)
 
 
+def pick_random_genre(tempo: Optional[TempoRequest] = None) -> str:
+    """``--genre random`` の選択（CLI_STAGE2_DESIGN §5）。候補は正規 id のみ（別名で確率が偏らないように）。
+
+    ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけを候補にする。乱数は seed と独立。"""
+    candidates = [
+        p.id for p in profiles.list_profiles()
+        if tempo is None or max(tempo.lo, p.tempo_range[0]) <= min(tempo.hi, p.tempo_range[1])
+    ]
+    if not candidates:
+        raise TempoRangeError(f"no genre supports tempo {tempo}")
+    return random.choice(candidates)
+
+
 def _tempo_arg(text: str) -> TempoRequest:
     try:
         return TempoRequest.parse(text)
@@ -71,7 +85,8 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--genre", "-g", default=DEFAULT_GENRE,
-                        help=f"genre id (default: {DEFAULT_GENRE}). choices: {ids} (see genres below)")
+                        help=f"genre id (default: {DEFAULT_GENRE}), or {'/'.join(RANDOM_GENRE)} to pick one at "
+                             f"random. choices: {ids} (see genres below)")
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="random seed (any integer) for reproducibility")
     names = formats.format_names()
@@ -88,11 +103,11 @@ def build_parser(prog: Optional[str] = None) -> argparse.ArgumentParser:
     return parser
 
 
-def print_banner(profile, result: Result, repro: str) -> None:
+def print_banner(profile, result: Result, repro: str, random_genre: bool = False) -> None:
     print(LINE)
     print(f"  ModWeaver: {profile.display_name}")
     print(LINE)
-    print(f"Genre       : {profile.id}")
+    print(f"Genre       : {profile.id}{' (random)' if random_genre else ''}")
     print(f"Format      : {result.fmt}")
     print(f"Seed        : {result.seed}")
     requested = result.tempo_request
@@ -130,8 +145,9 @@ def main(
         print(genre_listing())
         return 0
 
+    random_genre = args.genre in RANDOM_GENRE
     try:
-        profile = profiles.get_profile(args.genre)
+        profile = profiles.get_profile(pick_random_genre(args.tempo) if random_genre else args.genre)
         seed = args.seed if args.seed is not None else random.randint(*SEED_RANGE)
         fmt = args.format or formats.DEFAULT_FORMAT
         if args.output:
@@ -165,7 +181,7 @@ def main(
         repro += f" --format {args.format}"
     if args.tempo is not None:
         repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
-    print_banner(profile, result, repro)
+    print_banner(profile, result, repro, random_genre)
     return 0
 
 

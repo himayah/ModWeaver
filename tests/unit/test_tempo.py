@@ -110,5 +110,5 @@ def test_whole_tempo_range_generates_clean_output(genre):
     lo, hi = p.tempo_range
     for bpm in sorted({lo, hi, *range(lo, hi + 1, 29)}):
         song, _ = compose_song(p, 1, tempo=TempoRequest(bpm, bpm))
-        data = writer.WRITERS[p.target_format](song)
-        assert not verify.has_errors(verify.VERIFIERS[p.target_format](data, p.channel_plan)), (genre, bpm)
+        for data, check in ((writer.serialize(song), verify.verify), (writer.serialize_xm(song), verify.verify_xm)):
+            assert not verify.has_errors(check(data, p.channel_plan)), (genre, bpm)

@@ -18,7 +18,7 @@ def run_cli(args, capsys):
     return code, cap.out, cap.err
 
 
-def test_default_output_path_extension_follows_target_format():
+def test_default_output_path_extension_follows_format():
     assert cli.default_output_path("nostalgic", 1) == Path("nostalgic/nostalgic_1.mod")
     assert cli.default_output_path("nostalgic", 1, "mod") == Path("nostalgic/nostalgic_1.mod")
     assert cli.default_output_path("orchestral", 5, "xm") == Path("orchestral/orchestral_5.xm")
@@ -61,13 +61,26 @@ def test_default_output_path_creates_missing_genre_dir(tmp_path, capsys, monkeyp
     assert code == 0 and (tmp_path / "suspense-chase" / "suspense-chase_5.mod").exists()
 
 
-def test_default_output_path_uses_xm_extension_for_xm_target_format(tmp_path, capsys, monkeypatch):
-    """orchestral は target_format="xm" なので既定出力は .mod ではなく .xm（実体との拡張子不一致を防ぐ）。"""
+def test_default_format_is_mod_even_for_8ch_genre(tmp_path, capsys, monkeypatch):
+    """--format 省略時は全ジャンル mod（8ch の orchestral は FastTracker 系 8CHN）。"""
     monkeypatch.chdir(tmp_path)
-    code, *_ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
+    code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5"], capsys)
+    out = tmp_path / "orchestral" / "orchestral_5.mod"
+    assert code == 0 and out.exists() and out.read_bytes()[1080:1084] == b"8CHN"
+    assert "Format      : mod" in stdout and "--format" not in stdout
+
+
+def test_format_option_sets_extension_and_repro(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = run_cli(["-g", "orchestral", "-s", "5", "-f", "xm"], capsys)
     out = tmp_path / "orchestral" / "orchestral_5.xm"
-    assert code == 0 and out.exists()
-    assert not (tmp_path / "orchestral" / "orchestral_5.mod").exists()
+    assert code == 0 and out.read_bytes()[:17] == b"Extended Module: "
+    assert "--genre orchestral --format xm --seed 5" in stdout
+
+
+def test_unknown_format_exit_2(tmp_path, capsys):
+    code, _, err = run_cli(["-f", "wav", "-o", str(tmp_path / "x")], capsys)
+    assert code == 2 and "format" in err
 
 
 def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys):

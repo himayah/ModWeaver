@@ -6,8 +6,9 @@ import pytest
 
 from mod_weaver.core.model import Cell, ChannelRole, Pattern, SampleSpec, Song
 from mod_weaver.core.verify import (
-    VERIFIERS, ParseError, has_errors, parse_mod, parse_xm, verify, verify_xm,
+    ParseError, has_errors, parse_mod, parse_xm, verify, verify_xm,
 )
+from mod_weaver.core.formats import get_format
 from mod_weaver.core.writer import serialize, serialize_xm
 
 
@@ -38,7 +39,7 @@ def test_clean_file_has_no_errors():
     data = serialize(good_song())
     issues = verify(data)
     assert not has_errors(issues)
-    assert VERIFIERS["mod"] is verify
+    assert get_format("mod").verify is verify
 
 
 def test_parse_roundtrip_fields():
@@ -215,7 +216,7 @@ def test_xm_clean_file_has_no_errors():
     data = serialize_xm(good_xm_song())
     issues = verify_xm(data)
     assert not has_errors(issues)
-    assert VERIFIERS["xm"] is verify_xm
+    assert get_format("xm").verify is verify_xm
 
 
 def test_xm_parse_error_on_short_file():

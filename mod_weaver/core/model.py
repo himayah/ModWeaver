@@ -312,6 +312,7 @@ class Song:
     samples: list[SampleSpec]      # 位置=sample番号-1
     patterns: list[Pattern]
     order: list[int]               # 1..128 エントリ
+    instrument_names: tuple[str, ...] = ()   # build_samples() のキー（sample 番号順）。MIDI の音色表引き用
 
 
 @dataclass(frozen=True)

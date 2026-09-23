@@ -12,11 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
+from .core import formats, writer
 from .core import verify as verify_mod
-from .core import writer
 from .core.model import (
     MAX_SAMPLES,
-    NUM_CHANNELS,
     ROWS_PER_PATTERN,
     Instrument,
     MeasureBuffer,
@@ -67,6 +66,7 @@ class Result:
     plan: SongPlan
     issues: list[verify_mod.Issue]
     tempo_request: Optional[TempoRequest] = None
+    fmt: str = formats.DEFAULT_FORMAT
 
 
 # ------------------------------------------------------------
@@ -80,22 +80,19 @@ def validate_timebase(rows_per_measure: int) -> None:
         raise PlanError(f"rows_per_measure must divide {ROWS_PER_PATTERN}: {rows_per_measure}")
 
 
+MAX_PROFILE_CHANNELS = 64   # プロファイルが宣言できる上限（形式ごとの上限は formats.OutputFormat.max_channels）
+
+
 def validate_profile(profile: GenreProfile) -> None:
-    # target_format 自体の妥当性は最初に確定させる（以降の channel_plan 検査がその値で分岐するため）。
-    if profile.target_format not in writer.WRITERS:
-        raise PlanError(f"{profile.id}: unsupported target_format {profile.target_format!r}")
+    """形式に依存しない宣言の検査。形式ごとのチャンネル数上限は ``generate()`` が
+    ``formats.check_channels`` で検査する（FORMAT_TEMPO_DESIGN §2.1）。"""
     if profile.variable_meter:
         if profile.rows_per_measure <= 0:
             raise PlanError(f"{profile.id}: rows_per_measure must be positive: {profile.rows_per_measure}")
     else:
         validate_timebase(profile.rows_per_measure)
-    if profile.target_format == "mod":
-        if len(profile.channel_plan) != NUM_CHANNELS:
-            raise PlanError(f"{profile.id}: channel_plan must have {NUM_CHANNELS} roles for target_format=mod")
-    elif not 1 <= len(profile.channel_plan) <= writer.XM_MAX_CHANNELS:
-        raise PlanError(
-            f"{profile.id}: channel_plan must have 1..{writer.XM_MAX_CHANNELS} roles for target_format={profile.target_format!r}"
-        )
+    if not 1 <= len(profile.channel_plan) <= MAX_PROFILE_CHANNELS:
+        raise PlanError(f"{profile.id}: channel_plan must have 1..{MAX_PROFILE_CHANNELS} roles")
     if profile.tempo_policy not in ("engine", "profile"):
         raise PlanError(f"{profile.id}: invalid tempo_policy {profile.tempo_policy!r}")
     if profile.rng_mode not in ("single", "streams"):
@@ -245,7 +242,7 @@ def compose_song(
             pattern.insert_command(row - 1, 0x0D, 0x00)   # D00: 次 pattern の row0 へ break
         patterns.append(pattern)
 
-    song = Song(profile.title, specs, patterns, list(plan.order))
+    song = Song(profile.title, specs, patterns, list(plan.order), instrument_names=tuple(instruments))
     for post in profile.post_processors:
         post(song, plan)
     if profile.tempo_policy == "engine":
@@ -258,6 +255,27 @@ def build_song(profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest
     return compose_song(profile, seed, tempo=tempo)[0]
 
 
+def write_options(profile: GenreProfile, song: Song, plan: SongPlan) -> formats.WriteOptions:
+    """形式中立な付帯情報（チャンネルパン・初期テンポ・MIDI 用の音色表と拍子）をまとめる。"""
+    rpm = profile.rows_per_measure
+    return formats.WriteOptions(
+        channel_pans=formats.channel_pans(song, profile.channel_pans),
+        initial_bpm=plan.bpm,
+        instrument_names=song.instrument_names,
+        gm_voices=dict(getattr(profile, "gm_voices", {}) or {}),
+        rows_per_measure=rpm,
+        measure_rows=tuple(
+            tuple(s.rows if s.rows is not None else rpm for s in pp.slots for _ in range(s.measures))
+            for pp in plan.patterns
+        ),
+    )
+
+
+def serialize(profile: GenreProfile, song: Song, plan: SongPlan, fmt: str = formats.DEFAULT_FORMAT) -> bytes:
+    """Song を ``fmt`` 形式のバイト列にする（検査はしない）。"""
+    return formats.get_format(fmt).serialize(song, write_options(profile, song, plan))
+
+
 def generate(
     profile: GenreProfile,
     seed: Optional[int],
@@ -265,17 +283,20 @@ def generate(
     *,
     verify: bool = True,
     tempo: Optional[TempoRequest] = None,
+    fmt: str = formats.DEFAULT_FORMAT,
 ) -> Result:
-    """Song を生成し、検査して ``profile.target_format`` に応じたファイル（.mod/.xm）を書き出す。
+    """Song を生成し、検査して ``fmt`` 形式（既定 mod）のファイルを書き出す。
     検査 ERROR があればファイルを書かない。"""
+    output = formats.get_format(fmt)
+    formats.check_channels(output, len(profile.channel_plan), profile.id)
     if seed is None:
         seed = random.randint(*SEED_RANGE)
     song, plan = compose_song(profile, seed, tempo=tempo)
-    data = writer.WRITERS[profile.target_format](song)
+    data = output.serialize(song, write_options(profile, song, plan))
 
     issues: list[verify_mod.Issue] = []
-    if verify:
-        issues = verify_mod.VERIFIERS[profile.target_format](data, profile.channel_plan)
+    if verify and output.verify is not None:
+        issues = output.verify(data, profile.channel_plan)
         for i in issues:
             if i.level == "WARN":
                 log.warning("%s %s", i.code, i.message)
@@ -287,4 +308,4 @@ def generate(
 
     path = Path(out)
     writer.write_file(path, data)
-    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues, tempo_request=tempo)
+    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues, tempo_request=tempo, fmt=fmt)

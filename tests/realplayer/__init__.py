@@ -65,7 +65,8 @@ class Decoded:
         return self.samples[lo:hi]
 
 
-def decode(data: bytes, ext: str, *, demuxer: str | None = "libopenmpt") -> Decoded:
+def decode(data: bytes, ext: str, *, demuxer: str | None = "libopenmpt", stereo: bool = False):
+    """``stereo=True`` なら (left, right) の Decoded の組を返す。"""
     exe = ffmpeg_with_openmpt()
     assert exe, "ffmpeg with libopenmpt required"
     with tempfile.TemporaryDirectory() as d:
@@ -75,12 +76,15 @@ def decode(data: bytes, ext: str, *, demuxer: str | None = "libopenmpt") -> Deco
         cmd = [exe, "-hide_banner", "-nostdin", "-loglevel", "error"]
         if demuxer:
             cmd += ["-f", demuxer]
-        cmd += ["-i", src, "-ac", "1", "-ar", str(RATE), "-f", "s16le", "-"]
+        cmd += ["-i", src, "-ac", "2" if stereo else "1", "-ar", str(RATE), "-f", "s16le", "-"]
         proc = subprocess.run(cmd, capture_output=True, timeout=300)
     assert proc.returncode == 0, proc.stderr.decode(errors="replace")
     a = array.array("h")
-    a.frombytes(proc.stdout[: len(proc.stdout) // 2 * 2])
-    return Decoded(a, proc.stderr.decode(errors="replace"))
+    a.frombytes(proc.stdout[: len(proc.stdout) // 4 * 4])
+    err = proc.stderr.decode(errors="replace")
+    if stereo:
+        return Decoded(a[0::2], err), Decoded(a[1::2], err)
+    return Decoded(a, err)
 
 
 def correlation(x: list[float], y: list[float]) -> float:

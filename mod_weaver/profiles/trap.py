@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..core import automation, groove, synth, synth_presets
+from ..core import automation, dsp, groove, synth, synth_presets
 from ..core.composer import MelodyGenerator, RhythmMotif, ScaleRules, articulate
 from ..core.harmony import Registers, voice
 from ..core.model import (
@@ -170,20 +170,35 @@ class TrapProfile(GenreProfile):
 
     # ------------------------------------------------------------ 共通の部品
     @staticmethod
-    def _808_bass(buf: MeasureBuffer, ins, chord) -> None:
-        """拍をシンコペーションさせた808パターン。連続する打の間は 3xx グライドで滑らせる（EXT-5）。"""
+    def _808_bass(buf: MeasureBuffer, ins, chord, bpm: int) -> None:
+        """拍をシンコペーションさせた808パターン。連続する打の間は 3xx グライドで滑らせる（EXT-5）。
+
+        808 はワンショット（非ループ）なので、先行音が鳴り終わった後の 3xx は「滑らせる音が無い」。
+        ProTracker は差し替えたサンプルを頭から鳴らし直す固有の挙動（sample swap）でたまたま鳴っていたが、
+        XM/S3M/IT では無音になる。先行音の再生位置を追跡し、鳴り終わっていれば新しい打鍵として書く
+        （MOD での聴感はほぼ同じ。グライドは1 row で完了するため。FORMAT_TEMPO_DESIGN §4）。"""
         k808 = ins["k808"]
         shift = k808.spec.shift          # logical note -> tracker note（t = n - shift）は PERIODS の添字に必要
         root, fifth = chord.bass, fold_into_range(chord.bass + 7, *BASS_REG)
         notes = [root, fifth, root, fifth]
+        row_sec = 15.0 / bpm             # Speed 6 の 1 row
         prev: Optional[int] = None
+        prev_row = 0
+        consumed = 0.0                   # 先行音のサンプルを読み進めたバイト数
         for row, note in zip(MOTIF_808_ROWS, notes):
+            if prev is not None:
+                # 実際の再生レート＝Paula クロック / period（dsp.sample_rate() は合成時の基準レートで別物）
+                consumed += (row - prev_row) * row_sec * dsp.CLOCK / PERIODS[prev - shift]
             if prev is None:
                 buf.put(row, CH_808, k808.cell(note, vol=60))
+                consumed = 0.0
+            elif consumed >= len(k808.spec.data):
+                buf.put(row, CH_808, k808.cell(note))
+                consumed = 0.0
             else:
                 p = automation.portamento_param(PERIODS[prev - shift], PERIODS[note - shift], rows=1)
                 buf.put(row, CH_808, k808.cell(note, effect=3, param=p))
-            prev = note
+            prev, prev_row = note, row
 
     @staticmethod
     def _hihat(buf: MeasureBuffer, ins, rng: RngStreams) -> None:
@@ -216,13 +231,13 @@ class TrapProfile(GenreProfile):
     def _verse(self, mctx: MeasureCtx, st: TrapState, rng: RngStreams, buf: MeasureBuffer) -> None:
         """スパース。808 パターン中心、ハイハットのみ（スネアなし）。"""
         ins = mctx.instruments
-        self._808_bass(buf, ins, mctx.chord)
+        self._808_bass(buf, ins, mctx.chord, mctx.pattern.bpm)
         self._hihat(buf, ins, rng)
 
     def _hook(self, mctx: MeasureCtx, st: TrapState, rng: RngStreams, buf: MeasureBuffer) -> None:
         """フル編成。808＋ハイハット＋スネア＋リード。"""
         ins, intensity = mctx.instruments, mctx.pattern.intensity
-        self._808_bass(buf, ins, mctx.chord)
+        self._808_bass(buf, ins, mctx.chord, mctx.pattern.bpm)
         self._hihat(buf, ins, rng)
         self._snare(buf, ins, intensity)
         self._lead(buf, ins, st, rng, mctx)
@@ -230,7 +245,7 @@ class TrapProfile(GenreProfile):
     def _half_time(self, mctx: MeasureCtx, st: TrapState, rng: RngStreams, buf: MeasureBuffer) -> None:
         """ブリッジ。808＋ハイハットのみ、密度半分（スネア・リードなし）。"""
         ins = mctx.instruments
-        self._808_bass(buf, ins, mctx.chord)
+        self._808_bass(buf, ins, mctx.chord, mctx.pattern.bpm)
         self._hihat(buf, ins, rng)
 
     def _outro(self, mctx: MeasureCtx, st: TrapState, rng: RngStreams, buf: MeasureBuffer) -> None:

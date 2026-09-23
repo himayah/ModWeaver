@@ -3,22 +3,22 @@
 書込側（``writer`` / ``model``）とは独立に、バイト列を ``struct`` で直接読む。
 参照するのは Period 表（``pitch``）と ``ChannelPlan`` の型のみ。
 
-``VERIFIERS`` は出力フォーマット名→検査関数の表（``writer.WRITERS`` と対）。
+出力形式ごとの検査関数は ``core/formats.py`` の ``FORMATS`` から引く。
 """
 from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Optional
 
 from ..errors import ModGenError
 from .pitch import NOTE_MAX, PERIODS
 
 HEADER_SIZE = 1084
-PATTERN_BYTES = 1024
 ROWS = 64
-CHANNELS = 4
-LEFT_CHANNELS = (0, 3)     # Amiga: 1,4 = 左
+CHANNELS = 4               # M.K. のチャンネル数（xCHN はマジックから読む）
+PATTERN_BYTES = ROWS * CHANNELS * 4   # M.K. の 1 pattern のバイト数
+LEFT_CHANNELS = (0, 3)     # Amiga: 1,4 = 左（5ch 以上は 4ch 周期で繰り返す）
 RIGHT_CHANNELS = (1, 2)    # Amiga: 2,3 = 右
 VOLUME_SUM_LIMIT = 120     # V15
 _MAX_LOCATIONS = 3         # 1 コードあたり報告する位置の数
@@ -68,13 +68,33 @@ class ParsedMod:
     size: int = 0
 
     @property
+    def channels(self) -> int:
+        return mod_channels(self.magic) or CHANNELS
+
+    @property
+    def pattern_bytes(self) -> int:
+        return ROWS * self.channels * 4
+
+    @property
     def pattern_count(self) -> int:
         """order テーブル全体の最大値 + 1（ProTracker の規約）。"""
         return max(self.order) + 1
 
 
+def mod_channels(magic: bytes) -> Optional[int]:
+    """マジックからチャンネル数を読む（``M.K.``=4、``"6CHN"``=6、``"12CH"``=12）。不明なら None。"""
+    if magic == b"M.K.":
+        return 4
+    text = magic.decode("ascii", errors="replace")
+    if text[1:] == "CHN" and text[0].isdigit() and text[0] != "0":
+        return int(text[0])
+    if text[2:] == "CH" and text[:2].isdigit() and 10 <= int(text[:2]) <= 32:
+        return int(text[:2])
+    return None
+
+
 def parse_mod(data: bytes) -> ParsedMod:
-    """``M.K.`` 形式のバイト列を読む。ヘッダ（1084 byte）未満は ParseError。
+    """``M.K.``／``xCHN`` 形式のバイト列を読む。ヘッダ（1084 byte）未満は ParseError。
 
     パターン・サンプルデータが不足していても、読めた分だけを返す（不足は ``verify`` の V01 が報告）。
     """
@@ -94,18 +114,18 @@ def parse_mod(data: bytes) -> ParsedMod:
 
     pos = HEADER_SIZE
     for _ in range(pm.pattern_count):
-        if pos + PATTERN_BYTES > len(data):
+        if pos + pm.pattern_bytes > len(data):
             break
         rows = []
         for r in range(ROWS):
             row = []
-            for c in range(CHANNELS):
+            for c in range(pm.channels):
                 b0, b1, b2, b3 = data[pos:pos + 4]
                 pos += 4
                 row.append(ParsedCell(((b0 & 0x0F) << 8) | b1, (b0 & 0xF0) | (b2 >> 4), b2 & 0x0F, b3))
             rows.append(row)
         pm.patterns.append(rows)
-    pos = HEADER_SIZE + PATTERN_BYTES * pm.pattern_count
+    pos = HEADER_SIZE + pm.pattern_bytes * pm.pattern_count
     for s in samples:
         n = s.length_words * 2
         s.data = data[pos:pos + n] if pos <= len(data) else b""
@@ -172,7 +192,7 @@ def _loop_boundary_step(data: bytes) -> Optional[tuple[float, float]]:
 
 
 def _check_header(pm: ParsedMod, rep: _Report) -> None:
-    if pm.magic != b"M.K.":
+    if mod_channels(pm.magic) is None:
         rep.add("ERROR", "V02", f"magic={pm.magic!r}")
     if any(not (b == 0 or 0x20 <= b <= 0x7E) for b in pm.title):
         rep.add("ERROR", "V02", "title に非 ASCII/制御文字")
@@ -185,7 +205,7 @@ def _check_header(pm: ParsedMod, rep: _Report) -> None:
             rep.add("ERROR", "V03", f"order[{i}]={p} は実 pattern 数 {len(pm.patterns)} 以上")
     if pm.pattern_count > 64:
         rep.add("ERROR", "V12", f"pattern 数={pm.pattern_count}")
-    expected = HEADER_SIZE + PATTERN_BYTES * pm.pattern_count + sum(s.length_words * 2 for s in pm.samples)
+    expected = HEADER_SIZE + pm.pattern_bytes * pm.pattern_count + sum(s.length_words * 2 for s in pm.samples)
     if pm.size != expected:
         rep.add("ERROR", "V01", f"size={pm.size} expected={expected}")
 
@@ -255,8 +275,12 @@ def _check_tempo(pm: ParsedMod, rep: _Report) -> None:
 
 
 def _check_volume_sum(pm: ParsedMod, rep: _Report) -> None:
-    """再生順に各チャンネルの音量を追跡し、左（Ch1+Ch4）・右（Ch2+Ch3）の合計を検査する。"""
-    vol = [0] * CHANNELS
+    """再生順に各チャンネルの音量を追跡し、左（Ch1+Ch4…）・右（Ch2+Ch3…）の合計を検査する。
+    5ch 以上（xCHN）は Amiga の L R R L を 4ch 周期で繰り返す（FastTracker/OpenMPT の慣習）。"""
+    n = pm.channels
+    left_ch = [c for c in range(n) if c % 4 in LEFT_CHANNELS]
+    right_ch = [c for c in range(n) if c % 4 in RIGHT_CHANNELS]
+    vol = [0] * n
     seen: set[tuple[int, int]] = set()
     for pos, p in enumerate(pm.order[:pm.song_length]):
         if p >= len(pm.patterns):
@@ -267,8 +291,8 @@ def _check_volume_sum(pm: ParsedMod, rep: _Report) -> None:
                     vol[c] = cell.param
                 if cell.period and cell.sample and cell.effect != 0xC:
                     vol[c] = pm.samples[cell.sample - 1].volume
-            left = sum(vol[c] for c in LEFT_CHANNELS)
-            right = sum(vol[c] for c in RIGHT_CHANNELS)
+            left = sum(vol[c] for c in left_ch)
+            right = sum(vol[c] for c in right_ch)
             if (left > VOLUME_SUM_LIMIT or right > VOLUME_SUM_LIMIT) and (p, r) not in seen:
                 seen.add((p, r))
                 rep.add("WARN", "V15", f"pattern {p} row {r}: L={left} R={right}")
@@ -311,7 +335,7 @@ XM_NOTE_T0 = 37
 class ParsedXMCell:
     note: int          # 0=無音、1..96（1=C-0）。本プロジェクトは 37..72（t+XM_NOTE_OFFSET）のみ使用
     instrument: int
-    volume: int        # 本プロジェクトの writer は常に 0（vol column 不使用）
+    volume: int        # vol column。本プロジェクトの writer はチャンネルパン Px（0xC0..0xCF）にのみ使う
     effect: int
     param: int
 
@@ -567,6 +591,8 @@ def _check_xm_volume_sum(pm: ParsedXM, rep: _Report) -> None:
                     if inst and inst.samples:
                         vol[c] = inst.samples[0].volume
                         pan[c] = inst.samples[0].pan
+                if cell.volume & 0xF0 == 0xC0:                  # vol column Px（チャンネルパン）
+                    pan[c] = (cell.volume & 0x0F) * 17
             left = sum(vol[c] * (255 - pan[c]) / 255.0 for c in range(n))
             right = sum(vol[c] * pan[c] / 255.0 for c in range(n))
             if (left > VOLUME_SUM_LIMIT or right > VOLUME_SUM_LIMIT) and (p, r) not in seen:
@@ -591,6 +617,3 @@ def verify_xm(data: bytes, plan=None) -> list[Issue]:
             rep.add("INFO", "V13", f"instrument {i}")
     return rep.issues(_XM_DESCRIPTIONS)
 
-
-# 出力フォーマット名 → 検査関数
-VERIFIERS: dict[str, Callable[..., list[Issue]]] = {"mod": verify, "xm": verify_xm}

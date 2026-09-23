@@ -302,11 +302,14 @@ def has_errors(issues: list[Issue]) -> bool:
 
 XM_FIXED_HEADER = 60     # ID(17)+name(20)+0x1A(1)+tracker(20)+version(2)
 XM_ORDER_TABLE_SIZE = 256
+# XM note 番号 37（FT2 の C-3）＝ ProTracker period 856（tracker note t=0）。writer とは独立に、
+# 「FT2 の C-4（note 49）が 8363Hz＝period 428」という仕様上の事実から導いた値。
+XM_NOTE_T0 = 37
 
 
 @dataclass(frozen=True)
 class ParsedXMCell:
-    note: int          # 0=無音、1..96=note+1（本プロジェクトは 1..36 のみ使用）
+    note: int          # 0=無音、1..96（1=C-0）。本プロジェクトは 37..72（t+XM_NOTE_OFFSET）のみ使用
     instrument: int
     volume: int        # 本プロジェクトの writer は常に 0（vol column 不使用）
     effect: int
@@ -452,6 +455,7 @@ _XM_DESCRIPTIONS = {
     "V02": "マジックが不正",
     "V03": "曲長・order が不正",
     "V04": "サンプルヘッダが不正",
+    "V05": "note が本プロジェクトの音域（C-3..B-5）外",
     "V06": "未定義のインストゥルメント番号を参照",
     "V07": "note を持つセルにインストゥルメント番号がない",
     "V08": "エフェクト param が不正（0xC>64 または 0xF=0）",
@@ -526,8 +530,10 @@ def _check_xm_cells(pm: ParsedXM, plan, rep: _Report) -> set[int]:
                     rep.add("ERROR", "V09", f"{where}: instrument {cell.instrument} on {plan[c].name}")
                 if not cell.note and cell.instrument and cell.effect == 0 and cell.param == 0:
                     rep.add("WARN", "V14", f"{where}: instrument {cell.instrument}")
+                if cell.note and not XM_NOTE_T0 <= cell.note <= XM_NOTE_T0 + NOTE_MAX:
+                    rep.add("ERROR", "V05", f"{where}: note {cell.note}")
                 if cell.effect == 0 and cell.param and cell.note:
-                    t = cell.note - 1
+                    t = cell.note - XM_NOTE_T0
                     top = t + max(cell.param >> 4, cell.param & 0xF)
                     if top > NOTE_MAX:
                         rep.add("ERROR", "V16", f"{where}: t={t} arp={cell.param:02X}")

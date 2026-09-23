@@ -138,9 +138,9 @@ def test_xm_pan_and_cells_round_trip_via_parse_xm():
     assert pm.consumed == len(data)
     assert [s.pan for inst in pm.instruments for s in inst.samples] == [30, 210]
     cell00 = pm.patterns[0][0][0]
-    assert (cell00.note, cell00.instrument, cell00.effect, cell00.param) == (25, 1, 0xF, 100)   # t=24 -> note 25
+    assert (cell00.note, cell00.instrument, cell00.effect, cell00.param) == (61, 1, 0xF, 100)   # t=24 -> note 61（t+37）
     cell11 = pm.patterns[0][1][1]
-    assert (cell11.note, cell11.instrument, cell11.effect, cell11.param) == (13, 2, 0xC, 40)    # vol=40 -> effect C
+    assert (cell11.note, cell11.instrument, cell11.effect, cell11.param) == (49, 2, 0xC, 40)    # t=12 -> note 49（C-4）、vol=40 -> effect C
 
 
 def test_write_file_creates_and_overwrites_existing(tmp_path):

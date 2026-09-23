@@ -95,6 +95,12 @@ XM_INSTRUMENT_HEADER_SIZE = 243       # sample 1個・エンベロープ無し�
 XM_SAMPLE_HEADER_SIZE = 40
 XM_MAX_INSTRUMENTS = 128
 XM_FINETUNE_SCALE = 16                # MOD finetune(-8..7) を XM finetune(-128..127 相当) へ変換する倍率
+# tracker note t（0=ProTracker C-1＝period 856）→ XM note 番号（1始まり、1=C-0）への加算値。
+# period 856 は FT2 の C-3（XM note 37）に相当する（FT2 の C-4＝note 49 が period 428／8363Hz）。
+# 以前は t+1（C-0）と書いていたため 3 オクターブ低く鳴っていた。parse_xm も同じ誤った規約で読んでいたので
+# 自己ラウンドトリップでは検出できず、libopenmpt で MOD と XM を実際に再生比較して発覚した
+# （FORMAT_TEMPO_DESIGN §1.1。tests/realplayer/ の形式間等価性テストが回帰を防ぐ）。
+XM_NOTE_OFFSET = 37
 
 
 def _xm_text(text: str, limit: int, what: str) -> bytes:
@@ -113,7 +119,7 @@ def _xm_cell_effect(cell: Cell) -> tuple[int, int]:
 def _pack_xm_cell(cell: Cell) -> bytes:
     """XM のパック済みセル形式（bit7=圧縮フラグ、bit0..4=note/instrument/vol/effect_type/effect_param
     の有無）。vol column（bit2）は常に立てない。"""
-    note = 0 if cell.note is None else cell.note + 1     # 0=無音。t=0..35 -> XM note 1..36
+    note = 0 if cell.note is None else cell.note + XM_NOTE_OFFSET   # 0=無音。t=0..35 -> XM note 37..72
     instrument = cell.sample                              # 0=無音のまま一致
     effect, param = _xm_cell_effect(cell)
 

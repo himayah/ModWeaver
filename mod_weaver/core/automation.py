@@ -5,9 +5,9 @@
   （新規フックは不要）。``tempo_policy="profile"`` と組み合わせて使う。
 - ``portamento_param``: ``3xx``（Tone Portamento）の speed param を計算する純粋関数（808グライド等）。
 
-挿入は ``CellGrid.insert_command``（core/model.py）に委譲する。密な編成では空きチャンネルが無い row
-がありうるため、``apply_swing``（core/groove.py, EXT-1）と同じく ``ChannelConflictError`` は送出せず
-その row だけ静かにスキップする（直前の BPM が persist）。
+挿入は ``CellGrid.try_insert_command``（core/model.py）に委譲する。密な編成では空きチャンネルが無い
+row がありうるため、``apply_swing``（core/groove.py, EXT-1）と同じくその row だけ静かにスキップする
+（直前の BPM が persist）。
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from ..errors import ChannelConflictError, PlanError, SampleConstraintError
+from ..errors import PlanError, SampleConstraintError
 from .model import Pattern
 
 log = logging.getLogger("mod_weaver")
@@ -60,9 +60,7 @@ def render_tempo_curve(pattern: Pattern, curve: TempoCurve) -> None:
         bpm = max(32, min(255, bpm))
         if bpm == prev_bpm:
             continue
-        try:
-            pattern.insert_command(row, 0x0F, bpm)
-        except ChannelConflictError:
+        if not pattern.try_insert_command(row, 0x0F, bpm):
             log.debug("render_tempo_curve: no free channel at row %d, skipping (previous BPM persists)", row)
             continue
         prev_bpm = bpm

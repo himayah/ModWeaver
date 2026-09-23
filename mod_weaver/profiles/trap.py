@@ -191,8 +191,7 @@ class TrapProfile(GenreProfile):
         roll_row = rng.drums.choice(HAT_ROWS)
         for row in HAT_ROWS:
             if row == roll_row and rng.drums.random() < 0.6:
-                eff, param = groove.retrigger_param(3)
-                buf.put(row, CH_HAT, ins["hat_c"].cell(effect=eff, param=param))
+                buf.put(row, CH_HAT, ins["hat_c"].cell(effect=0x0E, param=groove.retrigger_param(3)))
             else:
                 buf.put(row, CH_HAT, ins["hat_c"].cell())
         buf.put(HAT_ROWS[-1], CH_HAT, ins["hat_o"].cell())   # フレーズ末はオープンハット（優先度で置換）

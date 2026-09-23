@@ -74,8 +74,9 @@ def serialize(song: Song) -> bytes:
 # CORE_EXTENSION_DESIGN §4.6③ のスコープどおり、エンベロープ／複数サンプルキーマップ／XM 独自の
 # vol column は使わない（1 Instrument = 1 sample、Cell の vol/effect 排他制約をそのまま流用）。
 #
-# §11 の要検証事項: 本実装はバイナリレイアウトの公開仕様の記憶に基づく机上実装であり、実機・
-# 実プレイヤー（OpenMPT/libxmp/MilkyTracker 等）での再生確認はまだ行っていない。
+# §11 の要検証事項: OpenMPT でパターン内容が読めない不具合を実際に検出・修正済み（header_size の
+# 基準オフセット、下記 XM_HEADER_SIZE のコメント参照）。波形・パンニングの実プレイヤーでの聴感確認は
+# まだ未実施。
 
 XM_ID = b"Extended Module: "        # 17 byte 固定
 XM_TRACKER_NAME = "ModWeaver"

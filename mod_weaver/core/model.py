@@ -207,6 +207,16 @@ class CellGrid:
                 return
         raise ChannelConflictError(f"no channel available for row command at row {row}")
 
+    def try_insert_command(self, row: int, effect: int, param: int) -> bool:
+        """``insert_command`` の非送出版。装飾的な row コマンド（EXT-1 スウィング／EXT-5 テンポ
+        カーブ等、「空きが無ければその row だけ諦めてよい」処理）が共通して使う、失敗を bool で
+        返すだけの薄いラッパ（探索ロジック自体は ``insert_command`` のものをそのまま使う）。"""
+        try:
+            self.insert_command(row, effect, param)
+            return True
+        except ChannelConflictError:
+            return False
+
     def get(self, row: int, ch: int) -> Cell:
         self._check_pos(row, ch)
         return self._cells[row][ch]

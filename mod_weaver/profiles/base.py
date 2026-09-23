@@ -26,7 +26,7 @@ class GenreProfile(ABC):
     aliases: tuple[str, ...] = ()
     display_name: str
     description: str
-    title: str                         # MOD タイトル（ASCII ≤20）
+    title: str                         # 出力ファイルのタイトル欄（ASCII ≤20。mod/xm 共通）
     default_filename: str
     tempo_choices: tuple[int, ...]     # 離散値
     rows_per_measure: int = 16         # 64 の約数

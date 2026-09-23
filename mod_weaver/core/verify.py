@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 from ..errors import ModGenError
 from .pitch import NOTE_MAX, PERIODS
@@ -160,6 +160,17 @@ def _signed(b: int) -> int:
     return b - 256 if b > 127 else b
 
 
+def _loop_boundary_step(data: bytes) -> Optional[tuple[float, float]]:
+    """ループ境界の「段差 vs 許容量」を計算する（MOD/XM 共通のクリック検出ヒューリスティック）。
+    データが空なら ``None``（呼出し側は判定をスキップする）。"""
+    if not data:
+        return None
+    d = [_signed(b) for b in data]
+    max_diff = max((abs(d[i + 1] - d[i]) for i in range(len(d) - 1)), default=0)
+    step = abs(d[0] - d[-1])
+    return step, max(2.0, 1.5 * max_diff)
+
+
 def _check_header(pm: ParsedMod, rep: _Report) -> None:
     if pm.magic != b"M.K.":
         rep.add("ERROR", "V02", f"magic={pm.magic!r}")
@@ -195,11 +206,12 @@ def _check_loop_boundary(idx: int, s: ParsedSample, rep: _Report) -> None:
     lo, hi = s.loop_start * 2, (s.loop_start + s.loop_length) * 2
     if hi > len(s.data):
         return
-    d = [_signed(b) for b in s.data[lo:hi]]
-    max_diff = max((abs(d[i + 1] - d[i]) for i in range(len(d) - 1)), default=0)
-    step = abs(d[0] - d[-1])
-    if step > max(2.0, 1.5 * max_diff):
-        rep.add("WARN", "V11", f"sample {idx}: 境界段差 {step} > 許容 {max(2.0, 1.5 * max_diff):.1f}")
+    result = _loop_boundary_step(s.data[lo:hi])
+    if result is None:
+        return
+    step, limit = result
+    if step > limit:
+        rep.add("WARN", "V11", f"sample {idx}: 境界段差 {step} > 許容 {limit:.1f}")
 
 
 def _check_cells(pm: ParsedMod, plan, rep: _Report) -> set[int]:
@@ -454,10 +466,6 @@ _XM_DESCRIPTIONS = {
 }
 
 
-def _xm_signed(b: int) -> int:
-    return b - 256 if b > 127 else b
-
-
 def _check_xm_header(pm: ParsedXM, rep: _Report) -> None:
     if pm.magic != b"Extended Module: ":
         rep.add("ERROR", "V02", f"magic={pm.magic!r}")
@@ -489,11 +497,12 @@ def _check_xm_loop_boundary(idx: int, s: ParsedXMSample, rep: _Report) -> None:
     lo, hi = s.loop_start, s.loop_start + s.loop_length
     if hi > len(s.data):
         return
-    d = [_xm_signed(b) for b in s.data[lo:hi]]
-    max_diff = max((abs(d[i + 1] - d[i]) for i in range(len(d) - 1)), default=0)
-    step = abs(d[0] - d[-1])
-    if step > max(2.0, 1.5 * max_diff):
-        rep.add("WARN", "V11", f"instrument {idx}: 境界段差 {step} > 許容 {max(2.0, 1.5 * max_diff):.1f}")
+    result = _loop_boundary_step(s.data[lo:hi])
+    if result is None:
+        return
+    step, limit = result
+    if step > limit:
+        rep.add("WARN", "V11", f"instrument {idx}: 境界段差 {step} > 許容 {limit:.1f}")
 
 
 def _check_xm_cells(pm: ParsedXM, plan, rep: _Report) -> set[int]:

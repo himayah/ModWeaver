@@ -273,8 +273,8 @@ class SwingJazzProfile(GenreProfile):
         if events and rng.melody.random() < 0.25:
             last = events[-1]
             if last.row % 2 == 1:                     # swung 8th（裏拍）の onset にのみ装飾を足す
-                eff, param = groove.retrigger_param(3)
-                buf.replace(last.row, CH_MEL, ins["sax"].cell(last.note, effect=eff, param=param))
+                buf.replace(last.row, CH_MEL,
+                            ins["sax"].cell(last.note, effect=0x0E, param=groove.retrigger_param(3)))
 
     # ------------------------------------------------------------ 各 pattern の文法
     def _intro(self, mctx: MeasureCtx, st: SwingState, rng: RngStreams, buf: MeasureBuffer) -> None:

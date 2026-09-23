@@ -207,7 +207,8 @@ def generate(
     *,
     verify: bool = True,
 ) -> Result:
-    """Song を生成し、検査して .mod を書き出す。検査 ERROR があればファイルを書かない。"""
+    """Song を生成し、検査して ``profile.target_format`` に応じたファイル（.mod/.xm）を書き出す。
+    検査 ERROR があればファイルを書かない。"""
     if seed is None:
         seed = random.randint(*SEED_RANGE)
     song, plan = compose_song(profile, seed)

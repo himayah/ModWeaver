@@ -40,12 +40,12 @@ def test_apply_swing_uses_next_free_channel_when_occupied():
 
 
 def test_retrigger_param():
-    assert groove.retrigger_param(3) == (0x0E, 0x93)
+    assert groove.retrigger_param(3) == 0x93
     with pytest.raises(SampleConstraintError):
         groove.retrigger_param(16)
 
 
 def test_delay_param():
-    assert groove.delay_param(2) == (0x0E, 0xD2)
+    assert groove.delay_param(2) == 0xD2
     with pytest.raises(SampleConstraintError):
         groove.delay_param(0)

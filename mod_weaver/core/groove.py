@@ -2,17 +2,19 @@
 
 - ``SwingConfig``/``apply_swing``: row の偶奇で Speed（``F0x``）を交互に変え、スウィング/シャッフルを
   作る後処理（``profile.post_processors`` から適用する）。1拍=2row（8分音符格子）の timebase を前提にする。
-- ``retrigger_param``/``delay_param``: ``E9x``（Retrigger）/``EDx``（Note Delay）の効果/param を返す
-  純粋関数。1 row 内で複数打を鳴らすサブステップ・ロール用（trap 等）。
+- ``retrigger_param``/``delay_param``: ``E9x``（Retrigger）/``EDx``（Note Delay）の param を返す純粋
+  関数（effect は両方とも常に ``0x0E`` 固定なので呼出し側が渡す。``automation.portamento_param`` 等と
+  同じ「param のみ返す」規約に揃えている）。1 row 内で複数打を鳴らすサブステップ・ロール用（trap 等）。
 
-挿入は ``CellGrid.insert_command``（core/model.py）に委譲し、チャンネル探索ロジックを重複させない。
+挿入は ``CellGrid.insert_command``/``try_insert_command``（core/model.py）に委譲し、チャンネル探索
+ロジックを重複させない。
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 
-from ..errors import ChannelConflictError, SampleConstraintError
+from ..errors import SampleConstraintError
 from .model import Pattern
 
 log = logging.getLogger("mod_weaver")
@@ -47,25 +49,25 @@ def apply_swing(pattern: Pattern, config: SwingConfig, *, start_row: int = 0) ->
     """
     for row in range(start_row, pattern.rows):
         speed = config.long_speed if (row - start_row) % 2 == 0 else config.short_speed
-        try:
-            pattern.insert_command(row, 0x0F, speed)
-        except ChannelConflictError:
+        if not pattern.try_insert_command(row, 0x0F, speed):
             log.debug("apply_swing: no free channel at row %d, skipping (previous Speed persists)", row)
 
 
-def retrigger_param(every_ticks: int) -> tuple[int, int]:
+def retrigger_param(every_ticks: int) -> int:
     """``E9x``: ``every_ticks``（1..15）ティックごとに再トリガする定数音量のロール。
+    呼出し側は ``effect=0x0E, param=retrigger_param(...)`` として使う。
 
     音量を変えたいクレッシェンド・ロールは表現できない（E9x は音量制御を持たない）。その場合は
     行グリッドを細かくして ``composer.articulate``/``composer.ramp`` で1打ずつ別 row に書く。
     """
     if not 1 <= every_ticks <= 15:
         raise SampleConstraintError(f"retrigger ticks out of range: {every_ticks}")
-    return (0x0E, 0x90 | every_ticks)
+    return 0x90 | every_ticks
 
 
-def delay_param(ticks: int) -> tuple[int, int]:
-    """``EDx``: note を ``ticks``（1..15）ティック遅延して発音する。"""
+def delay_param(ticks: int) -> int:
+    """``EDx``: note を ``ticks``（1..15）ティック遅延して発音する。
+    呼出し側は ``effect=0x0E, param=delay_param(...)`` として使う。"""
     if not 1 <= ticks <= 15:
         raise SampleConstraintError(f"delay ticks out of range: {ticks}")
-    return (0x0E, 0xD0 | ticks)
+    return 0xD0 | ticks

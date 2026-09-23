@@ -195,6 +195,19 @@ def test_insert_command_raises_when_no_slot():
         pat.insert_command(0, 0x0F, 6)
 
 
+def test_try_insert_command_mirrors_insert_command_on_success():
+    pat = Pattern(None, channels=2)
+    assert pat.try_insert_command(0, 0x0F, 6) is True
+    assert pat.get(0, 0) == Cell(None, 0, 0x0F, 6)
+
+
+def test_try_insert_command_returns_false_instead_of_raising():
+    pat = Pattern(None, channels=1)
+    pat.replace(0, 0, Cell(20, 2, vol=30))
+    assert pat.try_insert_command(0, 0x0F, 6) is False
+    assert pat.get(0, 0) == Cell(20, 2, vol=30)   # 変更なし
+
+
 # ---------------- SampleSpec / Instrument ----------------
 
 def _spec(**kw):

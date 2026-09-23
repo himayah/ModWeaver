@@ -81,11 +81,15 @@ XM_ID = b"Extended Module: "        # 17 byte 固定
 XM_TRACKER_NAME = "ModWeaver"
 XM_VERSION = 0x0104                  # 1.04
 XM_ORDER_TABLE_SIZE = 256
-# header_size は「header_size フィールド自身の直後（offset 64）から pattern order table の終端まで」
-# の長さとして書く（読み手は pattern データの開始位置を 64 + header_size として求める規約）。
-# song_length/restart/n_channels/n_patterns/n_instruments/flags/tempo/bpm の8フィールド(各2byte=16byte)
-# + order table(256byte) = 272。固定のマジックナンバーとして書かず計算する（§11 要検証事項）。
-XM_HEADER_SIZE = 8 * 2 + XM_ORDER_TABLE_SIZE   # = 272
+# header_size は「header_size フィールド自身（offset 60、4byte）を含めて」pattern order table の
+# 終端までの長さとして書く（実プレイヤーは pattern データの開始位置を 60 + header_size として求める
+# 規約——これが真の FT2/XM 仕様。以前は header_size フィールド自身を含めない 272 を書いていたため、
+# 実プレイヤー側は常に 4byte 手前からパターンデータを読み始めてしまい、パターン内容が全て文字化け
+# （OpenMPT で「パターンが空に見える」）していた。内部の parse_xm は独自規約で読んでいたため
+# 自己ラウンドトリップ検査ではこのズレを検出できなかった＝実プレイヤーでの検証が必須だった好例）。
+# header_size自身(4byte) + song_length/restart/n_channels/n_patterns/n_instruments/flags/tempo/bpm
+# の8フィールド(各2byte=16byte) + order table(256byte) = 276。
+XM_HEADER_SIZE = 4 + 8 * 2 + XM_ORDER_TABLE_SIZE   # = 276
 XM_INSTRUMENT_HEADER_SIZE = 243       # sample 1個・エンベロープ無しの標準サイズ
 XM_SAMPLE_HEADER_SIZE = 40
 XM_MAX_INSTRUMENTS = 128

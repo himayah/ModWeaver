@@ -381,7 +381,9 @@ def parse_xm(data: bytes) -> ParsedXM:
     order = list(data[80:80 + XM_ORDER_TABLE_SIZE])
     pm = ParsedXM(magic, title, song_length, n_channels, n_patterns, n_instruments, order, size=len(data))
 
-    pos = 64 + header_size
+    # header_size は offset 60（header_size フィールド自身）を起点に数える、というのが実際の
+    # FT2/XM 規約（writer.XM_HEADER_SIZE のコメント参照）。64 起点ではない。
+    pos = XM_FIXED_HEADER + header_size
     for _ in range(n_patterns):
         if pos + 9 > len(data):
             break

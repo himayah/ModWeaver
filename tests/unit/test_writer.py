@@ -101,6 +101,20 @@ def test_xm_header_layout():
     assert flags & 1 == 1                            # linear frequency table
 
 
+def test_xm_header_size_field_locates_real_pattern_data_offset():
+    """header_size は実 FT2/XM 規約どおり「offset 60（フィールド自身を含む）起点」で書かれている
+    ことを、parse_xm の実装と切り離して直接検査する（回帰: header_size=272 だった旧実装は自己
+    ラウンドトリップでは検出できず、実プレイヤー(OpenMPT)でパターン内容が読めない不具合になった）。
+    実際のパターンデータ開始位置は 60 + name(20)+0x1A(1)+tracker(20)+version(2) ではなく、固定
+    ヘッダ60byte + header_size フィールド自身(4)+8word(16)+order table(256) = 336byte のはず。"""
+    data = serialize_xm(_xm_song())
+    header_size = struct.unpack("<I", data[60:64])[0]
+    expected_pattern_data_start = 60 + 4 + 8 * 2 + 256   # = 336（実測の固定バイト数）
+    assert 60 + header_size == expected_pattern_data_start
+    # その offset に実際に pattern header（length=9 固定）が始まっていることも確認する。
+    assert struct.unpack("<I", data[60 + header_size:60 + header_size + 4])[0] == 9
+
+
 def test_xm_rejects_too_many_channels():
     with pytest.raises(PlanError):
         serialize_xm(_xm_song(n_channels=33))

@@ -116,8 +116,13 @@ def main(
 ) -> int:
     """CLI 本体。``invocation`` は再現コマンドの先頭（既定 ``python -m mod_weaver.cli``）。"""
     _configure_logging()
+    argv = sys.argv[1:] if argv is None else list(argv)
+    parser = build_parser(prog)
+    if not argv:                      # 引数なし: --help と同じ usage を出して終了（CLI_STAGE2_DESIGN §4）
+        parser.print_help()
+        return 0
     try:
-        args = build_parser(prog).parse_args(argv)
+        args = parser.parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 2
 

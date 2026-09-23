@@ -99,6 +99,26 @@ def test_genre_listing_appears_in_help(capsys):
         assert p.id in stdout and p.description in stdout
 
 
+def test_no_arguments_prints_help_and_exits_0(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _, help_out, _ = run_cli(["--help"], capsys)
+    code, stdout, err = run_cli([], capsys)
+    assert code == 0 and err == "" and stdout == help_out and stdout.startswith("usage:")
+    assert list(tmp_path.iterdir()) == []             # 生成は行われない
+
+
+def test_no_arguments_via_script_prints_usage(tmp_path):
+    r = subprocess.run([sys.executable, str(ROOT / "modweaver.py")], capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 0 and r.stdout.startswith("usage: modweaver.py") and r.stderr == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_any_argument_still_generates_default_genre(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = run_cli(["-s", "3"], capsys)
+    assert code == 0 and "Genre       : nostalgic" in stdout and (tmp_path / "nostalgic" / "nostalgic_3.mod").exists()
+
+
 def test_unknown_genre_exit_2(tmp_path, capsys):
     code, out, err = run_cli(["--genre", "bogus", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "unknown genre" in err and "nostalgic" in err and out == ""

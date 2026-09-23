@@ -52,6 +52,6 @@ def test_delay_param():
 
 
 def test_default_swing_config_spans_one_beat_of_24_ticks():
-    """long+short=24 tick で1拍（2 row）になり、BPM 表示どおりの速さで鳴る（FORMAT_TEMPO_DESIGN §1.3）。"""
+    """long+short=24 tick で1拍（2 row）になり、BPM 表示どおりの速さで鳴る（DESIGN.md §4.6）。"""
     cfg = groove.SwingConfig()
     assert cfg.long_speed + cfg.short_speed == 24

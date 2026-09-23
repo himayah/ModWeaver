@@ -1,4 +1,4 @@
-"""suspense-chase の文法・音域・契約（設計書 §8.4、§11.3）。"""
+"""suspense-chase の文法・音域・契約（DESIGN.md §6.4、§10）。"""
 from __future__ import annotations
 
 import pytest

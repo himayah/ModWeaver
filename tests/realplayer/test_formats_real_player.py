@@ -1,5 +1,5 @@
 """--format の各形式を実プレイヤー（libopenmpt）で再生し、MOD（4ch）／XM（8ch）の再生と
-音高・長さ・音量包絡が一致することを検査する（FORMAT_TEMPO_DESIGN §7「形式間の等価性」）。"""
+音高・長さ・音量包絡が一致することを検査する（DESIGN.md §9.2「形式間の等価性」）。"""
 import pytest
 
 from mod_weaver import engine, profiles

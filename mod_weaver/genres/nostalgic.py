@@ -1,4 +1,4 @@
-"""Nostalgic プロファイル: 旧 ``twilight_pad.py`` のロジックの等価移植（設計書 §8.1）。
+"""Nostalgic プロファイル: 旧 ``twilight_pad.py`` のロジックの等価移植（DESIGN.md §6.1）。
 
 作曲ロジック（plan・pattern の Cell 配置）は旧実装とバイト単位で同一（回帰テスト CP3〜CP4）。
 サンプル合成は core/synth.py の Patch 方式へ移行済みのため、波形バイトの完全一致はもはや

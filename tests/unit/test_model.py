@@ -170,7 +170,7 @@ def test_grid_is_generic_in_rows_and_channels():
         MeasureBuffer(0)
 
 
-# ---------------- CellGrid.insert_command (CORE_EXTENSION_DESIGN §4.0.1) ----------------
+# ---------------- CellGrid.insert_command (DESIGN.md §3.2) ----------------
 
 def test_insert_command_uses_lowest_empty_channel():
     pat = Pattern(None, channels=4)

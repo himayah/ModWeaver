@@ -1,4 +1,4 @@
-"""future-bass: フューチャーベース / グリッチ（GENRE_DESIGN_V2.md §7）。
+"""future-bass: フューチャーベース / グリッチ（DESIGN.md §6.9）。
 
 1 measure = 16 row = 4/4（標準16分格子）。EXT-4（``core/mixer.py``）のサイドチェイン・ダッキングと
 サンプル・スライサーを実証する最初のジャンル。Eb メジャーの I-V-vi-IV を4 measure=1 pattern で回す。
@@ -30,7 +30,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・調・進行（GENRE_DESIGN_V2.md §7.3）
+# 音域・調・進行（DESIGN.md §6.9）
 # ============================================================
 
 KEY_PC = 3                                    # Eb
@@ -54,7 +54,7 @@ def progression_summary() -> str:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §7.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.9）
 # ============================================================
 
 KICK, SUB, SAW, VOX, CLAP = 1, 2, 3, 4, 5
@@ -75,8 +75,8 @@ CLAP_OFFBEAT_8TH = (2, 6, 10, 14)          # buildup のハイハット代用
 VOCAL_CHOP_ROWS = (0, 2, 4, 6, 8, 10, 12, 14)
 N_SLICES = 6
 
-# EXT-4 サイドチェイン設定（GENRE_DESIGN_V2.md §7.6）
-# CH_KICK は kick/clap を優先度共有するチャンネルのため（§7.2）、backbeat（row 4,12）では
+# EXT-4 サイドチェイン設定（DESIGN.md §6.9）
+# CH_KICK は kick/clap を優先度共有するチャンネルのため（DESIGN.md §6.9）、backbeat（row 4,12）では
 # clap が kick を置換して実際のセルには clap しか残らない。ドロップの「4つ打ちポンピング」感を
 # 4拍とも保つため、kick と clap の両方をトリガとして登録する（実運用のサイドチェインも通常
 # キック単体ではなく「拍の打点」全体をトリガに使う）。

@@ -1,4 +1,4 @@
-"""データモデル（設計書 §5.2〜5.3）。
+"""データモデル（DESIGN.md §3）。
 
 - ``Cell``: 1 セル（note / sample / effect / param / vol）。frozen。
 - ``MeasureBuffer`` / ``Pattern``: 行×チャンネルの作業領域（共通基底 ``CellGrid``）。
@@ -6,9 +6,8 @@
 - 計画系（``ChordSpec`` … ``RngStreams``）: プロファイルとエンジンの間で受け渡す純粋データ。
 
 行数・チャンネル数は定数 ``ROWS_PER_PATTERN`` / ``NUM_CHANNELS`` を既定値とするだけで、
-``CellGrid`` は任意の値を受け付ける（可変小節拡張（EXT-2。``ChordSlot.rows``／``MeasureCtx.measure_rows``
-経由で使用中）の足場として機能済み。多チャンネル拡張（EXT-6）はまだこの足場を使っていない。
-CORE_EXTENSION_DESIGN 参照）。
+``CellGrid`` は任意の値を受け付ける（可変小節は ``ChordSlot.rows``／``MeasureCtx.measure_rows``、
+多チャンネルは ``ChannelPlan`` の要素数で使っている。DESIGN.md §3.2・§4.7）。
 """
 from __future__ import annotations
 
@@ -109,7 +108,7 @@ ChannelPlan = tuple[ChannelRole, ...]
 # ============================================================
 
 class CellGrid:
-    """行×チャンネルのセル領域。put / replace / get の規則を共有する（設計書 §5.2）。"""
+    """行×チャンネルのセル領域。put / replace / get の規則を共有する（DESIGN.md §3.2）。"""
 
     def __init__(
         self,
@@ -188,13 +187,13 @@ class CellGrid:
     def insert_command(self, row: int, effect: int, param: int) -> None:
         """row の空きチャンネルへ ``(effect, param)`` を書き込む（``vol`` は使わない）。
 
-        探索順序（CORE_EXTENSION_DESIGN §4.0.1）:
+        探索順序（DESIGN.md §3.2）:
           ① is_empty なチャンネルのうち最小番号
           ② なければ、note を持つが vol も effect も持たないチャンネル
              （そのチャンネルの note/sample はそのまま残し、サンプル既定音量で鳴り続ける）
         いずれも無ければ ChannelConflictError。``engine.apply_tempo`` や EXT-1/EXT-5（スウィング・
         テンポカーブ）の row 単位コマンド挿入が共用する（`Song`/プロファイルに依存しないため
-        `CellGrid` のメソッドとして持つ。§4.0.1 参照）。
+        `CellGrid` のメソッドとして持つ。DESIGN_HISTORY.md §7.2）。
         """
         for ch in range(self.channels):
             if self.get(row, ch).is_empty:
@@ -267,7 +266,7 @@ class SampleSpec:
     volume: int                    # 0..64
     loop: Optional[tuple[int, int]] = None   # (start_words, length_words) length>1。None は (0,1)
     rate_note: int = 24            # 生成レートを決める tracker note（既定 C-3）
-    shift: int = 0                 # n = t + shift（§5.1）
+    shift: int = 0                 # n = t + shift（DESIGN.md §3.1）
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
     finetune: int = 0
     pan: int = 128                 # EXT-6: 0=左、128=中央、255=右。MOD の serialize() は参照しない
@@ -275,7 +274,7 @@ class SampleSpec:
     # ↑ tracker note ``rate_note``（finetune 0）で鳴らしたときに実際に聞こえる基本周波数（Hz）。
     #   synth.render() が記録する。音高を持たない音色は None。MIDI 出力が実音の高さを求めるのに使う
     #   （合成は dsp.sample_rate()＝実際の Paula 再生レートの半分を基準に波形を作るため、論理 note の
-    #   pitch.hz(n) とは一致しない。FORMAT_TEMPO_DESIGN §6.4）
+    #   pitch.hz(n) とは一致しない。DESIGN.md §3.1）
 
     @property
     def length_words(self) -> int:
@@ -322,7 +321,7 @@ class Song:
 
 @dataclass(frozen=True)
 class Instrument:
-    """プロファイルが Cell を作る唯一の入口（設計書 §5.2）。"""
+    """プロファイルが Cell を作る唯一の入口（DESIGN.md §3.3）。"""
 
     slot: int                      # 1..31
     spec: SampleSpec

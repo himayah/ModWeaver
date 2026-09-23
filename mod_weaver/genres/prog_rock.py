@@ -1,4 +1,4 @@
-"""prog-rock: 変拍子プログレ / マスロック（GENRE_DESIGN_V2.md §2）。
+"""prog-rock: 変拍子プログレ / マスロック（DESIGN.md §6.7）。
 
 主リフの拍子サイクルは 7/8 + 7/8 + 5/8（合計 19/8。``rows_per_measure`` 既定16の16分格子で
 14+14+10=38 row）。1 pattern = リフサイクル1回（38 row）＋ ``D00`` 自動挿入（EXT-2。
@@ -34,7 +34,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・調・進行（GENRE_DESIGN_V2.md §2.3）
+# 音域・調・進行（DESIGN.md §6.7）
 # ============================================================
 
 KEY_PC = 4                                    # E
@@ -97,7 +97,7 @@ def progression_summary() -> str:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §2.2）
+# sample 番号 / ChannelPlan（DESIGN.md §6.7）
 # ============================================================
 
 KICK, SNARE, CRASH, BASS, GTR, LEAD = 1, 2, 3, 4, 5, 6

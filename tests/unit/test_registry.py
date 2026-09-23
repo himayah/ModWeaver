@@ -71,7 +71,7 @@ def test_duplicate_id_or_alias_rejected(clean_registry):
             id = "shared"
 
 
-# --- ジャンルモジュールの自動検出（CLI_STAGE2_DESIGN §3） ---
+# --- ジャンルモジュールの自動検出（DESIGN.md §5.6） ---
 
 GENRES_DIR = Path(registry.__file__).resolve().parents[1] / "genres"
 

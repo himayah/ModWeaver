@@ -289,7 +289,7 @@ def test_verification_error_message_summarises():
     assert "V01" in str(e) and "+2 more" in str(e)
 
 
-# ---------------- variable_meter / ChordSlot.rows (EXT-2 §4.0.2/§4.2) ----------------
+# ---------------- variable_meter / ChordSlot.rows (EXT-2。DESIGN.md §4.7) ----------------
 
 def _variable_plan(rows_list, bpm=100):
     """各 slot が 1 measure・``rows`` 行の PatternPlan を1つ持つ SongPlan を返す。"""

@@ -1,4 +1,4 @@
-"""GenreProfile 抽象基底（設計書 §7）。"""
+"""GenreProfile 抽象基底（DESIGN.md §5.1）。"""
 from __future__ import annotations
 
 import random
@@ -33,14 +33,14 @@ class GenreProfile(ABC):
     tempo_choices: tuple[int, ...]     # 離散値。値は4分音符の BPM（=tracker の Fxx。1拍=24 tick）
     tempo_range: tuple[int, int] = (32, 255)
     # ↑ --tempo で上書きできる BPM の範囲（両端含む）。BPM から row 数を計算しているジャンル等、極端な
-    #   テンポで破綻するものだけ狭める（FORMAT_TEMPO_DESIGN §3.3。値は総当たりの実測で決める）
+    #   テンポで破綻するものだけ狭める（DESIGN.md §5.5。値は総当たりの実測で決める）
     rows_per_measure: int = 16         # 64 の約数
     channel_plan: ChannelPlan
     tempo_policy: str = "engine"       # "engine" | "profile"
     rng_mode: str = "streams"          # "single"（Nostalgic）| "streams"
     strict_buffers: bool = True        # False: 無条件上書き（Nostalgic）
 
-    # --- 将来拡張の差込口（CORE_EXTENSION_DESIGN の Opt-in 方針。既定値では何も変わらない） ---
+    # --- 将来拡張の差込口（DESIGN.md §2.4 の opt-in 方針。既定値では何も変わらない） ---
     channel_pans: Optional[tuple[int, ...]] = None
     # ↑ MOD 以外の形式でのチャンネルごとのパン（0=左、128=中央、255=右）。None なら core/formats.py の
     #   channel_pans() が決める（全サンプル既定パンなら Amiga 風 LRRL、明示パンがあればサンプルから）
@@ -81,5 +81,5 @@ class GenreProfile(ABC):
         ``D00`` で途中終了する場合の「実際に再生される最終 row」（エンジンが挿入する `D00` の行）とは
         異なりうる。そのため `variable_meter=True` のプロファイルで「曲の末尾で持続音を消音する」
         処理をここで行いたい場合は、``pattern.rows - 1`` ではなく自分の ``PatternPlan``（``ChordSlot.rows``
-        の合計）から実際の最終 row を求めること。CORE_EXTENSION_DESIGN §4.2 参照。
+        の合計）から実際の最終 row を求めること。DESIGN.md §5.1 参照。
         """

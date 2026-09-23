@@ -1,4 +1,4 @@
-"""MP3 出力（FORMAT_TEMPO_DESIGN §5）。外部の ffmpeg に委譲する。
+"""MP3 出力（DESIGN.md §7.8）。外部の ffmpeg に委譲する。
 
 Song をいったん XM（任意チャンネル数・サンプルパン・チャンネルパンを保持できる形式）にし、ffmpeg 内蔵の
 libopenmpt（OpenMPT の再生エンジン）で再生・libmp3lame で MP3 に符号化する。自前の再生エンジンは持たない

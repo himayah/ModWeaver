@@ -1,10 +1,10 @@
-"""maqam: 中東マカーム / インド古典（GENRE_DESIGN_V2.md §5）。
+"""maqam: 中東マカーム / インド古典（DESIGN.md §6.10）。
 
 maqam Rast（G を主音 qarar とする）を EXT-3（``core/pitch.MicroScale``）で表現する最初のジャンル。
 1 measure = 16 row = 4/4。usul（リズム周期）は maqsum（``DUM . TEK . . DUM TEK .``）。
 
 和声は `harmony.voice()`／`CHORD_QUALITIES` を経由せず、``ChordDef`` を直接手組みする
-（march/nostalgic と同じ「明示的ボイシング」パターン。§8.2 参照）。
+（march/nostalgic と同じ「明示的ボイシング」パターン。DESIGN.md §4.2 参照）。
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音律（GENRE_DESIGN_V2.md §5.1）
+# 音律（DESIGN.md §6.10）
 # ============================================================
 
 KEY_PC = 7                                    # G
@@ -60,7 +60,7 @@ def _neutral_finetune(degree: int) -> int:
 
 
 def _maqam_chord() -> ChordDef:
-    """qarar/ghammaz と7度のジンス全音を手組みする（§5.5）。"""
+    """qarar/ghammaz と7度のジンス全音を手組みする（DESIGN.md §6.10）。"""
     scale_tones = tuple(_degree_note(d)[0] for d in range(7))
     return ChordDef(
         label="Rast on G", bass=QARAR_NOTE, harmony=_degree_note(4)[0],
@@ -74,7 +74,7 @@ def voice_progression() -> list[ChordSlot]:
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §5.3）
+# sample 番号 / ChannelPlan（DESIGN.md §6.10）
 # ============================================================
 
 DUM, TEK, OUD, OUD_N3, OUD_N7, NAY, QANUN = 1, 2, 3, 4, 5, 6, 7
@@ -189,7 +189,7 @@ class MaqamProfile(GenreProfile):
     # ------------------------------------------------------------ 共通の部品
     @staticmethod
     def _maqam_phrase(rng: RngStreams, prev_degree: Optional[int], n_events: int) -> tuple[list[int], int]:
-        """順次進行主体、まれに4度・5度の跳躍を混ぜる（§5.5）。度数列と終端度数を返す。"""
+        """順次進行主体、まれに4度・5度の跳躍を混ぜる（DESIGN.md §6.10）。度数列と終端度数を返す。"""
         lo, hi = MELODY_DEGREE_RANGE
         degree = prev_degree if prev_degree is not None else 0
         out = []

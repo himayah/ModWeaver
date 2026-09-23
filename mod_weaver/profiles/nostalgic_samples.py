@@ -1,7 +1,7 @@
 """Nostalgic のサンプル合成。
 
 旧 twilight_pad.py の gen_* を core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
-式・定数は移行前と同一（peak, len は数サンプル程度の丸め差のみ。§互換性は要求しないため許容）。
+式・定数は移行前と同一（peak, len は数サンプル程度の丸め差のみ。バイト単位の互換性は要求しないため許容。DESIGN_HISTORY.md §4 D15）。
 """
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
-"""タイムベース＆グルーヴ・エンジン（CORE_EXTENSION_DESIGN §4.1、EXT-1）。
+"""タイムベース＆グルーヴ・エンジン（DESIGN.md §4.6、EXT-1）。
 
 - ``SwingConfig``/``apply_swing``: row の偶奇で Speed（``F0x``）を交互に変え、スウィング/シャッフルを
   作る後処理（``profile.post_processors`` から適用する）。1拍=2row（8分音符格子）の timebase を前提にする。
   tracker の BPM（``Fxx``≥0x20）は「24 tick＝1拍」の速さなので、long+short＝24 tick にすると
-  ``SongPlan.bpm`` がそのまま4分音符の BPM として鳴る（FORMAT_TEMPO_DESIGN §3.1）。
+  ``SongPlan.bpm`` がそのまま4分音符の BPM として鳴る（DESIGN.md §5.5）。
 - ``retrigger_param``/``delay_param``: ``E9x``（Retrigger）/``EDx``（Note Delay）の param を返す純粋
   関数（effect は両方とも常に ``0x0E`` 固定なので呼出し側が渡す。``automation.portamento_param`` 等と
   同じ「param のみ返す」規約に揃えている）。1 row 内で複数打を鳴らすサブステップ・ロール用（trap 等）。
@@ -43,13 +43,12 @@ def apply_swing(pattern: Pattern, config: SwingConfig, *, start_row: int = 0) ->
     ``tempo_policy="engine"`` と併用する場合、``apply_tempo``（``F BPM``, param>=32）は
     ``post_processors`` の**後**に row 0 の別チャンネルへ挿入されるため、プロファイルは row 0 に
     2つ目の空き（または note のみで vol/effect なし）のチャンネルを残しておく契約になる
-    （CORE_EXTENSION_DESIGN §4.1①）。
+    （DESIGN.md §4.10）。
 
     4チャンネル全てが同時に vol/effect を持つ row では書き込む先が無い。これは後処理の「装飾」
-    （§6 レイヤーの直交性）であり基本生成を汚染してはならないため、``ChannelConflictError`` は
+    であり基本生成を汚染してはならないため（DESIGN.md §4.10）、``ChannelConflictError`` は
     送出せず、その row のみ静かにスキップする（直前の Speed が persist するため、その1 row だけ
-    スウィングが掛からない程度の軽微な影響に留まる。CORE_EXTENSION_DESIGN §11 の「試聴による
-    微調整」対象。頻発する場合はプロファイル側の編成密度を見直す）。
+    スウィングが掛からない程度の軽微な影響に留まる。頻発する場合はプロファイル側の編成密度を見直す）。
     """
     for row in range(start_row, pattern.rows):
         speed = config.long_speed if (row - start_row) % 2 == 0 else config.short_speed

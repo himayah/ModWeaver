@@ -1,4 +1,4 @@
-"""例外階層（設計書 §10.1）。"""
+"""例外階層（DESIGN.md §8.7）。"""
 from __future__ import annotations
 
 from typing import Any, Sequence

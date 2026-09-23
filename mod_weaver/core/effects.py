@@ -1,5 +1,5 @@
 """MOD 形式のエフェクト（Cell.effect/param）を Scream Tracker 3／Impulse Tracker のエフェクト
-（A=1 … Z=26 の文字コマンド）へ変換する（FORMAT_TEMPO_DESIGN §4.3 の表）。
+（A=1 … Z=26 の文字コマンド）へ変換する（DESIGN.md §7.6 の表）。
 
 ``Cell.vol``（MOD では effect C）は S3M/IT では volume column に置くため、ここでは扱わない。
 変換表に無いエフェクトは黙って落とさず ``CellConflictError`` で止める（将来のジャンルが新しい

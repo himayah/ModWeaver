@@ -1,4 +1,4 @@
-"""--tempo（FORMAT_TEMPO_DESIGN §3）のテスト。"""
+"""--tempo（DESIGN.md §5.5）のテスト。"""
 from __future__ import annotations
 
 import dataclasses

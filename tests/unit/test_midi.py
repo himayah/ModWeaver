@@ -1,4 +1,4 @@
-"""--format midi（FORMAT_TEMPO_DESIGN §6）。SMF の独立パースには mido（開発専用依存）を使う。"""
+"""--format midi（DESIGN.md §7.7）。SMF の独立パースには mido（開発専用依存）を使う。"""
 import io
 import math
 

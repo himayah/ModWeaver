@@ -1,4 +1,4 @@
-"""CP1: writer / Cell / pitch / verify の等価性（設計書 §11.4）。
+"""CP1: writer / Cell / pitch / verify の等価性（DESIGN_HISTORY.md §6）。
 
 旧実装の出力 mod（20 seed）を独立パーサ ``parse_mod`` で復元し、
 新 ``serialize`` で再構築したバイト列が元と完全一致することを確認する。

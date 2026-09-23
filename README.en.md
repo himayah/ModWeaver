@@ -2,7 +2,7 @@
 
 [日本語](README.md) | **English**
 
-[![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
@@ -34,7 +34,7 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
 
 ## Requirements
 
-- **Python 3.7 or later** (no extra `pip install` needed)
+- **Python 3.10 or later** (no extra `pip install` needed)
 - **Only for `--format mp3`: ffmpeg** (built with **libopenmpt** and **libmp3lame**)
   - The MP3 is made by writing the song as `.xm`, playing it with ffmpeg's built-in libopenmpt (OpenMPT's playback engine) and encoding it to MP3. ModWeaver itself has no audio playback engine.
   - Put `ffmpeg` on your PATH, or set the environment variable `MODWEAVER_FFMPEG` to the path of the executable.
@@ -231,7 +231,7 @@ The generated `.mod` / `.xm` / `.s3m` / `.it` files play right away in the track
 Channel roles and instruments differ per genre and are defined as a `ChannelPlan` in `mod_weaver/genres/*.py`.
 Below is the layout of the default `nostalgic` genre (a balanced stereo image following the Amiga's fixed panning:
 1: left, 2: right, 3: right, 4: left). For other genres, see `CHANNEL_PLAN` in each `genres/*.py`, or the per-genre
-sections (ChannelPlan / instrument kit) of [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) (in Japanese).
+sections in §6 of [DESIGN.md](DESIGN.md) (in Japanese).
 
 | Channel | Pan | Part | Instruments | Role |
 |:---|:---|:---|:---|:---|
@@ -256,18 +256,13 @@ sections (ChannelPlan / instrument kit) of [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.
 │                       #   (nostalgic / suspense-* / march / swing-jazz / prog-rock /
 │                       #   trap / future-bass / maqam / free-jazz / minimalism / orchestral)
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
-├── DESIGN.md               # Original detailed design of the nostalgic genre: rework points, acoustics, music theory
-├── EXTENSION_SPEC.md       # Earliest multi-genre concept (superseded by EXTENSION_DESIGN.md)
-├── EXTENSION_DESIGN.md     # Multi-genre engine, first stage (Phases 1–3, four genres; implemented)
-├── CORE_EXTENSION_DESIGN.md # Second-stage core extensions (EXT-1–6); Phases 4a–4e all implemented
-├── GENRE_DESIGN_V2.md      # Detailed design of the eight second-stage genres; all implemented
-├── FORMAT_TEMPO_DESIGN.md  # Output format (--format) and tempo (--tempo) design; implemented
-├── CLI_STAGE2_DESIGN.md    # Genre auto-discovery, --genre random, --version etc.; implemented
+├── DESIGN.md          # Design document (the current specification; Japanese)
+├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)
 ├── README.md          # README (Japanese; shown first on GitHub)
 └── README.en.md       # This document (English)
 ```
 
-The design documents are written in Japanese. For the acoustic analysis and the rework of the original issues (problems in the Copilot-generated code), see [DESIGN.md](DESIGN.md). The first-stage implementation design (nostalgic/suspense/march) is in [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md); sample synthesis (`core/synth.py`) is in [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8, and the second-stage core extensions (EXT-1–6, all implemented) in [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md); the genres (swing-jazz, prog-rock, orchestral and the rest of the eight, all implemented) are in [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md); output formats and tempo in [FORMAT_TEMPO_DESIGN.md](FORMAT_TEMPO_DESIGN.md); genre auto-discovery and the CLI improvements in [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md).
+The design documents are written in Japanese: [DESIGN.md](DESIGN.md) describes the current specification, and [DESIGN_HISTORY.md](DESIGN_HISTORY.md) records why things are the way they are, earlier plans and corrections.
 
 ---
 

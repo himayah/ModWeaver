@@ -1,5 +1,5 @@
 """各ジャンルが「表示している BPM」で実際に鳴ることを実プレイヤー（libopenmpt）の再生時間で検査する
-（FORMAT_TEMPO_DESIGN §1.3。swing-jazz が表示の2倍の速さで鳴っていた不具合の回帰テスト）。
+（DESIGN.md §9.2・DESIGN_HISTORY.md §9。swing-jazz が表示の2倍の速さで鳴っていた不具合の回帰テスト）。
 
 期待再生時間 = 再生される総 row 数 / (1拍の row 数) × 60 / BPM。
 trap は 32分格子（1拍=8row）だが、trap の慣習的な BPM 表記（ハーフタイムの倍で数える）に合わせて

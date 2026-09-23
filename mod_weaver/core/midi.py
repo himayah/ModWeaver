@@ -1,4 +1,4 @@
-"""General MIDI の Standard MIDI File（SMF format 1）シリアライザと構造検査（FORMAT_TEMPO_DESIGN §6）。
+"""General MIDI の Standard MIDI File（SMF format 1）シリアライザと構造検査（DESIGN.md §7.7）。
 
 目的は「ジャンルの意図（音高・リズム・構成・テンポ）を GM 音源で聴ける／DAW に持ち込めること」であり、
 サンプル音色の再現は目的外（音色は GM 音源次第）。

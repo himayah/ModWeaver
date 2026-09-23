@@ -1,4 +1,4 @@
-"""suspense-slow: 低速・重苦しい緊張（設計書 §8.3）。
+"""suspense-slow: 低速・重苦しい緊張（DESIGN.md §6.3）。
 
 構成: hush → pedal → phrygian → pedal → shock → aftermath（``order=[0,1,2,1,3,4]``、約 85 秒）。
 文法の核は「心拍」「無音→突発アクセント（anvil）」「ペダルの持続音＋アルペジオ弦」。

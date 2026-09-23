@@ -1,4 +1,4 @@
-"""prog-rock の契約・可変小節構造・検査クリーン性（GENRE_DESIGN_V2.md §2）。"""
+"""prog-rock の契約・可変小節構造・検査クリーン性（DESIGN.md §6.7）。"""
 from __future__ import annotations
 
 import pytest

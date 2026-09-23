@@ -1,9 +1,9 @@
-"""コマンドライン入口（設計書 §9、§10）。
+"""コマンドライン入口（DESIGN.md §8）。
 
 終了コード: 0=成功 / 2=引数エラー・未登録 genre・ジャンルが対応しないテンポ / 3=生成・検査エラー / 4=I/O エラー /
 5=外部ツール（mp3 出力の ffmpeg）が無い・機能不足 / 1=想定外例外。
 ログは stderr（WARNING 以上）、バナーは stdout。
-画面表示（usage・ジャンル一覧・バナー）は既定で日本語、``-e`` / ``--english`` で英語（CLI_STAGE2_DESIGN §12）。
+画面表示（usage・ジャンル一覧・バナー）は既定で日本語、``-e`` / ``--english`` で英語（DESIGN.md §8.5）。
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def genre_listing(lang: str = "ja") -> str:
 
 
 def pick_random_genre(tempo: Optional[TempoRequest] = None) -> str:
-    """``--genre random`` の選択（CLI_STAGE2_DESIGN §5）。候補は正規 id のみ（別名で確率が偏らないように）。
+    """``--genre random`` の選択（DESIGN.md §8.3）。候補は正規 id のみ（別名で確率が偏らないように）。
 
     ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけを候補にする。乱数は seed と独立。"""
     candidates = [
@@ -244,11 +244,11 @@ def main(
     """CLI 本体。``invocation`` は再現コマンドの先頭（既定 ``python -m mod_weaver.cli``）。"""
     _configure_logging()
     argv = sys.argv[1:] if argv is None else list(argv)
-    # usage の言語は解析前に決める必要があるので -e だけ先に拾う（CLI_STAGE2_DESIGN §12）
+    # usage の言語は解析前に決める必要があるので -e だけ先に拾う（DESIGN.md §8.2）
     lang = "en" if any(_is_english_flag(a) for a in argv) else "ja"
     parser = build_parser(prog, lang)
     if not [a for a in argv if not _is_english_flag(a)]:
-        parser.print_help()           # 引数なし（-e だけも含む）: --help と同じ usage を出して終了（§4）
+        parser.print_help()           # 引数なし（-e だけも含む）: --help と同じ usage を出して終了（DESIGN.md §8.2）
         return 0
     try:
         args = parser.parse_args(argv)

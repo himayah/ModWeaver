@@ -1,4 +1,4 @@
-"""future-bass の契約・サイドチェイン・検査クリーン性（GENRE_DESIGN_V2.md §7）。"""
+"""future-bass の契約・サイドチェイン・検査クリーン性（DESIGN.md §6.9）。"""
 from __future__ import annotations
 
 import pytest

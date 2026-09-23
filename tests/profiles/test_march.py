@@ -1,4 +1,4 @@
-"""march の文法・音域・契約（設計書 §8.5、§11.3）。"""
+"""march の文法・音域・契約（DESIGN.md §6.5、§10）。"""
 from __future__ import annotations
 
 import pytest

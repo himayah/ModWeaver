@@ -1,8 +1,8 @@
-"""可変小節・ポリメトリック補助（CORE_EXTENSION_DESIGN §4.2、EXT-2）。
+"""可変小節・ポリメトリック補助（DESIGN.md §4.7、EXT-2）。
 
 可変長 measure と ``D00`` 自動挿入そのものは ``model.ChordSlot.rows``／``GenreProfile.variable_meter``／
 ``engine.compose_song`` の側で完結しており、本モジュールに専用クラスは無い（設計段階の簡略化。
-CORE_EXTENSION_DESIGN §0 参照）。ポリメトリック合成（minimalism 等）向けの折返しヘルパーのみを置く。
+DESIGN_HISTORY.md §7.2 参照）。ポリメトリック合成（minimalism 等）向けの折返しヘルパーのみを置く。
 """
 from __future__ import annotations
 

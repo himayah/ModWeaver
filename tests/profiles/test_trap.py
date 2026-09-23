@@ -1,4 +1,4 @@
-"""trap の契約・サブステップ・808グライド・検査クリーン性（GENRE_DESIGN_V2.md §4）。"""
+"""trap の契約・サブステップ・808グライド・検査クリーン性（DESIGN.md §6.8）。"""
 from __future__ import annotations
 
 import pytest
@@ -84,7 +84,7 @@ def test_hat_retrigger_occurs_across_seeds():
 @pytest.mark.parametrize("seed", SEEDS[:10])
 def test_intro_has_no_808_or_snare(seed):
     """intro（order[0]）は 808/snare 無音。row 0 の CH_808 には F<bpm> テンポセルが入りうる
-    （空きチャンネルへ挿入される。§4.0.1）ため sample 番号で判定する。"""
+    （空きチャンネルへ挿入される。DESIGN.md §3.2）ため sample 番号で判定する。"""
     song, _ = build(seed)
     pat = song.patterns[0]     # intro
     for r in range(pat.rows):

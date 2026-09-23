@@ -1,4 +1,4 @@
-"""free-jazz: フリージャズ / 現代無調音楽（GENRE_DESIGN_V2.md §8）。
+"""free-jazz: フリージャズ / 現代無調音楽（DESIGN.md §6.11）。
 
 和声は `harmony.voice()`／`CHORD_QUALITIES` を経由せず、隣接半音を密集させたトーンクラスターを
 ``ChordDef`` として直接手組みする（march/nostalgic/maqam と同じ「明示的ボイシング」パターン）。
@@ -35,7 +35,7 @@ from ..profiles.base import GenreProfile
 from ..profiles.registry import register_profile
 
 # ============================================================
-# 音域・和声（GENRE_DESIGN_V2.md §8.2）
+# 音域・和声（DESIGN.md §6.11）
 # ============================================================
 
 BASS_REG = (0, 11)                            # arco_bass（shift=-12 → t=12..23）
@@ -66,7 +66,7 @@ def _movement_slots(rng: random.Random, kind: str, n_clusters: int = 4) -> list[
 
 
 # ============================================================
-# sample 番号 / ChannelPlan（GENRE_DESIGN_V2.md §8.3）
+# sample 番号 / ChannelPlan（DESIGN.md §6.11）
 # ============================================================
 
 PIANO_CL, ARCO_BASS, SAX_SCR, CYM_SWELL = 1, 2, 3, 4
@@ -195,7 +195,7 @@ class FreeJazzProfile(GenreProfile):
 
     def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: FreeJazzState, rng: RngStreams) -> None:
         # sustain 楽器（piano_cluster/arco_bass はループではないが sax/perc 含め全て自然減衰）を
-        # 念のため消音してから、EXT-5 のテンポカーブを描画する（row 単位の Fxx 挿入。§8.6）。
+        # 念のため消音してから、EXT-5 のテンポカーブを描画する（row 単位の Fxx 挿入。DESIGN.md §4.9）。
         for ch in (CH_PIANO, CH_BASS, CH_SAX, CH_PERC):
             pattern.put(pattern.rows - 1, ch, Cell(None, 0, vol=0))
         for start_bpm, end_bpm, start_row, end_row, curve_type in TEMPO_CURVES[pctx.kind]:

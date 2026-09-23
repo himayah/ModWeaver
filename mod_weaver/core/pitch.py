@@ -1,4 +1,4 @@
-"""音高の表現（設計書 §5.1）。
+"""音高の表現（DESIGN.md §3.1・§4.1）。
 
 - tracker note index ``t``: 0=C-1 … 35=B-3（Period 表の並び）。Cell に格納する値
 - logical note index ``n``: 実際に鳴る音高。``n = t + shift``（shift は SampleSpec）
@@ -131,7 +131,7 @@ CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット
 
 
 # ============================================================
-# マイクロチューニング（CORE_EXTENSION_DESIGN §4.3、EXT-3）
+# マイクロチューニング（DESIGN.md §4.1、EXT-3）
 # ============================================================
 
 FINETUNE_CENTS = 100.0 / 12.8   # 1 finetune ステップ ≈ 7.8125 セント（-8..+7 の等間隔仕様。ProTracker規格）

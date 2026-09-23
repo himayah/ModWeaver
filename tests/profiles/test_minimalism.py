@@ -1,4 +1,4 @@
-"""minimalism の契約・ポリメトリック・検査クリーン性（GENRE_DESIGN_V2.md §6）。"""
+"""minimalism の契約・ポリメトリック・検査クリーン性（DESIGN.md §6.12）。"""
 from __future__ import annotations
 
 import pytest

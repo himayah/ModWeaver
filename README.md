@@ -2,9 +2,9 @@
 
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Format](https://img.shields.io/badge/Format-ProTracker%20MOD%20(4ch)-green.svg)](https://openmpt.org/)
+[![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でProTracker形式（および FastTracker II `.xm` 形式）トラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）、ミニマル（`minimalism`）、フルオーケストラ（`orchestral`、8chマルチチャンネル `.xm` 出力）など、計12ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）、ミニマル（`minimalism`）、フルオーケストラ（`orchestral`、8chマルチチャンネル）など、計12ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -23,14 +23,22 @@
   - **Twilight Ambient Pad**: 整数周期設計によりクリックノイズが一切生じない、温かいアナログシンセ・ストリングス（完全シームレスループ）。
   - **Warm Mellow Bass**: 丸く深みのあるアコースティック／Lo-Fiサブベース。
   - **Vintage Lo-Fi Drums**: ピッチ降下キック、温かいレトロスネア、繊細なクローズドハイハット。
-- **標準ProTracker 4ch MOD準拠（一部ジャンルは FastTracker II `.xm` 8ch出力）**:
-  ほとんどのジャンルは Amiga ProTracker（`M.K.` マジックタグ）4ch MOD 完全準拠で、現代のあらゆるトラッカーソフトやメディアプレイヤーでネイティブ再生できます。`orchestral` のみ4chでは表現しきれない8パート編成のため FastTracker II `.xm` 形式（8ch）で出力します（`.xm` 出力は独立パーサでの自己検証まで実施済みですが、実トラッカーソフトでの再生確認は未了です）。
+- **6つの出力形式（`--format`）**:
+  既定は Amiga ProTracker 4ch MOD（`M.K.`）。4ch 以外のジャンル（`orchestral` の 8ch）は FastTracker 系の多チャンネル MOD（`8CHN`）になります。ほかに `.xm`／`.s3m`／`.it`（トラッカー形式）、General MIDI の `.mid`（DAW や GM 音源で鳴らせる）、`.mp3`（ffmpeg で音声化）を選べます。トラッカー形式はすべて OpenMPT の再生エンジン（libopenmpt）で実際に再生し、MOD と同じ音高・長さで鳴ることを自動テストで確認しています。
+- **テンポ指定（`--tempo`）**:
+  `--tempo 120` のように BPM を固定するか、`--tempo 80-100` のように範囲を指定してその中からランダムに決められます。同じシードならテンポだけが違う「同じ曲」になります。
 
 ---
 
 ## 動作要件
 
 - **Python 3.7 以上**（追加の `pip install` は不要です）
+- **`--format mp3` を使う場合のみ: ffmpeg**（**libopenmpt** と **libmp3lame** を有効にしてビルドされたもの）
+  - MP3 は、曲をいったん `.xm` にして ffmpeg 内蔵の libopenmpt（OpenMPT の再生エンジン）で再生し、MP3 に符号化して作ります。ModWeaver 自身は音声の再生エンジンを持ちません。
+  - `ffmpeg` を PATH に通すか、環境変数 `MODWEAVER_FFMPEG` に実行ファイルのパスを指定してください。
+  - Windows では [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) の **full** ビルド等が libopenmpt を含みます（essentials ビルドには含まれない場合があります）。対応を確認するには `ffmpeg -hide_banner -demuxers` の出力に `libopenmpt` が、`ffmpeg -hide_banner -encoders` の出力に `libmp3lame` があることを確かめてください。
+  - ffmpeg が見つからない／必要な機能が無い場合は、何が足りないかを表示して終了コード `5` で終了します（ファイルは作られません）。
+  - `.mp3` 以外の形式には ffmpeg は不要です。
 
 ---
 
@@ -45,9 +53,10 @@ python modweaver.py
 実行例：
 ```text
 ==================================================
-  TwilightPad Procedural MOD Generator
+  ModWeaver: Nostalgic
 ==================================================
 Genre       : nostalgic
+Format      : mod
 Seed        : 732501
 Tempo       : BPM 90
 Theme A     : Step-Down (Nostalgic Descent) -> Fmaj7 - Em7 - Dm7 - Cmaj7
@@ -83,8 +92,25 @@ python modweaver.py --genre future-bass
 python modweaver.py --genre maqam
 python modweaver.py --genre free-jazz
 python modweaver.py --genre minimalism
-python modweaver.py --genre orchestral   # .xm（FastTracker II）形式で出力される
+python modweaver.py --genre orchestral   # 8ch。既定の mod では 8CHN 形式
 ```
+
+#### 出力形式を選ぶ（`--format` / `-f`。省略時は `mod`）:
+```bash
+python modweaver.py --format xm          # FastTracker II
+python modweaver.py --format s3m         # Scream Tracker 3
+python modweaver.py --format it          # Impulse Tracker
+python modweaver.py --format midi        # General MIDI（拡張子は .mid）
+python modweaver.py --format mp3         # MP3（ffmpeg が必要。動作要件を参照）
+```
+出力先を省略した場合の拡張子は形式に合わせて変わります（例: `nostalgic/nostalgic_732501.it`）。
+
+#### テンポを指定する（`--tempo` / `-t`。省略時はジャンルごとに自動）:
+```bash
+python modweaver.py --tempo 120          # BPM 120 で生成
+python modweaver.py --tempo 80-100       # 80〜100 の範囲からランダムに決める
+```
+範囲指定のとき、実際に選ばれた BPM はバナーの `Tempo` 行に表示され、再現コマンドには確定した値（例: `--tempo 92`）が出ます。
 
 #### 指定できるジャンル一覧を確認する:
 ```bash
@@ -98,10 +124,27 @@ python modweaver.py --list-genres
 | オプション | 短縮形 | 既定値 | 説明 |
 |:---|:---|:---|:---|
 | `--genre` | `-g` | `nostalgic` | 生成するジャンル id（下表参照）。未登録の id を指定するとエラー終了（コード 2） |
-| `--seed` | `-s` | 乱数（100000〜999999） | 再現性のためのシード値（任意の整数、負値も可）。同じ genre + seed は常に同一バイナリを出力する |
-| `--output` | `-o` | `<ジャンル名>/<ジャンル名>_<シード>.mod`（例: `nostalgic/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力し、自動整理は行わない（存在しない親フォルダがあればエラー終了） |
+| `--seed` | `-s` | 乱数（100000〜999999） | 再現性のためのシード値（任意の整数、負値も可）。同じ genre + seed（+ format + tempo）は常に同一バイナリを出力する |
+| `--format` | `-f` | `mod` | 出力形式: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3`（下表参照） |
+| `--tempo` | `-t` | ジャンルごとに自動 | BPM（`120`）または範囲（`80-100`、範囲内からランダム）。32〜255。ジャンルが対応できない範囲だとエラー終了（コード 2）、一部だけ外れていれば対応範囲に切り詰めて警告 |
+| `--output` | `-o` | `<ジャンル名>/<ジャンル名>_<シード>.<拡張子>`（例: `nostalgic/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力し、自動整理は行わない（存在しない親フォルダがあればエラー終了） |
 | `--list-genres` | – | – | 指定できる全ジャンルの id・別名・説明を一覧表示して終了（コード 0）。生成は行わない |
 | `--help` | `-h` | – | 使い方とオプション一覧（ジャンル一覧を含む）を表示して終了（コード 0） |
+
+#### 出力形式
+
+| `--format` | 拡張子 | チャンネル数 | 備考 |
+|:---|:---|:---|:---|
+| `mod`（既定） | `.mod` | 4（`M.K.`）／それ以外は `xCHN` | 4ch 以外（`orchestral` の 8ch）は FastTracker 系の多チャンネル MOD。OpenMPT・MilkyTracker・libxmp 等で再生できるが、本家 ProTracker／Amiga 実機では再生不可。サンプル単位のステレオ配置（orchestral）は失われ、プレイヤー既定の L R R L 定位になる |
+| `xm` | `.xm` | 1〜32 | 4ch ジャンルは Amiga 風の L R R L（左右幅は控えめ）、orchestral は楽器ごとの定位 |
+| `s3m` | `.s3m` | 1〜16 | 同上（チャンネル定位で表現） |
+| `it` | `.it` | 1〜64 | 同上 |
+| `midi` | `.mid` | 制限なし | General MIDI（SMF format 1）。音色は各ジャンルが楽器ごとに指定した GM 音色で、サンプル音色そのものではない。グライド（ポルタメント）は目標音への即時切替、ビブラートはモジュレーション（CC1）で近似 |
+| `mp3` | `.mp3` | 1〜32 | 44.1kHz ステレオ 192kbps。**ffmpeg が必要**（動作要件を参照） |
+
+#### テンポ（BPM）の意味
+
+`--tempo` とバナーの `Tempo` は **4分音符の BPM** です（トラッカーの `Fxx` の値と同じ）。例外として `trap` は 32分音符の細かい格子で書かれたハーフタイムのジャンルなので、表示 BPM は trap の慣習どおりの数え方（例: 150 → ハーフタイムで 75 に感じる）です。`free-jazz` はテンポが連続的に揺れ動くジャンルで、`--tempo` は開始時の BPM を決めます（以降のテンポ変化は同じ比率で拡大縮小。指定できるのは 44〜163）。
 
 #### 指定できるジャンル
 
@@ -118,7 +161,7 @@ python modweaver.py --list-genres
 | `maqam` | – | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
 | `free-jazz` | – | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 | `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
-| `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル（`.xm`形式）、弦+木管+金管+ティンパニ |
+| `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル、弦+木管+金管+ティンパニ |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
 
@@ -127,14 +170,15 @@ python modweaver.py --list-genres
 | コード | 意味 |
 |:---|:---|
 | `0` | 成功（`--help` / `--list-genres` を含む） |
-| `2` | 引数エラー、または未登録のジャンル指定 |
+| `2` | 引数エラー、未登録のジャンル指定、またはジャンルが対応できないテンポ指定 |
 | `3` | 生成・構造検査エラー |
 | `4` | 出力エラー（書き込み不可など） |
+| `5` | `--format mp3` で ffmpeg が見つからない、または libopenmpt / libmp3lame を含まない |
 | `1` | 想定外の例外（スタックトレースを表示） |
 
 ### 3. 再生・試聴方法
 
-生成された `.mod` ファイルは、以下のトラッカーやプレイヤーですぐに再生可能です：
+生成された `.mod`／`.xm`／`.s3m`／`.it` ファイルは、以下のトラッカーやプレイヤーですぐに再生可能です（`.mid` は GM 音源・DAW・メディアプレイヤーで、`.mp3` は一般の音楽プレイヤーで再生できます）：
 
 - **推奨トラッカー（編集・詳細確認用）**:
   - [OpenMPT (Open ModPlug Tracker)](https://openmpt.org/) (Windows)
@@ -173,16 +217,18 @@ python modweaver.py --list-genres
 ├── modweaver.py       # トップレベル起動スクリプト（`--genre` 対応。省略時は nostalgic）
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
-│   │                   #        可変小節(EXT-2)・writer/verify
+│   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /
+│   │                   #        timeline / render(mp3)）
 │   └── profiles/      # 可変層: ジャンルごとの GenreProfile
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
-│                       #        trap / future-bass / maqam / free-jazz / minimalism）
+│                       #        trap / future-bass / maqam / free-jazz / minimalism / orchestral）
 ├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md               # nostalgic ジャンルの改修観点・音響工学・音楽理論の詳細設計書（原初版）
 ├── EXTENSION_SPEC.md       # 多ジャンル拡張の最初期構想（検討書。EXTENSION_DESIGN.md が置き換え済み）
 ├── EXTENSION_DESIGN.md     # マルチジャンル対応エンジン第一段階の設計書（Phase 1〜3・4ジャンル分・実装済み）
 ├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a〜4e（EXT-1〜6）全て実装済み
 ├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。8ジャンル全て実装済み
+├── FORMAT_TEMPO_DESIGN.md  # 出力形式選択（--format）・テンポ指定（--tempo）の設計書。実装済み
 └── README.md          # 本ドキュメント
 ```
 

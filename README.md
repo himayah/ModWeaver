@@ -1,10 +1,12 @@
 # ModWeaver
 
+**日本語** | [English](README.en.md)
+
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）、ミニマル（`minimalism`）、フルオーケストラ（`orchestral`、8chマルチチャンネル）など、計12ジャンルを `--genre` で切り替えて生成できます（旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、サスペンス（`suspense-slow` / `suspense-chase`）、行進曲（`march`）、スウィング・ジャズ（`swing-jazz`）、変拍子プログレ（`prog-rock`）、トラップ（`trap`）、フューチャーベース（`future-bass`）、中東マカーム（`maqam`）、フリージャズ（`free-jazz`）、ミニマル（`minimalism`）、フルオーケストラ（`orchestral`、8chマルチチャンネル）など、計12ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -46,14 +48,16 @@
 
 ### 1. 実行方法
 
-#### 新しい曲をランダム生成する（実行するたびに変化。`--genre` 省略時は既定の `nostalgic`）:
+引数を何も付けずに `python modweaver.py` と実行すると、使い方（`--help` と同じ内容）を表示して終了します。曲を作るときは下のようにオプションを指定してください。
+
+#### 新しい曲をランダム生成する（実行するたびに変化）:
 ```bash
-python modweaver.py
+python modweaver.py --genre nostalgic
 ```
 実行例：
 ```text
 ==================================================
-  ModWeaver: Nostalgic
+  ModWeaver: TwilightPad Procedural
 ==================================================
 Genre       : nostalgic
 Format      : mod
@@ -70,7 +74,7 @@ Success! To reproduce this exact song, run:
 
 出力先を省略すると、`<ジャンル名>/<ジャンル名>_<シード>.mod`（例: `nostalgic/nostalgic_732501.mod`）にジャンルごとのサブフォルダへ自動整理されます（フォルダが無ければ作成）。
 
-#### お気に入りの曲をシード指定で再生成する:
+#### お気に入りの曲をシード指定で再生成する（`--genre` を省略すると既定の `nostalgic`）:
 ```bash
 python modweaver.py --seed 732501
 ```
@@ -95,6 +99,13 @@ python modweaver.py --genre minimalism
 python modweaver.py --genre orchestral   # 8ch。既定の mod では 8CHN 形式
 ```
 
+#### ジャンルをランダムに選ぶ（`--genre random` / `-g r`）:
+```bash
+python modweaver.py --genre random
+python modweaver.py -g r --tempo 120     # テンポ 120 に対応できるジャンルの中から選ぶ
+```
+選ばれたジャンルはバナーに `Genre       : trap (random)` のように表示され、再現コマンドには選ばれたジャンル名（例: `--genre trap`）が出ます。ジャンルの選択は `--seed` とは無関係に毎回ランダムです（同じ曲をもう一度作るときは再現コマンドを使ってください）。
+
 #### 出力形式を選ぶ（`--format` / `-f`。省略時は `mod`）:
 ```bash
 python modweaver.py --format xm          # FastTracker II
@@ -117,18 +128,28 @@ python modweaver.py --tempo 80-100       # 80〜100 の範囲からランダム�
 python modweaver.py --list-genres
 ```
 
+#### バージョンを確認する:
+```bash
+python modweaver.py --version
+```
+```text
+ModWeaver 1.1.0
+https://github.com/himayah/ModWeaver
+```
+
 ### 2. コマンドラインオプション
 
-`python modweaver.py` / `python -m mod_weaver` のどちらも同じオプションを受け付けます。
+`python modweaver.py` / `python -m mod_weaver` のどちらも同じオプションを受け付けます。オプションを何も付けずに起動すると、`--help` と同じ使い方を表示して終了します（コード 0）。
 
 | オプション | 短縮形 | 既定値 | 説明 |
 |:---|:---|:---|:---|
-| `--genre` | `-g` | `nostalgic` | 生成するジャンル id（下表参照）。未登録の id を指定するとエラー終了（コード 2） |
+| `--genre` | `-g` | `nostalgic` | 生成するジャンル id（下表参照）。`random` / `r` なら指定できるジャンルからランダムに選ぶ（`--tempo` があればそのテンポに対応できるジャンルから）。未登録の id を指定するとエラー終了（コード 2） |
 | `--seed` | `-s` | 乱数（100000〜999999） | 再現性のためのシード値（任意の整数、負値も可）。同じ genre + seed（+ format + tempo）は常に同一バイナリを出力する |
 | `--format` | `-f` | `mod` | 出力形式: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3`（下表参照） |
 | `--tempo` | `-t` | ジャンルごとに自動 | BPM（`120`）または範囲（`80-100`、範囲内からランダム）。32〜255。ジャンルが対応できない範囲だとエラー終了（コード 2）、一部だけ外れていれば対応範囲に切り詰めて警告 |
 | `--output` | `-o` | `<ジャンル名>/<ジャンル名>_<シード>.<拡張子>`（例: `nostalgic/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力し、自動整理は行わない（存在しない親フォルダがあればエラー終了） |
 | `--list-genres` | – | – | 指定できる全ジャンルの id・別名・説明を一覧表示して終了（コード 0）。生成は行わない |
+| `--version` | `-v` | – | バージョンと GitHub リポジトリの URL を表示して終了（コード 0） |
 | `--help` | `-h` | – | 使い方とオプション一覧（ジャンル一覧を含む）を表示して終了（コード 0） |
 
 #### 出力形式
@@ -161,16 +182,18 @@ python modweaver.py --list-genres
 | `maqam` | – | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
 | `free-jazz` | – | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 | `minimalism` | – | ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る |
-| `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル、弦+木管+金管+ティンパニ |
+| `orchestral` | – | フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ |
 
 最新の一覧は `python modweaver.py --list-genres` または `python modweaver.py --help` でも確認できます（今後ジャンルが追加された場合も、このコマンドの出力が常に正となります）。
+
+ジャンルは `mod_weaver/genres/` に置いたモジュール（1ファイル＝1ジャンル）から起動のたびに自動で読み込まれます。新しいジャンルは、このディレクトリに `@register_profile` 付きの `GenreProfile` サブクラス（`id` と1行の `description` を持つ）を定義した `.py` を置くだけで追加できます（詳細は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) §3）。
 
 #### 終了コード
 
 | コード | 意味 |
 |:---|:---|
-| `0` | 成功（`--help` / `--list-genres` を含む） |
-| `2` | 引数エラー、未登録のジャンル指定、またはジャンルが対応できないテンポ指定 |
+| `0` | 成功（引数なしでの起動、`--help` / `--list-genres` / `--version` を含む） |
+| `2` | 引数エラー、未登録のジャンル指定、またはジャンルが対応できないテンポ指定（`--genre random` で対応できるジャンルが1つも無い場合を含む） |
 | `3` | 生成・構造検査エラー |
 | `4` | 出力エラー（書き込み不可など） |
 | `5` | `--format mp3` で ffmpeg が見つからない、または libopenmpt / libmp3lame を含まない |
@@ -190,15 +213,15 @@ python modweaver.py --list-genres
   - [Audacious](https://audacious-media-player.org/)
 
 > **Tip (OpenMPTでの再生)**:
-> OpenMPTで開くと、Pattern 0〜3 のノートデータ、使用サンプル（ヘッダーとループポイント）、BPM 92の設定、および4チャンネルの演奏状況をリアルタイムに確認・編集できます。
+> OpenMPTで開くと、各パターンのノートデータ、使用サンプル（ヘッダーとループポイント）、テンポ（BPM）の設定、および各チャンネルの演奏状況をリアルタイムに確認・編集できます。
 
 ---
 
 ## トラック・パート構成 (4 Channels)
 
-チャンネル役割・使用音色はジャンルごとに異なる `ChannelPlan` として `profiles/*.py` に定義されています。
+チャンネル役割・使用音色はジャンルごとに異なる `ChannelPlan` として `mod_weaver/genres/*.py` に定義されています。
 以下は既定ジャンル `nostalgic` の構成例です（Amigaのステレオ定位特性 1:左, 2:右, 3:右, 4:左 に合わせた
-バランスの良い音像設計）。他ジャンルの構成は各 `profiles/*.py` の `CHANNEL_PLAN`、または
+バランスの良い音像設計）。他ジャンルの構成は各 `genres/*.py` の `CHANNEL_PLAN`、または
 [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) の各ジャンル節（ChannelPlan／音色キット）を参照してください。
 
 | チャンネル | 定位 | パート | 使用音色 | 役割 |
@@ -214,12 +237,13 @@ python modweaver.py --list-genres
 
 ```text
 .
-├── modweaver.py       # トップレベル起動スクリプト（`--genre` 対応。省略時は nostalgic）
+├── modweaver.py       # トップレベル起動スクリプト（引数なしなら使い方を表示）
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
 │   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /
 │   │                   #        timeline / render(mp3)）
-│   └── profiles/      # 可変層: ジャンルごとの GenreProfile
+│   ├── profiles/      # ジャンルの仕組み: GenreProfile 基底・登録簿（genres/ の自動検出）・ジャンル共通の補助
+│   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録）
 │                       #        （nostalgic / suspense-* / march / swing-jazz / prog-rock /
 │                       #        trap / future-bass / maqam / free-jazz / minimalism / orchestral）
 ├── nostalgic/         # 生成されたMOD音楽ファイル（既定出力先。例: nostalgic_732501.mod）
@@ -229,10 +253,12 @@ python modweaver.py --list-genres
 ├── CORE_EXTENSION_DESIGN.md # 第二段階 core 拡張（EXT-1〜6）の設計書。Phase 4a〜4e（EXT-1〜6）全て実装済み
 ├── GENRE_DESIGN_V2.md      # 第二段階8ジャンルの詳細設計。8ジャンル全て実装済み
 ├── FORMAT_TEMPO_DESIGN.md  # 出力形式選択（--format）・テンポ指定（--tempo）の設計書。実装済み
-└── README.md          # 本ドキュメント
+├── CLI_STAGE2_DESIGN.md    # ジャンル自動検出・--genre random・--version 等の設計書。実装済み
+├── README.md          # 本ドキュメント（日本語）
+└── README.en.md       # 英語版 README
 ```
 
-より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。第一段階（nostalgic/suspense/march）の実装詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8、第二段階の core 拡張（EXT-1〜6、全て実装済み）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)、各ジャンル（swing-jazz/prog-rock/orchestral 等、8ジャンル全て実装済み）の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md) をご参照ください。
+より詳細な音響工学的分析や初期課題（Copilot生成コードの問題点）に対する改修観点については、[DESIGN.md](DESIGN.md) をご参照ください。第一段階（nostalgic/suspense/march）の実装詳細設計は [EXTENSION_DESIGN.md](EXTENSION_DESIGN.md)、サンプル音源合成の仕組み（`core/synth.py`）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md) §8、第二段階の core 拡張（EXT-1〜6、全て実装済み）は [CORE_EXTENSION_DESIGN.md](CORE_EXTENSION_DESIGN.md)、各ジャンル（swing-jazz/prog-rock/orchestral 等、8ジャンル全て実装済み）の詳細設計は [GENRE_DESIGN_V2.md](GENRE_DESIGN_V2.md)、出力形式とテンポ指定は [FORMAT_TEMPO_DESIGN.md](FORMAT_TEMPO_DESIGN.md)、ジャンルの自動検出と CLI の改善は [CLI_STAGE2_DESIGN.md](CLI_STAGE2_DESIGN.md) をご参照ください。
 
 ---
 

@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | `次の検討事項.txt` 第２段階（① 引数なしで usage、② `--list-genres` の動的化、③ `--genre random`、④ `--version`、⑤ 英語版 README） |
 | 前提ドキュメント | [FORMAT_TEMPO_DESIGN.md](FORMAT_TEMPO_DESIGN.md)（第１段階）、[EXTENSION_DESIGN.md](EXTENSION_DESIGN.md) §7.4（プロファイル登録簿） |
-| ステータス | **実装中**（branch `stage2-cli`）。§9 の論点は 2026-09-24 に決定済み |
+| ステータス | **実装済み**（branch `stage2-cli`）。§9 の論点は 2026-09-24 に決定済み、実装で判明したことは §11 |
 | 作成日 | 2026-09-24 |
 
 ---
@@ -276,3 +276,16 @@ https://github.com/himayah/ModWeaver
 3. `--genre random` / `r`
 4. `--version` / `-v`
 5. README（日本語版の更新 → 英語版の作成）
+
+---
+
+## 11. 実装で判明したこと
+
+1. **`discover()` の WARNING はテストの実行順に影響される**: `cli.main` が `mod_weaver` ロガーを `propagate=False`＋独自ハンドラに
+   するため、その後に caplog で WARNING を捕まえるテストは失敗する。`test_registry.py` では既存の `test_engine.py` と同じく
+   ロガーを元に戻すフィクスチャを使う。
+2. **`orchestral` の seed 11 は検査 WARNING（V15: 左右の同時合計音量が上限超過）を出す**。第２段階の変更前（main）でも同じで、
+   本段階とは無関係の既存の挙動。`--genre random` のテストは選ばれるジャンルが変わるため stderr が空であることを求めない。
+   V15 自体の扱いは本段階の範囲外（必要なら別途検討）。
+3. **README の実行例のバナーが実際と違っていた**: 表示名は `ModWeaver: Nostalgic` ではなく `ModWeaver: TwilightPad Procedural`。
+   OpenMPT の Tip にあった「BPM 92」も曲ごとに変わるので一般的な書き方に直した。

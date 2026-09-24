@@ -11,6 +11,7 @@ import argparse
 import logging
 import random
 import re
+import shutil
 import sys
 import traceback
 import unicodedata
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from . import __url__, __version__, profiles
+from .profiles import registry
 from .core import formats
 from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
 from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
@@ -37,7 +39,7 @@ MESSAGES = {
         "usage_prefix": "使い方: ",
         "options_title": "オプション",
         "help": "この使い方を表示して終了する",
-        "genre": "ジャンル id（既定: {default}）。{random} ならランダムに選ぶ。選択肢: {ids}（下のジャンル一覧を参照）",
+        "genre": "ジャンル id（既定: {default}）。{random} ならランダムに選ぶ（選択肢は下のジャンル一覧）",
         "seed": "再現用の乱数シード（任意の整数。省略時はランダム）",
         "format": "出力形式（既定: {default}）。選択肢: {names}",
         "output": "出力先パス（既定: output/<ジャンル>_<シード>.<拡張子>。拡張子は --format に従う）",
@@ -46,9 +48,10 @@ MESSAGES = {
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
-        "epilog_head": "ジャンル一覧:",
-        "epilog_tail": "--list-genres でこの一覧だけを表示して終了します",
+        "epilog_head": "ジャンル一覧（{n} 種類）:",
+        "epilog_tail": "各ジャンルの説明は --list-genres で表示します",
         "alias": "別名",
+        "categories": {"mood": "気分", "genre": "ジャンル", "style": "〜風"},
         "genre_label": "ジャンル",
         "format_label": "出力形式",
         "seed_label": "シード",
@@ -63,8 +66,7 @@ MESSAGES = {
         "usage_prefix": "usage: ",
         "options_title": "options",
         "help": "show this help message and exit",
-        "genre": "genre id (default: {default}), or {random} to pick one at random. choices: {ids} "
-                 "(see genres below)",
+        "genre": "genre id (default: {default}), or {random} to pick one at random (see the genre list below)",
         "seed": "random seed (any integer) for reproducibility (default: random)",
         "format": "output format (default: {default}). choices: {names}",
         "output": "output file path (default: output/<genre>_<seed>.<ext>, extension follows --format)",
@@ -73,9 +75,10 @@ MESSAGES = {
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
         "version": "print the version and the GitHub repository URL, then exit",
-        "epilog_head": "genres:",
-        "epilog_tail": "use --list-genres to print this list alone and exit",
+        "epilog_head": "genres ({n}):",
+        "epilog_tail": "use --list-genres to see what each genre sounds like",
         "alias": "alias",
+        "categories": {"mood": "Mood", "genre": "Genre", "style": "Style"},
         "genre_label": "Genre",
         "format_label": "Format",
         "seed_label": "Seed",
@@ -110,13 +113,38 @@ def _configure_logging() -> None:
     log.propagate = False
 
 
+def _by_category() -> list[tuple[str, list]]:
+    """登録ジャンルを区分（registry.CATEGORIES の順）ごとに id 順でまとめる。空の区分は除く。"""
+    groups = {c: [] for c in registry.CATEGORIES}
+    for p in profiles.list_profiles():
+        groups[p.category].append(p)
+    return [(c, ps) for c, ps in groups.items() if ps]
+
+
 def genre_listing(lang: str = "ja") -> str:
-    """全ジャンルの id・別名・説明を1行ずつ整形する（``--list-genres`` と ``--help`` の両方から使う）。"""
+    """``--list-genres``: 区分ごとに全ジャンルの id・別名・1行説明を整形する（DESIGN.md §8.1）。"""
     m = MESSAGES[lang]
     lines = []
-    for p in profiles.list_profiles():
-        alias = f" ({m['alias']}: {', '.join(p.aliases)})" if p.aliases else ""
-        lines.append(f"  {p.id}{alias}\n      {p.description_en if lang == 'en' else p.description}")
+    for cat, ps in _by_category():
+        if lines:
+            lines.append("")
+        lines.append(f"{m['categories'][cat]} ({cat}):")
+        for p in ps:
+            alias = f" ({m['alias']}: {', '.join(p.aliases)})" if p.aliases else ""
+            lines.append(f"  {p.id}{alias}\n      {p.description_en if lang == 'en' else p.description}")
+    return "\n".join(lines)
+
+
+def genre_ids_by_category(lang: str = "ja", width: int = 78) -> str:
+    """``--help`` 末尾用: 区分ごとの id だけの一覧（説明は ``--list-genres``）。表示幅で折り返す。"""
+    m = MESSAGES[lang]
+    lines = []
+    for cat, ps in _by_category():
+        label = f"  {m['categories'][cat]}: "
+        indent = " " * _cols(label)
+        body = _wrap(", ".join(p.id for p in ps), max(20, width - _cols(label)))
+        lines.append(label + body[0])
+        lines.extend(indent + b for b in body[1:])
     return "\n".join(lines)
 
 
@@ -177,19 +205,20 @@ def _wrap(text: str, width: int) -> list[str]:
 
 def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.ArgumentParser:
     m = MESSAGES[lang]
-    ids = ", ".join(p.id for p in profiles.list_profiles())
     names = formats.format_names()
+    width = max(40, shutil.get_terminal_size().columns - 2)
     parser = argparse.ArgumentParser(
         prog=prog,
         description=m["description"],
-        epilog=m["epilog_head"] + "\n" + genre_listing(lang) + "\n\n" + m["epilog_tail"],
+        epilog=(m["epilog_head"].format(n=len(profiles.list_profiles())) + "\n"
+                + genre_ids_by_category(lang, width) + "\n\n" + m["epilog_tail"]),
         formatter_class=_formatter_class(lang),
         add_help=False,
     )
     opts = parser.add_argument_group(m["options_title"])   # argparse 既定の見出し（英語）の代わり
     opts.add_argument("--help", "-h", action="help", help=m["help"])
     opts.add_argument("--genre", "-g", default=DEFAULT_GENRE,
-                      help=m["genre"].format(default=DEFAULT_GENRE, random="/".join(RANDOM_GENRE), ids=ids))
+                      help=m["genre"].format(default=DEFAULT_GENRE, random="/".join(RANDOM_GENRE)))
     opts.add_argument("--seed", "-s", type=int, default=None, help=m["seed"])
     opts.add_argument("--format", "-f", choices=names, default=None,
                       help=m["format"].format(default=formats.DEFAULT_FORMAT, names=", ".join(names)))

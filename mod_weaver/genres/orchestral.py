@@ -146,7 +146,6 @@ class OrchestralProfile(GenreProfile):
     rows_per_measure = 16
     channel_plan = CHANNEL_PLAN
     gm_voices = GM_VOICES
-    allow_volume_sum_over = True   # climax の8ch全合奏は V15 の目安（片側合計 ≤120）を必ず超えるが、実再生では割れない
     tempo_policy = "engine"
     rng_mode = "streams"
     strict_buffers = True

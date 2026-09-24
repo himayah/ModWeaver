@@ -161,6 +161,13 @@ Layer = Union[ToneLayer, PitchSweepLayer, NoiseLayer]
 class WeightedLayer:
     layer: Layer
     weight: float = 1.0
+    offset_ms: float = 0.0
+    # ↑ このレイヤーの鳴り始めを遅らせる（ミリ秒。OneShot 専用）。ギターのストローク（弦ごとに少しずつ
+    #   遅れて鳴る）のように、同じ Patch の中で声部の立ち上がりをずらす用途。遅らせた分だけ末尾は切れる
+
+    def __post_init__(self) -> None:
+        if self.offset_ms < 0:
+            raise SampleConstraintError(f"offset_ms must be >= 0: {self.offset_ms}")
 
 
 # ============================================================
@@ -227,6 +234,8 @@ class Patch:
                     f"{self.name}: post_filter/decay_alpha/attack_ms/tail_fade_ms are OneShot-only"
                 )
             for wl in self.layers:
+                if wl.offset_ms > 0:
+                    raise SampleConstraintError(f"{self.name}: WeightedLayer.offset_ms is OneShot-only")
                 if not isinstance(wl.layer, ToneLayer):
                     raise SampleConstraintError(
                         f"{self.name}: Loop finish only supports ToneLayer (got {type(wl.layer).__name__})"
@@ -337,8 +346,9 @@ def render(patch: Patch) -> SampleSpec:
                 sig = _render_noise(layer, rng, rate, n)
             else:
                 raise SampleConstraintError(f"{patch.name}: unknown layer type {type(layer).__name__}")
-            for i in range(n):
-                mix[i] += wl.weight * sig[i]
+            offset = round(wl.offset_ms / 1000.0 * rate)
+            for i in range(offset, n):
+                mix[i] += wl.weight * sig[i - offset]
         if patch.post_filter is not None:
             mix = _apply_post_filter(mix, patch.post_filter)
         if patch.decay_alpha is not None:

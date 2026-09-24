@@ -16,13 +16,14 @@ log = logging.getLogger(__name__)
 
 GENRES_PACKAGE = "mod_weaver.genres"                    # ここに置いた .py がジャンルとして登録される
 RESERVED_NAMES = frozenset({"random", "r"})             # --genre random / r（cli）が使うので id・別名にできない
+CATEGORIES = ("mood", "genre", "style")                 # 一覧の区分（この順に表示する）
 
 PROFILE_REGISTRY: dict[str, type[GenreProfile]] = {}   # 正規 id → クラス
 _ALIASES: dict[str, str] = {}                           # 別名 → 正規 id
 
 
 def register_profile(cls: T) -> T:
-    """``@register_profile`` でクラスを登録する（id・別名の重複・予約語、説明（日本語・英語）の欠落・複数行は ValueError）。"""
+    """``@register_profile`` でクラスを登録する（id・別名の重複・予約語、説明（日本語・英語）の欠落・複数行・未知の区分は ValueError）。"""
     pid = getattr(cls, "id", None)
     if not isinstance(pid, str) or not pid:
         raise ValueError(f"{cls.__name__}: profile id must be a non-empty string")
@@ -30,6 +31,8 @@ def register_profile(cls: T) -> T:
         desc = getattr(cls, attr, None)
         if not isinstance(desc, str) or not desc.strip() or "\n" in desc or "\r" in desc:
             raise ValueError(f"{pid}: {attr} must be a non-empty single line")
+    if getattr(cls, "category", None) not in CATEGORIES:
+        raise ValueError(f"{pid}: category must be one of {', '.join(CATEGORIES)}: {getattr(cls, 'category', None)!r}")
     for name in (pid, *cls.aliases):
         if name in RESERVED_NAMES:
             raise ValueError(f"{pid}: {name!r} is reserved and cannot be a profile id or alias")

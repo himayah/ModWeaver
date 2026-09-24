@@ -93,11 +93,25 @@ def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys, monkeypatch):
     assert not (tmp_path / "output").exists()  # 生成は行われない
 
 
-def test_genre_listing_appears_in_help(capsys):
+def test_help_lists_genre_ids_by_category_without_descriptions(capsys):
+    """ジャンルが増えても読めるよう、--help の末尾は区分ごとの id だけ（説明は --list-genres）。"""
     code, stdout, _ = run_cli(["--help"], capsys)
-    assert code == 0
+    epilog = stdout[stdout.index("ジャンル一覧"):]
+    assert code == 0 and f"ジャンル一覧（{len(cli.profiles.list_profiles())} 種類）" in epilog
+    assert "--list-genres" in epilog
     for p in cli.profiles.list_profiles():
-        assert p.id in stdout and p.description in stdout
+        assert p.id in epilog and p.description not in stdout
+
+
+def test_list_genres_is_grouped_by_category(capsys):
+    _, stdout, _ = run_cli(["--list-genres"], capsys)
+    headers = [l for l in stdout.splitlines() if l and not l.startswith(" ")]
+    order = [h.split("(")[1].rstrip("):") for h in headers]
+    assert order == [c for c in cli.registry.CATEGORIES if any(p.category == c for p in cli.profiles.list_profiles())]
+    for p in cli.profiles.list_profiles():                          # 各ジャンルは自分の区分の見出しの下にある
+        before = stdout[:stdout.index(f"  {p.id}")]
+        last_header = [l for l in before.splitlines() if l and not l.startswith(" ")][-1]
+        assert f"({p.category})" in last_header, p.id
 
 
 def test_no_arguments_prints_help_and_exits_0(tmp_path, capsys, monkeypatch):
@@ -203,25 +217,24 @@ def test_japanese_banner_is_aligned_by_display_width(tmp_path, capsys):
 
 def test_english_help_and_listing(capsys):
     code, en_help, _ = run_cli(["-e", "--help"], capsys)
-    assert code == 0 and en_help.startswith("usage:") and "options:" in en_help and "genres:" in en_help
+    assert code == 0 and en_help.startswith("usage:") and "options:" in en_help and "genres (" in en_help
     code, en_noarg, _ = run_cli(["-e"], capsys)                       # -e だけ = 引数なし扱い（英語の usage）
     assert code == 0 and en_noarg == en_help
     code, ja_help, _ = run_cli(["-h"], capsys)
-    assert ja_help.startswith("使い方:") and "オプション:" in ja_help and "ジャンル一覧:" in ja_help
+    assert ja_help.startswith("使い方:") and "オプション:" in ja_help and "ジャンル一覧（" in ja_help
     code, listing, _ = run_cli(["--list-genres", "-e"], capsys)
     assert code == 0 and "suspense-slow (alias: suspense)" in listing
     for p in cli.profiles.list_profiles():
         assert p.description_en in listing and p.description not in listing
-        assert p.description_en in en_help
+        assert p.id in en_help
 
 
 def test_japanese_help_wraps_by_display_width(capsys, monkeypatch):
     monkeypatch.setenv("COLUMNS", "80")
     _, ja_help, _ = run_cli(["--help"], capsys)
-    body = ja_help[:ja_help.index("ジャンル一覧:")]                     # epilog（ジャンルの説明）は折り返さない
-    assert max(cli._cols(l) for l in body.splitlines()) <= 80
-    assert "free-jazz," in body                                      # 語の途中では折り返さない
-    assert not any(l.strip().startswith(("。", "、", "）")) for l in body.splitlines())
+    assert max(cli._cols(l) for l in ja_help.splitlines()) <= 80       # 末尾の id 一覧も含めて収まる
+    assert "free-jazz," in ja_help                                     # 語の途中では折り返さない
+    assert not any(l.strip().startswith(("。", "、", "）")) for l in ja_help.splitlines())
 
 
 def test_wrap_helper():

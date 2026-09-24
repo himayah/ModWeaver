@@ -15,7 +15,11 @@ from .pitch import (
 )
 
 PC_NAMES = ("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
-_QUALITY_SUFFIX = {"maj": "", "min": "m", "dim": "dim", "maj7": "maj7", "m7": "m7", "dom7": "7"}
+_QUALITY_SUFFIX = {
+    "maj": "", "min": "m", "dim": "dim", "maj7": "maj7", "m7": "m7", "dom7": "7",
+    "6": "6", "m6": "m6", "maj9": "maj9", "m9": "m9", "dom9": "9", "dom13": "13", "m11": "m11",
+    "add9": "add9", "sus2": "sus2", "sus4": "sus4", "7sus4": "7sus4", "m7b5": "m7b5", "dim7": "dim7", "aug": "aug",
+}
 
 
 @dataclass(frozen=True)

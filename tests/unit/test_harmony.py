@@ -75,3 +75,22 @@ def test_registers_and_quality_validation():
         Registers(bass=(0, 10), harmony=(17, 28), melody=(24, 41))
     with pytest.raises(PitchRangeError):
         voice(ChordSpec(0, "sus"), 0, PHRYGIAN, REGS)
+
+
+# --- 第３段階で追加した和音・スケール（DESIGN.md §12.8 C1・C2） ---
+
+@pytest.mark.parametrize("quality", sorted(CHORD_QUALITIES))
+def test_every_quality_voices_with_its_pitch_classes(quality):
+    regs = Registers((0, 11), (17, 28), (24, 41))
+    c = voice(ChordSpec(2, quality), 0, Scale(0, MODES["ionian"]), regs, arp=True)
+    expected = {(2 + i) % 12 for i in CHORD_QUALITIES[quality]}
+    assert {t % 12 for t in c.chord_tones} == expected
+    q = CHORD_QUALITIES[quality]
+    assert c.arp == (q[1] << 4) | q[2] and c.label.startswith("D")
+
+
+@pytest.mark.parametrize("mode,size", [("lydian", 7), ("harmonic_minor", 7), ("melodic_minor", 7),
+                                       ("major_pent", 5), ("minor_pent", 5), ("blues", 6)])
+def test_new_modes(mode, size):
+    iv = MODES[mode]
+    assert len(iv) == size and iv[0] == 0 and list(iv) == sorted(set(iv)) and all(0 <= i < 12 for i in iv)

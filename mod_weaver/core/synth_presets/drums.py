@@ -54,3 +54,27 @@ DRUM_BOOMBAP_SNARE = register("drum_boombap_snare", Patch(
     "BoomBapSnare", (tone((185.0, 1.0, 18.0), weight=0.5), noise(weight=0.8, decay=12.0, lp=0.3)),
     OneShot(0.30), pitched=False, saturate=1.6, rate_note=MID, volume=52),
     "ブーンバップの湿ったスネア（LP ノイズで暗め）。")
+
+# ------------------------------------------------------------ チップチューン（ノイズ・チャンネルの打楽器）
+CHIP_KICK = register("chip_kick", Patch(
+    "ChipKick", (sweep(180.0, 50.0, 45.0, 14.0),), OneShot(0.18), pitched=False, rate_note=MID, volume=52),
+    "チップチューンのキック（速く落ちるピッチ）。")
+
+CHIP_SNARE = register("chip_snare", Patch(
+    "ChipSnare", (noise(decay=26.0),), OneShot(0.20), pitched=False, rate_note=MID, volume=44),
+    "チップチューンのスネア（フィルタを掛けない粗いノイズ）。")
+
+CHIP_HAT = register("chip_hat", Patch(
+    "ChipHat", (noise(decay=90.0, hp=True),), OneShot(0.06), pitched=False, rate_note=HIGH, volume=30),
+    "チップチューンのハット（短い HP ノイズ）。")
+
+# ------------------------------------------------------------ インダストリアル
+IND_KICK = register("ind_kick", Patch(
+    "IndKick", (sweep(160.0, 45.0, 30.0, 6.0), noise(weight=0.3, decay=40.0)),
+    OneShot(0.45), pitched=False, saturate=3.5, rate_note=MID, volume=58),
+    "強く歪ませたキック（インダストリアル）。")
+
+IND_SNARE = register("ind_snare", Patch(
+    "IndSnare", (tone((190.0, 0.5, 20.0)), noise(weight=1.0, decay=14.0)),
+    OneShot(0.35), pitched=False, saturate=3.0, rate_note=MID, volume=50),
+    "強く歪ませたスネア（インダストリアル）。")

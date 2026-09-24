@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`trap`・`orchestral` など25種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、サスペンス `suspense-slow` など13種）の計47ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。チャンネル数はジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります（`--channels` で指定も可能）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral` など27種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、サスペンス `suspense-slow` など14種）の計50ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。チャンネル数はジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります（`--channels` で指定も可能）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -101,6 +101,9 @@ python modweaver.py --genre calm         # 気分: 落ち着き（4ch）
 python modweaver.py --genre city-pop     # ジャンル: シティポップ（6ch）
 python modweaver.py --genre classical    # ジャンル: 弦楽四重奏のメヌエット（3/4）
 python modweaver.py --genre jrpg         # 〜風: JRPG のフィールド曲
+python modweaver.py --genre gamelan      # ジャンル: ガムラン（スレンドロ／ペロッグ音律）
+python modweaver.py --genre chiptune     # 〜風: 8bit ゲーム音楽（パルス波・三角波・ノイズ）
+python modweaver.py --genre industrial   # ジャンル: インダストリアル（歪みと金属音）
 ```
 
 #### ジャンルをランダムに選ぶ（`--genre random` / `-g r`）:
@@ -204,7 +207,7 @@ https://github.com/himayah/ModWeaver
 | `uplifting` | – | 4/6/8 | 上げていく高揚感。4つ打ちとアルペジオ、明るいスーパーソウのコード |
 | `warm` | – | 4/6 | 温かい。アコースティックギターとピアノ、長調の穏やかな伴奏 |
 
-**ジャンル（genre）** — 25 種類
+**ジャンル（genre）** — 27 種類
 
 | ジャンル id | 別名 | ch | 説明 |
 |:---|:---|:---|:---|
@@ -217,8 +220,10 @@ https://github.com/himayah/ModWeaver
 | `folk` | – | 4/6 | フォーク。アコースティックギターのストロークとフィドル、素朴な進行 |
 | `free-jazz` | – | 4 | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 | `future-bass` | – | 4 | フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV |
+| `gamelan` | – | 6 | ガムラン風。青銅の鍵盤と壺型ゴングの重なり、周期的なゴングの区切りとスレンドロ／ペロッグ音律 |
 | `hiphop` | – | 4/6 | ヒップホップ。ラップが乗る余白を残したブーンバップのビートとサンプル風ループ |
 | `house` | – | 4/6/8 | ハウス。4つ打ちの安定したグルーヴと裏拍のオルガン・スタブ |
+| `industrial` | – | 6 | インダストリアル。歪んだビートと金属の打撃、うなる歪んだベースと工場の騒音 |
 | `jazz` | – | 4 | ジャズ。ドリアンのモーダルなヴァンプ、4度堆積のピアノとミュート・トランペット |
 | `lofi-hiphop` | – | 4/6/8 | ローファイ・ヒップホップ。よれたビート、ジャジーなエレピ、レコードのノイズ |
 | `maqam` | – | 4 | 中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程 |
@@ -234,13 +239,14 @@ https://github.com/himayah/ModWeaver
 | `techno` | – | 4 | テクノ。繰り返しの中で少しずつ変わるシーケンスと4つ打ち |
 | `trap` | – | 4 | トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ |
 
-**〜風（style）** — 13 種類
+**〜風（style）** — 14 種類
 
 | ジャンル id | 別名 | ch | 説明 |
 |:---|:---|:---|:---|
 | `acoustic-ssw` | – | 4/6 | 弾き語り風。指弾きのギターと軽いパーカッション、歌のような旋律 |
 | `ambient-drone` | – | 4 | ドローン。長く伸びる持続音がゆっくり移ろう、変化の少ない響き |
 | `anime-ost` | – | 4/6/8 | アニメ劇伴風。刻むストリングスとジャズの和声、ブラスの決め |
+| `chiptune` | – | 4 | 8bit ゲーム音楽風。パルス波の旋律とアルペジオ、三角波のベース、ノイズの打楽器とジャンプ音 |
 | `indie-rock` | – | 4/6/8 | インディー・ロック風。生音のドラムと鳴り響くギターのアルペジオ、軽い歪み |
 | `jpop-80s` | – | 4/6/8 | 80年代 J-POP 風。明るいコードと都会的なブラス、軽快なビートと最後のサビの転調 |
 | `jrock-90s` | – | 4/6/8 | 90年代 J-ROCK 風。歪んだギターが前に出る速いビートとギターソロ、最後のサビで転調 |
@@ -310,7 +316,7 @@ https://github.com/himayah/ModWeaver
 │   │                   #        timeline / render(mp3)）
 │   ├── profiles/      # ジャンルの仕組み: GenreProfile 基底・登録簿（genres/ の自動検出）・ジャンル共通の補助
 │   │                   #        （band_common: 第３段階の35ジャンルが共有する骨格 BandProfile）
-│   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。47ジャンル）
+│   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。50ジャンル）
 ├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md          # 設計書（現在の仕様）
 ├── DESIGN_HISTORY.md  # 設計の経緯（決定の理由・訂正・見送ったもの）

@@ -36,3 +36,8 @@ BASS_DEEP = register("bass_deep", Patch(
     "DeepBass", loop_harmonics(3, ((1, 1.0), (2, 0.2))),
     Loop(190, attack_samples=30), pitched=True, rate_note=MID, shift=-12, volume=58),
     "ディープハウスの丸いベース（正弦＋わずかな第2倍音のループ）。")
+
+BASS_DIST = register("bass_dist", Patch(
+    "DistBass", loop_harmonics(3, tuple((h, 1.0 / h) for h in range(1, 9))),
+    Loop(190, attack_samples=20), pitched=True, saturate=3.0, rate_note=MID, shift=-12, volume=50),
+    "強く歪ませたノコギリ波の持続ベース（インダストリアル。明るい低音）。")

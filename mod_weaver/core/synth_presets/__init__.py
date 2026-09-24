@@ -7,7 +7,7 @@
 （ゼロから ``Patch`` を組み立てない）。
 
 モジュール構成: ``genre_kits``（既存12ジャンルの音色。ジャンル名で命名）と、楽器の種類ごとの
-``drums``・``perc``・``bass``・``keys``・``guitar``・``synths``・``pads``・``orch``・``fx``
+``drums``・``perc``・``bass``・``keys``・``guitar``・``synths``・``pads``・``orch``・``fx``・``metal``
 （第３段階以降の共有音色。楽器名で命名し複数ジャンルで使い回す）。どのモジュールの定数も
 ``synth_presets.<定数名>`` で参照できる。
 """
@@ -24,3 +24,4 @@ from .synths import *  # noqa: F401,F403
 from .pads import *  # noqa: F401,F403
 from .orch import *  # noqa: F401,F403
 from .fx import *  # noqa: F401,F403
+from .metal import *  # noqa: F401,F403

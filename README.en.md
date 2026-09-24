@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 47 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (25, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `trap`, `orchestral`) and **styles** (13, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 50 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -103,6 +103,9 @@ python modweaver.py -e --genre calm         # mood: calm (4 channels)
 python modweaver.py -e --genre city-pop     # genre: city pop (6 channels)
 python modweaver.py -e --genre classical    # genre: string-quartet minuet (3/4)
 python modweaver.py -e --genre jrpg         # style: JRPG field theme
+python modweaver.py -e --genre gamelan      # genre: gamelan (slendro / pelog tuning)
+python modweaver.py -e --genre chiptune     # style: 8-bit game music (pulse, triangle, noise)
+python modweaver.py -e --genre industrial   # genre: industrial (distortion and metal)
 ```
 
 #### Pick a genre at random (`--genre random` / `-g r`):
@@ -206,7 +209,7 @@ https://github.com/himayah/ModWeaver
 | `uplifting` | – | 4/6/8 | Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords |
 | `warm` | – | 4/6 | Warm: acoustic guitar and piano in a gentle major key |
 
-**Genres (genre)** — 25
+**Genres (genre)** — 27
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
@@ -219,8 +222,10 @@ https://github.com/himayah/ModWeaver
 | `folk` | – | 4/6 | Folk: strummed acoustic guitar and fiddle over simple progressions |
 | `free-jazz` | – | 4 | Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes) |
 | `future-bass` | – | 4 | Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV |
+| `gamelan` | – | 6 | Gamelan style: interlocking bronze metallophones and gongs in slendro or pelog tuning |
 | `hiphop` | – | 4/6 | Hip hop: boom-bap beats and sample-style loops that leave room for rap |
 | `house` | – | 4/6/8 | House: steady four-on-the-floor groove with offbeat organ stabs |
+| `industrial` | – | 6 | Industrial: distorted beats and metal clangs, a roaring distorted bass and factory noise |
 | `jazz` | – | 4 | Modal jazz: dorian vamps, quartal piano voicings and muted trumpet |
 | `lofi-hiphop` | – | 4/6/8 | Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise |
 | `maqam` | – | 4 | Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals |
@@ -236,13 +241,14 @@ https://github.com/himayah/ModWeaver
 | `techno` | – | 4 | Minimal techno: a hypnotic four-on-the-floor with slowly mutating sequences |
 | `trap` | – | 4 | Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop |
 
-**Styles (style)** — 13
+**Styles (style)** — 14
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
 | `acoustic-ssw` | – | 4/6 | Acoustic singer-songwriter style: fingerpicked guitar, light percussion and a vocal-like melody |
 | `ambient-drone` | – | 4 | Ambient drone: long sustained tones that shift very slowly |
 | `anime-ost` | – | 4/6/8 | Anime soundtrack style: driving strings with jazz harmony and brass hits |
+| `chiptune` | – | 4 | 8-bit chiptune style: pulse-wave melody and arpeggios, triangle bass, noise drums and jump sounds |
 | `indie-rock` | – | 4/6/8 | Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive |
 | `jpop-80s` | – | 4/6/8 | 80s J-pop style: bright chords, city brass, a light beat and a final key change |
 | `jrock-90s` | – | 4/6/8 | 90s J-rock style: loud guitars over a fast beat, a guitar solo and a final key change |
@@ -313,7 +319,7 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 │   │                   #   timeline / render (mp3))
 │   ├── profiles/      # Genre machinery: GenreProfile base, registry (auto-discovers genres/), shared helpers
 │   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres)
-│   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 47 genres)
+│   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 50 genres)
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md          # Design document (the current specification; Japanese)
 ├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)

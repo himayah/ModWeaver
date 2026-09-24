@@ -98,7 +98,7 @@ def test_gm_voice_validation():
 
 def test_sounding_hz_matches_sample_data():
     """SampleSpec.sounding_hz（MIDI 音高の根拠）をサンプルデータの自己相関（YIN）で検算する。
-    非調和な音色（トーンクラスター、スクリーチ、ベル）と和音を焼き込んだ音色（パワーコード・第３段階の和音サンプル。
+    非調和な音色（トーンクラスター、スクリーチ、ベル、ガムランの金属打楽器、金属パイプ）と和音を焼き込んだ音色（パワーコード・第３段階の和音サンプル。
     仮想基音が根音より下に出る）は除く。"""
     np = pytest.importorskip("numpy")
     from mod_weaver.core import dsp
@@ -106,7 +106,8 @@ def test_sounding_hz_matches_sample_data():
 
     from mod_weaver.profiles.band_common import BandProfile
 
-    skip_patches = {"FreePianoCluster", "FreeSaxScreech", "ProgGtrPower", "CrunchGtr", "Bell"}
+    skip_patches = {"FreePianoCluster", "FreeSaxScreech", "ProgGtrPower", "CrunchGtr", "Bell",
+                    "MetalPipe", "Saron", "Bonang", "Kenong", "Kempul", "GongAgeng"}
 
     def chordal(cls, key, spec):
         if spec.name in skip_patches:

@@ -874,6 +874,14 @@ GM_DEFAULTS: dict[str, GmVoice] = {
     "Choir": _gm(program=52), "Flute": _gm(program=73), "Spiccato": _gm(program=48),
     "Braam": _gm(program=61), "VinylNoise": _gm(program=122), "Rain": _gm(program=122),
     "Riser": _gm(program=97), "Impact": _gm(program=55),
+    # 音色空間の疎な領域を埋めた音色（gamelan・chiptune・industrial。DESIGN.md §12）
+    "Saron": _gm(program=11), "Bonang": _gm(program=114), "Kenong": _gm(program=14), "Kempul": _gm(program=14),
+    "GongAgeng": _gm(program=14), "Ketuk": _gm(drum_note=77), "KendangDhe": _gm(drum_note=64),
+    "KendangTak": _gm(drum_note=62), "Pulse25": _gm(program=80), "Pulse12": _gm(program=80),
+    "Triangle": _gm(program=38), "ChipKick": _gm(drum_note=36), "ChipSnare": _gm(drum_note=38),
+    "ChipHat": _gm(drum_note=42), "ChipJump": _gm(program=98), "IndKick": _gm(drum_note=36),
+    "IndSnare": _gm(drum_note=40), "MetalClang": _gm(drum_note=53), "MetalPipe": _gm(program=14),
+    "BuzzLead": _gm(program=81), "DistBass": _gm(program=38), "FactoryNoise": _gm(program=122),
 }
 
 

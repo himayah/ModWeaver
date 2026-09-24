@@ -1,6 +1,8 @@
 """シンセ（第３段階の共有音色。DESIGN.md §4.5）。"""
 from __future__ import annotations
 
+import math
+
 from ..synth import FilterSpec, Loop, OneShot, Patch
 from ._common import MID, loop_harmonics, tone
 from ._registry import register
@@ -39,3 +41,28 @@ SYN_POLY_PAD = register("syn_poly_pad", Patch(
     "PolyPad", loop_harmonics(120, tuple((h, 1.0 / h) for h in range(1, 7)), detune=0.7),
     Loop(3800, attack_samples=600), pitched=True, rate_note=MID, volume=38),
     "80年代のポリシンセ・パッド（隣接整数デチューンの2層ループ）。")
+
+# ------------------------------------------------------------ チップチューン（ファミコン風の音源）
+# パルス波のデューティ d の倍音 n の振幅は |sin(π n d)| / n。K=12・L=380 は K=6・L=190 と同じ高さで、15 倍音まで入る。
+CHIP_PULSE25 = register("chip_pulse25", Patch(
+    "Pulse25", loop_harmonics(12, tuple((h, abs(math.sin(math.pi * h * 0.25)) / h) for h in range(1, 16)
+                                        if abs(math.sin(math.pi * h * 0.25)) > 1e-9)),
+    Loop(380, attack_samples=8), pitched=True, rate_note=MID, volume=40),
+    "パルス波 25%（チップチューンの旋律。明るい整数倍音）。")
+
+CHIP_PULSE12 = register("chip_pulse12", Patch(
+    "Pulse12", loop_harmonics(12, tuple((h, abs(math.sin(math.pi * h * 0.125)) / h) for h in range(1, 16)
+                                        if abs(math.sin(math.pi * h * 0.125)) > 1e-9)),
+    Loop(380, attack_samples=8), pitched=True, rate_note=MID, volume=34),
+    "パルス波 12.5%（チップチューンのアルペジオ。細く明るい）。")
+
+CHIP_TRIANGLE = register("chip_triangle", Patch(
+    "Triangle", loop_harmonics(3, ((1, 1.0), (3, 1 / 9), (5, 1 / 25), (7, 1 / 49))),
+    Loop(190), pitched=True, rate_note=MID, shift=-12, volume=52),
+    "三角波（チップチューンのベース。純音に近い低音）。")
+
+# ------------------------------------------------------------ インダストリアル
+IND_BUZZ_LEAD = register("ind_buzz_lead", Patch(
+    "BuzzLead", loop_harmonics(6, ((1, 1.0), (3, 1 / 3), (5, 1 / 5), (7, 1 / 7), (9, 1 / 9))),
+    Loop(190, attack_samples=20), pitched=True, saturate=2.5, rate_note=MID, volume=40),
+    "強く歪ませた矩形波のリード（インダストリアル）。")

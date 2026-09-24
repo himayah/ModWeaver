@@ -310,6 +310,7 @@ https://github.com/himayah/ModWeaver
 ```text
 .
 ├── modweaver.py       # トップレベル起動スクリプト（引数なしなら使い方を表示）
+├── listen_samples.bat # 試聴用の曲をまとめて作るバッチ（Windows。DESIGN.md §11 の試聴項目ごとに3例、output\listen\ へ）
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
 │   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /

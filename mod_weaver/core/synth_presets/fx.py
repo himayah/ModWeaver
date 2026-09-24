@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ..synth import OneShot, Patch
-from ._common import MID, noise, sweep
+from ._common import HIGH, MID, noise, sweep, tone
 from ._registry import register
 
 FX_VINYL = register("fx_vinyl", Patch(
@@ -24,3 +24,13 @@ FX_IMPACT = register("fx_impact", Patch(
     "Impact", (sweep(120.0, 35.0, 6.0, 2.5), noise(weight=0.6, decay=4.0, lp=0.5)),
     OneShot(2.0), pitched=False, saturate=1.5, rate_note=MID, volume=64),
     "低い衝撃音（ドロップ頭・予告編の一撃）。")
+
+FX_JUMP = register("fx_jump", Patch(
+    "ChipJump", (sweep(300.0, 1400.0, 20.0, 8.0), sweep(600.0, 2800.0, 20.0, 8.0, weight=0.35)),
+    OneShot(0.25), pitched=False, rate_note=HIGH, volume=36),
+    "上昇ピッチの「ジャンプ音」（チップチューンの効果音。2本の上昇スイープ）。")
+
+FX_FACTORY = register("fx_factory", Patch(
+    "FactoryNoise", (noise(lp=0.6), tone((55.0, 0.4, 0.05), (110.0, 0.2, 0.05))),
+    OneShot(3.8), pitched=False, attack_ms=150.0, tail_fade_ms=200.0, saturate=1.6, rate_note=MID, volume=24),
+    "工場の騒音（一定のノイズと低いうなり。インダストリアルで小節頭に鳴らし直す）。")

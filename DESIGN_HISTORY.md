@@ -17,6 +17,7 @@
 | 2026-09-23 | 第１段階（次の検討事項） | 出力形式の選択（mod/xm/s3m/it/midi/mp3）とテンポ指定。実プレイヤー検査を導入。main にマージ（`a696667`） | `FORMAT_TEMPO_DESIGN.md` |
 | 2026-09-24 | 第２段階（次の検討事項） | ジャンルの自動検出、引数なしで usage、`--genre random`、`--version`、英語版 README、出力先 `output/`、日本語表示と `-e`。orchestral の V15 誤警告を修正。main にマージ（`63d2aeb`） | `CLI_STAGE2_DESIGN.md` |
 | 2026-09-24 | 文書の統合 | 設計書7本を `DESIGN.md`（現行仕様）と本書（経緯）に統合 | 本書 |
+| 2026-09-24〜 | 第３段階 | 35ジャンルの追加（§12.5） | `DESIGN.md` §12 |
 
 ---
 
@@ -326,6 +327,29 @@ MP3 の代替案（自前の再生エンジン＋`lameenc`、pure Python の MP3
 - libopenmpt で実際に再生して測ると音割れは無かった（最大振幅 MOD −5.1 dBFS、XM −1.9、IT −2.3。他ジャンルの MOD は −3.5〜−4.8）。V15 はチャンネル音量の単純合計による目安で、再生エンジンのミキシングを考えないため、多チャンネルの全合奏では割れなくても超える。
 - 対処の候補は3つ: A）ジャンルが宣言して V15 を外し、実測の音割れ検査で置き換える／B）orchestral の音量を下げる（片側4chで合計 120 以下にすると1ch 平均 30 まで下がり、もともと他ジャンルより静かな orchestral の迫力が失われる）／C）V15 を実際のミキシングに近い計算に作り直す（プレイヤーごとに違うので正確にできない）。**A を採用**（ユーザー判断）。
 - `GenreProfile.allow_volume_sum_over`（既定 False）を足し、orchestral だけが宣言。全ジャンル × MOD/XM/S3M/IT × 2 seed の実再生で最大振幅 <0 dBFS を検査するテストを追加し、振幅最大の矩形波に差し替えると失敗すること（検査が見逃さないこと）も確認した。生成される曲は変わらない。
+
+---
+
+## 12.5 第３段階: 35ジャンルの追加（2026-09-24〜）
+
+### 要求
+
+気分（Uplifting・Calm・Melancholic・Energetic・Dreamy・Dark/Tense・Warm・Cool・Focus）、ジャンル（Rock・Pop・Jazz・Bossa Nova・City Pop・Ambient・Lo-fi HipHop・EDM・House・HipHop/Trap・Classical・Cinematic・Folk・R&B/Soul・Synthwave・Minimal/Techno）、「〜風」（80s Japanese Pop・90s J-Rock・Anime OST・JRPG・Lo-fi Producer・Indie Rock・Cinematic Trailer・Ambient Drone・Acoustic Singer-songwriter・Neo Soul）の35ジャンルを追加する。努力目標: パターン構成に合わせて適切なチャンネル数を選ぶ。
+
+### 決定事項（2026-09-24 ユーザー確認済み。すべて推奨案）
+
+| # | 論点 | 決定 |
+|:---|:---|:---|
+| Q1 | 既存とほぼ重なるもの（Jazz≒swing-jazz、HipHop/Trap≒trap、Lo-fi Producer風≒Lo-fi HipHop） | 別ジャンルとして作り、違う方向に寄せる（jazz＝モーダル、hiphop＝ブーンバップ、lofi-chill＝ギターとサイドチェインのうねり）。35すべて作る |
+| Q2 | 実在の人名 | id・表示名・説明に入れず、音楽的特徴で書く |
+| Q3 | 47ジャンルの一覧とヘルプ | `GenreProfile.category`（mood/genre/style）を持たせて区分ごとに表示。`--help` の末尾は区分ごとの id だけ |
+| Q4 | 多チャンネル曲の V15 | V15 は 4ch の曲だけ検査する。`allow_volume_sum_over` は廃止。音割れは実プレイヤー検査で全ジャンル確認 |
+| Q5 | 気分ジャンルの「相性」 | 設計書に記録するだけ（属性は、天気・時間帯から選ぶ機能を作るときに足す） |
+| Q6 | ギターのストローク | `WeightedLayer.offset_ms` を追加する |
+| Q7 | テスト時間 | 実プレイヤー検査に `slow` の印を付け、普段は省略できるようにする（マージ前は全部流す） |
+| Q8 | 進め方 | 基盤を先に作り、近いジャンルどうし約5つずつに分けて実装・コミット |
+
+チャンネル数は、ファイル形式上1曲の中で変えられないため、ジャンル単位で 4／6／8 から選ぶことで努力目標に応える。
 
 ---
 

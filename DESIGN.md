@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |:---|:---|
 | 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`） |
-| 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) |
+| 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md)。**例外: §12 は実装中の設計（第３段階）**。実装したら §12 の内容を §6 などへ移して §12 を消す |
 | 最終更新 | 2026-09-24（2026-09-21〜24 に書かれた設計書7本をこの2本に統合。統合前の原文は git 履歴で参照できる） |
 
 ---
@@ -780,3 +780,452 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | nostalgic の pad/flute の −17.6 セント | K=32/L=1024 のまま | 直すなら K=6/L=190（+0.49 セント）。出力が変わるので回帰基準の更新とセット |
 | MIDI のグライド | 目標音へ即時切替 | ピッチベンドでの近似は将来課題 |
 | 外部ジャンルのプラグイン読込、WAV レンダラ | なし | 要件外 |
+
+---
+
+## 12. 設計中: 第３段階の追加ジャンル35種（実装中）
+
+`次の検討事項.txt` 第３段階の35ジャンルの設計。§12.9 の論点は 2026-09-24 にすべて推奨案で決定（DESIGN_HISTORY.md §12.5）。
+
+### 12.1 方針
+
+1. **既存の仕組みの上に作る**。作曲の枠組み（`GenreProfile`・`compose_measure`・`ChannelPlan`・`MelodyGenerator`・`voice()`）、出力形式、検査は変えない。core への変更は §12.8 の最小限（辞書の項目追加と opt-in 属性）に絞る。
+2. **重複を避ける**。35ジャンルの多くは「ドラム・ベース・和音・旋律・パッド」という同じ骨格を持つ。ジャンル間で共有する補助（ドラムパターンの書き込み、ベース型、和音の刻み方、エコー、ビルドアップ、フィル、和音サンプルの作り方）は **`profiles/band_common.py`**（新規の補助モジュール。`suspense_common.py` と同じ位置づけで、core ではない）に置く。
+3. **音色は楽器ごとの共有ライブラリ**にする。今のプリセットはジャンル名で命名されているが、追加分は楽器の種類で命名し（`DRUM_*`・`PERC_*`・`BASS_*`・`KEYS_*`・`GTR_*`・`SYN_*`・`PAD_*`・`VOX_*`・`FX_*`）、複数のジャンルで使い回す（§12.4）。既存プリセットも流用する。
+4. **ジャンル同士を聞き分けられるようにする**。一覧には意味の近いものが多い（例: Lo-fi HipHop・Lo-fi Producer風・Focus、Ambient・Ambient Drone風・Calm、Cinematic・Cinematic Trailer風・Dark/Tense）。各ジャンルに「何で区別するか」を明記した（§12.7 の各項の「区別」）。既存ジャンルとほぼ同じになるものは §12.9 で扱いを決めていただく。
+5. **チャンネル数はジャンルごとに適切な数を選ぶ**（努力目標への対応）。Amiga 互換の 4ch を基本にし、ドラムを2系統に分けたい・和音とパッドを別に鳴らしたいジャンルは 6ch、大編成は 8ch にする（§12.3）。1曲の中でチャンネル数を変えることはファイル形式上できない（全形式でチャンネル数はファイル単位）ので、「パターン構成に合わせて選ぶ」はジャンル単位で行う。
+6. **表示名・説明・id に実在の人名を入れない**（原文の「山下達郎・竹内まりや系」「B'z・GLAY系」「菅野よう子系」は音楽的特徴に置き換える。§12.9 Q2）。生成する曲はどれも手続き的に作るもので、既存の曲の旋律は使わない。
+
+### 12.2 ジャンル一覧（id・区分・基本値）
+
+区分（`category`、§12.8 C3）: **mood**＝気分／**genre**＝ジャンル／**style**＝「〜風」。ch＝チャンネル数、rpm＝1 measure の row 数（16分格子。可変小節は「可変」）。
+
+| # | 原文 | id | 区分 | BPM | 拍子（rpm） | ch | 調・旋法 |
+|:--|:---|:---|:---|:---|:---|:---|:---|
+| 1 | Uplifting | `uplifting` | mood | 128–136 | 4/4（16） | 6 | D/E/F メジャー |
+| 2 | Calm / Relaxed | `calm` | mood | 68–78 | 4/4（16） | 4 | C/F/G メジャー（リディアン色） |
+| 3 | Melancholic | `melancholic` | mood | 66–76 | 4/4（16） | 4 | A/D/E マイナー（和声的短音階の V） |
+| 4 | Energetic | `energetic` | mood | 160–176 | 4/4（16） | 6 | E/A/D メジャー |
+| 5 | Dreamy | `dreamy` | mood | 80–92 | 4/4（16） | 6 | Eb/Ab/Db メジャー（リディアン） |
+| 6 | Dark / Tense | `dark-tense` | mood | 90–100 | 4/4（16） | 6 | C/D マイナー（フリジアン・和声的短音階） |
+| 7 | Warm | `warm` | mood | 88–100 | 4/4（16） | 4 | G/D/C メジャー |
+| 8 | Cool | `cool` | mood | 100–112 | 4/4（16） | 6 | F#/B マイナー（ドリアン） |
+| 9 | Focus | `focus` | mood | 78–86 | 4/4（16、16分スウィング） | 4 | D/E マイナー（ドリアン） |
+| 10 | Rock | `rock` | genre | 112–132 | 4/4（16） | 6 | E/A/D（ミクソリディアン／エオリアン） |
+| 11 | Pop | `pop` | genre | 100–120 | 4/4（16） | 6 | C/G/D/F メジャー |
+| 12 | Jazz | `jazz` | genre | 120–144 | 4/4（8、8分スウィング） | 4 | D ドリアン（モーダル） |
+| 13 | Bossa Nova | `bossa-nova` | genre | 120–140 | 2/4（8） | 4 | F/C/G/D メジャー・マイナー |
+| 14 | City Pop | `city-pop` | genre | 104–120 | 4/4（16） | 6 | E/A/Db メジャー |
+| 15 | Ambient | `ambient` | genre | 60–72 | 4/4（16） | 4 | D/E リディアン |
+| 16 | Lo-fi HipHop | `lofi-hiphop` | genre | 72–88 | 4/4（16、16分スウィング） | 6 | マイナー（ドリアン）／メジャー7th |
+| 17 | EDM | `edm` | genre | 124–130 | 4/4（16） | 6 | F/G マイナー |
+| 18 | House / Deep House | `house` | genre | 118–124 | 4/4（16） | 6 | A/D マイナー（ドリアン） |
+| 19 | HipHop / Trap | `hiphop` | genre | 86–96 | 4/4（16、16分スウィング） | 4 | マイナー |
+| 20 | Classical | `classical` | genre | 100–120 | 3/4（可変 12） | 4 | G/D/F/Bb メジャー |
+| 21 | Cinematic | `cinematic` | genre | 70–84 | 4/4（16） | 8 | C/D マイナー → 平行長調 |
+| 22 | Folk | `folk` | genre | 96–116 | 4/4（16） | 4 | G/D/C/A メジャー（ミクソリディアン） |
+| 23 | R&B / Soul | `rnb-soul` | genre | 68–84 | 4/4（16、軽い16分スウィング） | 6 | Eb/Ab/Db メジャー、Bb マイナー |
+| 24 | Synthwave / Retrowave | `synthwave` | genre | 96–112 | 4/4（16） | 6 | A/E/F# マイナー |
+| 25 | Minimal / Techno | `techno` | genre | 124–132 | 4/4（16） | 4 | A/D マイナー（和音はほぼ固定） |
+| 26 | 80s Japanese Pop風 | `jpop-80s` | style | 120–136 | 4/4（16） | 6 | C/D/E メジャー（最後のサビで転調） |
+| 27 | 90s J-Rock風 | `jrock-90s` | style | 140–168 | 4/4（16） | 6 | E/A/D（マイナー寄り） |
+| 28 | Anime OST風 | `anime-ost` | style | 120–150 | 4/4（16） | 6 | D/G マイナー |
+| 29 | Game Music風（JRPG） | `jrpg` | style | 96–120 | 4/4（16） | 6 | C/D/F メジャー（同主短調の借用） |
+| 30 | Lo-fi Producer風 | `lofi-chill` | style | 72–88 | 4/4（16、16分スウィング） | 6 | メジャー7th／ドリアン |
+| 31 | Indie Rock風 | `indie-rock` | style | 118–140 | 4/4（16） | 6 | G/D/A メジャー |
+| 32 | Cinematic Trailer風 | `trailer` | style | 90–100 | 4/4（16） | 8 | D/C マイナー |
+| 33 | Ambient Drone風 | `ambient-drone` | style | 60–66 | 4/4（16） | 4 | 主音＋5度のドローン（ドリアン／エオリアン） |
+| 34 | Acoustic Singer-songwriter風 | `acoustic-ssw` | style | 80–100 | 4/4（16） | 4 | G/C/D/E メジャー |
+| 35 | Neo Soul風 | `neo-soul` | style | 80–96 | 4/4（16、強い16分スウィング） | 6 | Eb/Ab メジャー、F/Bb マイナー |
+
+既存12ジャンルの区分（案）: mood は無し、genre＝swing-jazz・prog-rock・trap・future-bass・maqam・free-jazz・minimalism・orchestral・march、style＝nostalgic・suspense-slow・suspense-chase（§12.8 C3 を採るとき）。
+
+### 12.3 チャンネル構成の型
+
+| 型 | ch | 構成 | 使うジャンル |
+|:---|:---|:---|:---|
+| **B4**（4ch バンド） | 4 | 1 ドラム（kick/snare/hat を優先度で共有: snare>kick>hat）／2 ベース／3 和音／4 旋律 | warm、folk、hiphop、acoustic-ssw、focus |
+| **B6**（6ch バンド） | 6 | 1 kick/snare（snare>kick）／2 hat・perc（open>closed>shaker）／3 ベース／4 和音（コンプ・ストローク・鍵盤）／5 旋律／6 パッド・対旋律・エコー | rock、pop、energetic、city-pop、jpop-80s、jrock-90s、indie-rock、rnb-soul、neo-soul、anime-ost、jrpg、lofi-hiphop、lofi-chill |
+| **E6**（6ch 電子音楽） | 6 | 1 kick／2 clap・snare・hat／3 ベース／4 和音スタブ／5 リード・アルペジオ／6 パッド・FX | uplifting、edm、house、synthwave、cool、dreamy、dark-tense |
+| **A4**（4ch アンビエント） | 4 | 1 パッドA／2 パッドB・ドローン／3 テクスチャ・ベル／4 エコー・低音 | calm、ambient、ambient-drone、melancholic（1 旋律ピアノ／2 伴奏ピアノ／3 弦パッド／4 低音に読み替え） |
+| **Q4**（弦楽四重奏） | 4 | vln1／vln2／vla／vc | classical |
+| **O8**（8ch 管弦楽） | 8 | §12.7 の各項 | cinematic、trailer |
+| **T4**（4ch テクノ） | 4 | 1 kick／2 hat・clap／3 ベース／4 シーケンス | techno |
+
+- 4ch の型は既定の MOD で `M.K.`（Amiga 互換）になる。6ch・8ch は `6CHN`・`8CHN`。
+- 6ch・8ch のジャンルは `channel_pans` を宣言する（MOD 以外の形式でのパン。例 B6: kick/snare 128・hat 160・bass 128・和音 88・旋律 168・パッド 64）。既定の L R R L の繰り返しだと kick やベースが片側に寄るため。
+- 和音を鳴らす方法（`band_common` が提供）: ①**和音サンプル**（和音の構成音を1つのサンプルに焼き込み、根音の高さで鳴らす。prog-rock のパワーコードと同じ技法。和音の種類ごとに1スロット）②アルペジオ `0xy`（3音まで）③分散和音（順に鳴らす）。1チャンネルで和音の厚みが要るジャンルは①を使う。
+
+### 12.4 追加する音色ライブラリ（プリセット案）
+
+既存プリセットで足りるものは流用する（例: `prog_kick`・`nostalgic_hihat`・`trap_hat_open`・`march_crash_cymbal`・`swing_ride`・`swing_walk_bass`・`fb_sub`・`fb_supersaw`・`fb_clap`・`trap_808`・`orch_*`・`march_brass_*`・`swing_sax_lead`・`nostalgic_musicbox`・`free_cymbal_swell`・`noise_swoosh`・`pizz_stab`）。新規はすべて既存の3 Layer・2 Finish の組合せで作れる（ストロークだけは §12.8 C4 の拡張を推奨）。
+
+| 系統 | 新規プリセット（キー） | 構成の要点 |
+|:---|:---|:---|
+| ドラム | `drum_pop_kick`、`drum_pop_snare`、`drum_gated_snare`（80年代の大きなスネア）、`drum_909_kick`、`drum_909_hat`、`drum_909_open_hat`、`drum_rim`、`drum_tom`（音程あり。shift で高低）、`drum_boombap_kick`、`drum_boombap_snare` | PitchSweep＋Noise の組合せ。909 系は長めのピッチドロップと金属的な HP ノイズ。gated は Noise の長い減衰を `tail_fade_ms` で急に切る |
+| パーカッション | `perc_shaker`、`perc_tambourine`、`perc_conga`（音程あり）、`perc_clave`、`perc_cajon`、`perc_surdo`、`perc_taiko`、`perc_clap_stomp` | 短い HP ノイズ（shaker）、非調和部分音＋ノイズ（tambourine）、低いピッチドロップ（surdo・taiko） |
+| ベース | `bass_finger`、`bass_slap`、`bass_pick`、`bass_synth_saw`（ループ）、`bass_synth_square`（ループ）、`bass_deep`（house の丸いベース） | shift −12／−24。ループ系は整数サイクル数 |
+| 鍵盤 | `keys_piano`（弦の非調和性を少し入れた減衰音）、`keys_ep`（Rhodes 風: 正弦＋高次の「ティン」成分が速く減衰）、`keys_organ`（ドローバー風ループ）、`keys_bell`（グロッケン）、`keys_harp`、`keys_house_stab`（和音スタブ） | 和音サンプルは `band_common.chord_patch(base, quality)` で「構成音ぶんの部分音を複製した Patch」を作る |
+| ギター | `gtr_acoustic`（スチール弦のピック）、`gtr_nylon`、`gtr_clean_cut`（カッティング用の短いミュート音）、`gtr_clean_arp`（アルペジオ用の余韻）、`gtr_crunch`（軽い歪み）、`gtr_strum_*`（和音ストローク。§12.8 C4） | 部分音ごとに減衰を変える ToneLayer＋撥弦のクリック |
+| シンセ | `syn_saw_lead`、`syn_square_lead`、`syn_pluck`、`syn_arp_bell`、`syn_brass`、`syn_stab`、`syn_poly_pad`（synthwave） | ループは整数サイクル数・アタック窓 |
+| パッド・声 | `pad_glass`（高次倍音＋隣接整数デチューン）、`pad_warm`（nostalgic_pad の音程を直した版: K=6/L=190 系）、`vox_ooh`・`vox_choir`（フォルマント風の重み付けのループ） | 息のノイズは入れず、デチューンのうなりで表現（§4.5 の流儀） |
+| 管・弦 | `wind_flute`（音程を直した nostalgic_flute）、`str_spiccato`（短い弦。trailer の刻み）、`brass_braam`（低い金管クラスタ＋強い飽和） | |
+| 効果音 | `fx_vinyl`（LP ノイズのヒス＋まばらなクリックを長い OneShot に。1〜2小節ごとに鳴らし直す）、`fx_riser`（上昇ピッチ＋上昇ノイズ）、`fx_impact`（低いピッチドロップ＋ノイズのブーム）、`fx_rain`（LP ノイズ） | ノイズはループ不可（§4.5）なので、長い OneShot を小節頭で鳴らし直す（先頭と末尾をフェードしてつなぎ目を目立たなくする） |
+
+合計およそ55。各プリセットには GM 音色の既定値（`band_common.GM_DEFAULTS`）を用意し、各ジャンルの `gm_voices` はそこから作る（全楽器の宣言は従来どおり必須）。
+
+### 12.5 共有の補助（`profiles/band_common.py`、新規）
+
+| 関数・データ | 役割 |
+|:---|:---|
+| `DrumGroove`（row → 楽器・音量の表）と `write_groove(buf, ch_map, groove, *, rng, humanize)` | ドラムパターンの書き込み。ゴースト・軽い音量ゆらぎ・フィルの差し替えを含む。代表的な型（`BACKBEAT`・`FOUR_ON_FLOOR`・`DOUBLE_TIME`・`BOOMBAP`・`HALF_TIME`・`BOSSA`・`TWO_STEP`・`DEEP_HOUSE`）を定数で持つ |
+| `bass_line(kind, chord, next_chord, ...)` | ベース型: `root_whole`・`root_8ths`・`octave_8ths`・`offbeat`（EDM）・`root_fifth`・`walking`・`syncopated_16`（city-pop・funk）・`bossa`（付点4分＋8分） |
+| `comp(kind, ...)` | 和音の刻み: `block_whole`・`pulse_8ths`・`charleston`・`offbeat_stab`・`cutting_16`（ミュートと本音の混在）・`bossa`・`arpeggio`（上行・下行・往復）・`fingerpick`（トラヴィス奏法: 親指で根音と5度を交互、他の指で上声） |
+| `chord_patch(base, quality)`・`chord_slot_key(quality)` | 和音サンプルの Patch を作る（機械的な複製なので美的判断を含まない）。ループ系は各構成音のサイクル数を整数に丸める（数セントの誤差） |
+| `echo(pattern, src_ch, dst_ch, delay_rows, ratio, repeats)` | 旋律・アルペジオの遅れた複製を、音量を下げて別チャンネルの空き row に書く（リバーブ／ディレイ感。MOD に残響エフェクトは無いため） |
+| `buildup(buf, ch, ...)` | EDM 系のビルドアップ: スネアの 8分→16分→`E9x` の加速、音量の上昇、`fx_riser` |
+| `fill(buf, ch, ...)` | フレーズ末のタム・スネアのフィル |
+| `song_form(sections, repeats)` | 「intro・verse・pre・chorus…」の並びから `PatternPlan` 列と order を作る。最後のサビの転調（`key_offset`）もここで付ける |
+| `GM_DEFAULTS` | §12.4 の各プリセットの GM 音色の既定値 |
+
+### 12.6 共通の文法
+
+- **歌もの（pop・rock・city-pop・jpop-80s・jrock-90s・indie-rock・rnb-soul・neo-soul・acoustic-ssw・energetic）**: 1 pattern＝4小節。form は `intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus, outro` を基本に、ジャンルごとに省略・追加する。旋律は `MelodyGenerator` の動機を2小節で反復し、サビは音域を上げ、サビの1小節目にフックの動機（毎回同じリズム）を置く。**歌の息継ぎ**として4小節ごとに最低2拍の休符を入れる。
+- **電子音楽（uplifting・edm・house・techno・synthwave・cool）**: 1 pattern＝4小節、8小節（2 pattern）単位でレイヤーを出し入れする。kick の4つ打ちをサイドチェインのトリガにする（`mixer.apply_sidechain`、future-bass と同じ）。
+- **アンビエント系（calm・ambient・ambient-drone・dreamy）**: 和音は2〜4小節ごとにしか変えない。音量の出し入れ（`fade_cells`）で起伏を作る。先頭 pattern の row 0 は `apply_tempo` のために1チャンネル空ける。
+- **スウィング**: 16分スウィング（focus・lofi-hiphop・lofi-chill・hiphop・rnb-soul・neo-soul）は1拍＝4 row のまま、row の偶奇で Speed を交互にする（`SwingConfig(7, 5)`＝1.4:1、neo-soul は `(8, 4)`＝2:1）。**Speed の和は 12**（1拍＝2組＝24 tick）。8分スウィング（jazz）は swing-jazz と同じ1拍＝2 row・和 24。
+- **neo-soul の「よれ」**: スネアとハットの一部に `EDx`（ノートディレイ 1〜2 tick）を確率で付け、グリッドから少し遅らせる。
+- **転調**: 最後のサビを半音または全音上げる（jpop-80s・jrock-90s・pop の一部）。`PatternPlan.key_offset` を使う（march のトリオと同じ）。
+- **3/4 拍子**（classical）: 1 measure＝12 row、`variable_meter=True`、1 pattern＝4小節（48 row）＋`D00`。
+
+### 12.7 各ジャンルの設計
+
+各項の見出しの後の「区別」は、似たジャンル（既存を含む）とどこで聞き分けられるかを示す。和音の記法は主調に対する度数（`ChordSpec` の root・quality）。構成の各区間は 1 pattern＝4小節（rpm 16 なら 64 row）。
+
+#### 12.7.1 `uplifting` — 高揚するシンセ・アンセム（mood、E6）
+- 説明: 「上げていく高揚感。4つ打ちとアルペジオ、明るいスーパーソウのコード」／"Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords"
+- 相性（原文）: 晴れ・昼間
+- 音色: `drum_909_kick`、`fb_clap`＋`drum_909_open_hat`、`bass_synth_saw`、`fb_supersaw`、`syn_pluck`（アルペジオ）、`pad_glass`
+- 和声: I–V–vi–IV、vi–IV–I–V、IV–V–iii–vi から2つ（A・B）。
+- 構成: intro, build, drop, drop, break, build, drop, drop, outro
+- 文法: kick は4つ打ち、ベースは裏拍の8分（row 2,6,10,14）、コードは全音符で持続しサイドチェインで揺らす、アルペジオは16分でコードトーンを上行、drop でリードが動機を反復、build は `buildup`。
+- 区別: edm よりテンポが速めで長調・アルペジオ主体。future-bass より直線的な4つ打ち。
+
+#### 12.7.2 `calm` — 穏やかなピアノとパッド（mood、A4）
+- 説明: 「落ち着き。低いテンポで柔らかいパッドとピアノの分散和音」／"Calm and relaxed: soft pads and slow piano arpeggios"
+- 相性: 夜・雨・低気温
+- 音色: `keys_piano`、`pad_warm`、`bass_finger`（弱く）、`keys_bell`（まばら）
+- 和声: Imaj7–IVmaj7（リディアンの #4 を経過音に）、Imaj7–vi7–IVmaj7–Vsus4。和音は2小節ごと。
+- 構成: intro, a, b, a, outro（intensity 0.3→0.5→0.6→0.5→0.2）
+- 文法: ピアノは8分の分散和音（上行・下行の往復）、パッドは全音符、ベースは小節頭の根音のみ、ベルは4小節に1〜2音。打楽器なし。
+- 区別: ambient より拍がはっきりした（ピアノの8分）穏やかな曲。melancholic は短調でピアノが旋律を持つ。
+
+#### 12.7.3 `melancholic` — 物悲しいピアノ・バラード（mood、A4 読み替え）
+- 説明: 「物悲しい。短調のピアノが旋律を歌い、弦のパッドが支える」／"Melancholic piano ballad in a minor key over soft strings"
+- 相性: 曇り・夜・冬
+- 音色: `keys_piano`（旋律）、`keys_piano`（伴奏。別スロットで音量を下げる）、`orch_violin` 系の弦パッド、`orch_cello`（低音）
+- 和声: i–VI–III–VII、i–iv–VII–III、i–VII–VI–V（V は和声的短音階の長三和音）。
+- 構成: intro（ピアノのみ）, a, b（弦が入る）, a, b, outro
+- 文法: 旋律は4分・2分主体で跳躍の後は逆行、フレーズ末で長音。伴奏は8分の分散和音。
+- 区別: calm は長調・旋律なし。cinematic は8ch の管弦楽で盛り上がりがある。
+
+#### 12.7.4 `energetic` — 元気なドラム主体のロック（mood、B6）
+- 説明: 「元気・活動的。速いテンポと強いドラム、8分で刻むギターとベース」／"Energetic: fast, drum-driven rock with driving guitars and bass"
+- 相性: 晴れ・朝
+- 音色: `prog_kick`、`prog_snare`、`nostalgic_hihat`・`march_crash_cymbal`、`bass_pick`、`gtr_crunch`（パワーコード）、`syn_square_lead`、`drum_tom`
+- 和声: I–V–vi–IV、IV–I–V–vi。
+- 構成: intro, verse, pre, chorus, verse, pre, chorus, bridge（ハーフタイム）, chorus, chorus, outro
+- 文法: `DOUBLE_TIME`（kick 0,6,8／snare 4,12 をさらに8分で詰める）、ハットとベースは8分、ギターは8分刻み、区間頭に crash、4小節ごとに `fill`。
+- 区別: rock より速く（160–176）明るい長調。jrock-90s は J-POP の曲構成と転調・ギターソロを持つ。
+
+#### 12.7.5 `dreamy` — 夢見心地のアルペジオ（mood、E6）
+- 説明: 「夢見心地。深い残響感のアルペジオとパッド」／"Dreamy: echoing arpeggios over lush pads"
+- 相性: 夜・湿度高め
+- 音色: `drum_pop_kick`・`drum_rim`（控えめ）、`syn_arp_bell`、同じ音色のエコー用スロット、`pad_glass`、`wind_flute`（まばらな旋律）、`fb_sub`
+- 和声: Imaj7–IVmaj7（#11）、I–iii–IV–iv（同主短調の iv を借用）。
+- 構成: intro, a, b, a, outro
+- 文法: アルペジオは16分、`echo`（3 row 遅れ・音量 0.5・2回）を ch3 に書く。ドラムはハーフタイム（snare は row 8 のみ）。
+- 区別: ambient は拍が無い。calm はピアノ主体でエコーを使わない。
+
+#### 12.7.6 `dark-tense` — 緊張感のある暗いパルス（mood、E6）
+- 説明: 「緊張感。低音のオスティナートと刻むパルス、重い打撃」／"Dark and tense: low ostinato, ticking pulse and heavy hits"
+- 相性: 嵐・夜
+- 音色: `perc_taiko`、`drum_909_hat`（16分の刻み）、`bass_synth_saw`（16分オスティナート）、`tension_strings`、`brass_braam`、`fx_riser`・`fx_impact`
+- 和声: i–bII–i–V（フリジアン）、i–VI–iv–V（和声的短音階）。
+- 構成: intro, build, pulse, build, climax, collapse
+- 文法: ベースは16分で根音と短2度・5度を往復、ハットは16分で一定、taiko は小節頭と3拍目、braam は4小節ごと。
+- 区別: suspense は無音と恐怖の効果音が主役。dark-tense は一定のパルスが途切れない。trailer は3幕構成で最後に壮大化する。
+
+#### 12.7.7 `warm` — 温かいアコースティック（mood、B4）
+- 説明: 「温かい。アコースティックギターとピアノ、長調の穏やかな伴奏」／"Warm: acoustic guitar and piano in a gentle major key"
+- 相性: 春・昼
+- 音色: `perc_cajon`・`perc_shaker`、`bass_finger`、`gtr_strum_*`（和音ストローク）、`keys_piano`（旋律）
+- 和声: I–V–vi–IV、I–IV–ii–V、I–vi–IV–V。
+- 構成: intro, a, b, a, b, outro
+- 文法: ストロークは8分の「ダウン・ダウンアップ・アップダウンアップ」、cajon は2・4拍、ピアノの旋律は順次進行主体。
+- 区別: folk はフィドルと舞曲的なリズム。acoustic-ssw は指弾きのアルペジオと歌の旋律。
+
+#### 12.7.8 `cool` — 涼しげな透明感（mood、E6）
+- 説明: 「涼しげ。透明感のあるシンセと軽い2ステップのビート」／"Cool: glassy synths over a light two-step beat"
+- 相性: 夏の夜・高湿度
+- 音色: `drum_pop_kick`・`drum_rim`、`drum_909_hat`、`fb_sub`、`pad_glass`（m9・maj9 の和音サンプル）、`syn_pluck`、エコー用スロット
+- 和声: i9–IV9（ドリアン）、i7–bVIImaj7–bVImaj7–v7。
+- 構成: intro, a, b, break, a, outro
+- 文法: `TWO_STEP`（kick 0,10／snare 4,12、ハットの裏拍）、プラックの短い動機に `echo`。
+- 区別: dreamy より拍がはっきりし速い。house より軽く4つ打ちではない。
+
+#### 12.7.9 `focus` — 集中用のミニマルなローファイ（mood、B4）
+- 説明: 「集中。ほとんど変化しないローファイのループと一定のテンポ」／"Focus: minimal lo-fi loop with a steady, unchanging groove"
+- 相性: 室内・夜
+- 音色: `drum_boombap_kick`・`drum_boombap_snare`・`nostalgic_hihat`、`bass_finger`、`keys_ep`（和音サンプル m7・maj7）、`fx_vinyl`
+- 和声: 2和音のループ（im7–IVmaj7、ii7–V7、Imaj7–vi7 から1つ）を曲全体で固定。
+- 構成: intro, loop×3, loop_b, loop×3, outro（loop_b はキックを抜くだけ）
+- 文法: 16分スウィング、旋律なし、変化は8小節ごとのハットの密度だけ。vinyl は ch4 で2小節ごとに鳴らし直す。
+- 区別: lofi-hiphop・lofi-chill は旋律と区間の変化がある。focus は意図的に変化を抑える。
+
+#### 12.7.10 `rock` — ギター主体のロック（genre、B6）
+- 説明: 「ロック。ギターのリフと8ビート、4/4 の中〜速いテンポ」／"Rock: guitar riffs over a straight eight-beat"
+- 音色: `prog_kick`・`prog_snare`、`nostalgic_hihat`・`march_crash_cymbal`・`swing_ride`、`bass_pick`、`gtr_crunch`（リフ）、`prog_lead_gtr`、`drum_tom`
+- 和声: I–bVII–IV–I（ミクソリディアン）、i–bVI–bVII–i、I–IV–V。
+- 構成: intro（リフ）, verse, chorus, verse, chorus, solo, chorus, outro
+- 文法: `BACKBEAT`（kick 0,8,10／snare 4,12）、ハット8分、サビはライドに替える。リフは2小節の動機（ルートとパワーコードの組合せ）を和音に合わせて移調。ソロは `MelodyGenerator`（ペンタトニック、跳躍多め、長音に `4xy`）。
+- 区別: prog-rock は変拍子。energetic は速い長調のパンク寄り。indie-rock は軽い歪みとアルペジオ。
+
+#### 12.7.11 `pop` — 明るいポップ（genre、B6）
+- 説明: 「ポップ。長調の明るいメロディとピアノ、覚えやすいサビ」／"Pop: bright major-key melodies, piano and a catchy chorus"
+- 音色: `drum_pop_kick`・`drum_pop_snare`・`fb_clap`、`perc_shaker`・`nostalgic_hihat`、`bass_finger`、`keys_piano`（8分の刻み）、`vox_ooh`（旋律）、`orch_violin` 系のパッド
+- 和声: I–V–vi–IV、vi–IV–I–V、I–vi–IV–V。
+- 構成: intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus（半数の seed で +1 転調）, outro
+- 文法: §12.6 の歌もの。サビのフックは1小節の動機を4回（2回目・4回目は語尾を変える）。
+- 区別: jpop-80s は80年代の音色（ゲートスネア・シンセブラス）と王道進行。city-pop はテンションコードとカッティング。
+
+#### 12.7.12 `jazz` — モーダル・ジャズ（genre、B4 読み替え）
+- 説明: 「ジャズ。ドリアンのモーダルなヴァンプ、4度堆積のピアノとミュート・トランペット」／"Modal jazz: dorian vamps, quartal piano voicings and muted trumpet"
+- 音色: `swing_ride`・`swing_brush_snare`、`swing_walk_bass`、`keys_piano` の4度堆積の和音サンプル、`orch_trumpet` を柔らかくした派生
+- 和声: Dm ドリアン16小節 → Ebm ドリアン8小節 → Dm ドリアン8小節（AABA のモーダル形式）。ピアノは4度堆積（例: E–A–D–G–B）の和音を平行移動する。
+- 構成: head（AABA）, solo（AABA）, head, 最後にフェルマータ風の長い和音
+- 文法: swing-jazz と同じ 8分格子（rpm 8、1拍＝2 row）と `SwingConfig(14, 10)`。ベースは4分のウォーキング、トランペットは長音主体で、ソロは跳躍と経過音を増やす。
+- 区別: **swing-jazz（既存）はビバップのリズムチェンジで速い**。jazz は和音がほとんど動かないモーダル。原文の「7thコード、スウィング、即興」は swing-jazz でも満たすので、別ジャンルにするか別名にするかを §12.9 Q1 で決める。
+
+#### 12.7.13 `bossa-nova` — ボサノバ（genre、B4）
+- 説明: 「ボサノバ。2/4 の柔らかいガットギターと軽いパーカッション」／"Bossa nova: soft nylon guitar and light percussion in 2/4"
+- 音色: `drum_rim`（クラーベのパターン）・`perc_shaker`・`perc_surdo`、`bass_finger`、`gtr_nylon`（和音サンプル maj7・m7・dom7・m7b5）、`wind_flute`
+- 和声: Imaj7–II7–iim7–V7（Ipanema 型）、iim7–V7–Imaj7–VI7、im7–IV7（ドリアン）。
+- 構成: intro, a, a, b, a, solo（フルート）, a, outro
+- 文法: 1 measure＝2/4（8 row）。ベースは付点4分＋8分（row 0 に根音、row 6 に5度）。ギターはボサノバの定型（低音は拍、和音はシンコペーション）。リムはボサノバのクラーベ（2小節周期）。
+- 区別: jazz・swing-jazz はスウィングする。bossa-nova はストレートな16分と2小節周期のクラーベ。
+
+#### 12.7.14 `city-pop` — 80年代シティポップ（genre、B6）
+- 説明: 「シティポップ。テンションコードのエレピ、跳ねるベースとギターのカッティング」／"City pop: jazzy electric piano, bouncy bass and funky guitar cutting"
+- 音色: `drum_pop_kick`・`drum_pop_snare`、`nostalgic_hihat`・`perc_tambourine`、`bass_slap`、`keys_ep`（maj7・m9・dom9）、`syn_brass`（旋律）、`gtr_clean_cut`
+- 和声: IVmaj7–III7–vim7–(vm7–I7)（いわゆる丸サ進行）、iim7–V7–Imaj7–VI7、IVmaj7–V7–iiim7–vim7。
+- 構成: intro, verse, pre, chorus, interlude, verse, pre, chorus, chorus, outro
+- 文法: ベースは `syncopated_16`（オクターブの跳躍）、ギターは `cutting_16`、エレピは2拍ごとの和音、ハット16分。
+- 区別: jpop-80s は王道進行とブラスの決めで明るく速い。neo-soul は拍のよれと複雑なテンション。
+
+#### 12.7.15 `ambient` — アンビエント（genre、A4）
+- 説明: 「アンビエント。拍の弱い、重なり合うパッドとまばらなベル」／"Ambient: layered pads and sparse bells with little or no beat"
+- 音色: `pad_glass`、`pad_warm`、`keys_bell`、エコー用スロット
+- 和声: Imaj7 – IVmaj7（リディアン）– vi(add9)。和音は4小節ごと。
+- 構成: 6 区間（layer1, layer2, bloom, layer2, drift, fade）。intensity で層を出し入れ。
+- 文法: 2つのパッドが和音の異なる構成音を持続、ベルは4小節に数音で `echo`。打楽器なし。
+- 区別: ambient-drone は和音がほぼ変わらない持続音。calm はピアノの分散和音の拍がある。
+
+#### 12.7.16 `lofi-hiphop` — ローファイ・ヒップホップ（genre、B6）
+- 説明: 「ローファイ・ヒップホップ。よれたビート、ジャジーなエレピ、レコードのノイズ」／"Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise"
+- 音色: `drum_boombap_kick`・`drum_boombap_snare`、`nostalgic_hihat`、`bass_finger`、`keys_ep`（m9・maj9・dom13 の和音サンプル、`4xy` の遅いビブラートで揺れ）、`swing_sax_lead` を柔らかくした旋律、`fx_vinyl`
+- 和声: iim9–V13–Imaj9–vi7、Imaj7–iii7–vi7–IVmaj7。
+- 構成: intro, a, a, b, a, outro
+- 文法: `BOOMBAP`＋16分スウィング `(7, 5)`、旋律は短い動機を小節ごとに少し変える。
+- 区別: nostalgic（既存）はストレートな16分とオルゴール。lofi-chill はギター・フルートとサイドチェインのうねり。focus は旋律なし。
+
+#### 12.7.17 `edm` — ビルドアップとドロップ（genre、E6）
+- 説明: 「EDM。シンセ主体、ビルドアップで溜めてドロップで弾ける」／"EDM: synth-driven builds that explode into the drop"
+- 音色: `drum_909_kick`、`fb_clap`・`drum_909_hat`、`bass_synth_saw`、`fb_supersaw`（ドロップのリード）、`syn_saw_lead`、`fx_riser`・`fx_impact`
+- 和声: vi–IV–I–V、i–VI–III–VII。
+- 構成: intro, build, drop, drop, break, build, drop, drop, outro
+- 文法: build は `buildup`（スネアが8分→16分→E9x、音量上昇、riser）、ドロップ頭に impact、ドロップはリードの2小節フックの反復、ベースとコードにサイドチェイン。
+- 区別: uplifting はアルペジオ主体で長調の高揚。house はビルドアップが無く一定のグルーヴ。
+
+#### 12.7.18 `house` — ハウス／ディープハウス（genre、E6）
+- 説明: 「ハウス。4つ打ちの安定したグルーヴと裏拍のオルガン・スタブ」／"House: steady four-on-the-floor groove with offbeat organ stabs"
+- 音色: `drum_909_kick`、`fb_clap`・`drum_rim`・`drum_909_open_hat`、`bass_deep`、`keys_house_stab`（m7・m9）、`fb_vocal_chop`・`pad_warm`
+- 和声: im7–IV9（ドリアンの2和音）、im9–bVIImaj7。
+- 構成: intro（ドラムのみ）, groove, main, main, break, main, main, outro
+- 文法: `DEEP_HOUSE`（kick 4つ打ち、clap 2・4拍、裏拍の open hat）、スタブは裏拍のシンコペーション、ベースは16分のシンコペーション。
+- 区別: edm はビルドアップとドロップの起伏。techno は和音をほとんど持たない。
+
+#### 12.7.19 `hiphop` — ブーンバップ・ヒップホップ（genre、B4）
+- 説明: 「ヒップホップ。ラップが乗る余白を残したブーンバップのビートとサンプル風ループ」／"Hip hop: boom-bap beats and sample-style loops that leave room for rap"
+- 音色: `drum_boombap_kick`・`drum_boombap_snare`・`nostalgic_hihat`、`bass_finger`、`keys_piano`／弦の和音サンプル（ループ素材）、`march_brass_horn`（フックのホーン）
+- 和声: 1〜2小節の短調ループ（i–VI、i–iv、im7–bVImaj7）を曲全体で固定。
+- 構成（ラップ向け）: intro（4小節）, verse×4（16小節）, hook×2（8小節）, verse×4, hook×2, outro
+- 文法: verse は中音域の旋律を置かず（ラップの余白）、ループとドラムだけ。hook でホーンのスタブが入る。16分スウィング `(7, 5)`。
+- 区別: trap（既存）は 808 のグライドと32分のハイハット。原文の「HipHop / Trap（808、ラップ向け構造）」の trap 部分は既存の trap が満たすので、扱いを §12.9 Q1 で決める。
+
+#### 12.7.20 `classical` — 古典派の弦楽四重奏（genre、Q4）
+- 説明: 「クラシック。古典派のメヌエット風の弦楽四重奏、明確な和声と終止」／"Classical: a Classical-era minuet for string quartet with clear cadences"
+- 音色: `orch_violin`（vln1・vln2）、`orch_viola`、`orch_cello`
+- 和声: 機能和声。前半8小節は I–IV–V7–I と半終止（I–ii6–V）、後半は属調へ転調（`key_offset=+7`）して戻る。V/V（副属七）を使う。
+- 構成（メヌエットとトリオ）: minuet_a, minuet_a, minuet_b, trio（下属調）, minuet_a, coda
+- 文法: 3/4（12 row、`variable_meter`、1 pattern＝4小節＋D00）。vln1 が楽節（前楽節4小節は半終止、後楽節は完全終止）、vln2・vla は和声を刻み、vc は低音。声部は `voice()` と導音の解決の規則で進める。最終 row は1チャンネル空ける（D00 のため）。
+- 区別: orchestral（既存）は8ch の劇伴。classical は4ch の室内楽で、古典的な楽節構造と終止を持つ。
+
+#### 12.7.21 `cinematic` — 映画音楽の情感（genre、O8）
+- 説明: 「映画音楽。ピアノのオスティナートから弦とホルンが重なり、ドラマチックに高まる」／"Cinematic: piano ostinato building to soaring strings and horns"
+- チャンネル: 1 ピアノ／2 ヴァイオリン（旋律）／3 ヴィオラ・第2ヴァイオリン／4 チェロ／5 コントラバス／6 ホルン／7 合唱パッド／8 ティンパニ・シンバルスウェル
+- 音色: `keys_piano`、`orch_violin`・`orch_viola`・`orch_cello`・`orch_bass_str`、`march_brass_section`、`vox_choir`、`orch_timpani`・`free_cymbal_swell`
+- 和声: i–VI–III–VII、VI–VII–i。クライマックスで平行長調へ（I–V–vi–IV、`key_offset=+3`）。
+- 構成: intro（ピアノのみ）, rise1, theme, rise2, climax, resolve（ピアノのみ）
+- 区別: orchestral は古典的な機能和声で木管を含む。trailer は打楽器と金管の衝撃で、3幕の構成。
+
+#### 12.7.22 `folk` — フォーク（genre、B4）
+- 説明: 「フォーク。アコースティックギターのストロークとフィドル、素朴な進行」／"Folk: strummed acoustic guitar and fiddle over simple progressions"
+- 音色: `perc_clap_stomp`・`perc_tambourine`、`swing_walk_bass`（アップライト）、`gtr_strum_*`、`orch_violin` にビブラートを付けたフィドル／`wind_flute`（ホイッスル）
+- 和声: I–IV–I–V、I–V–vi–IV、I–bVII–IV–I（ミクソリディアン）。
+- 構成: intro, verse, chorus, verse, instrumental（フィドル）, chorus, outro
+- 文法: 足踏み（1・3拍）と手拍子（2・4拍）、ベースは根音と5度の交互、ストロークは8分、フィドルは8分の順次進行と装飾（前打音）。
+- 区別: warm はピアノの旋律と穏やかな伴奏。acoustic-ssw は指弾き。
+
+#### 12.7.23 `rnb-soul` — R&B／ソウル（genre、B6）
+- 説明: 「R&B／ソウル。滑らかなテンションコードと歌うような旋律のスロー・ジャム」／"R&B / soul: smooth extended chords and a singing melody in a slow jam"
+- 音色: `drum_pop_kick`・`drum_pop_snare`、`drum_rim`・`nostalgic_hihat`、`bass_finger`、`keys_ep`（maj9・m9・dom13）、`vox_ooh`（旋律）、`orch_violin` 系のパッド
+- 和声: IVmaj7–iii7–ii7–Imaj7、ii9–V13–Imaj9、vi9–ii9–V13sus4–Imaj9。
+- 構成: intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, outro
+- 文法: 軽い16分スウィング `(7, 5)`、旋律は長音と装飾（16分の回し）と `4xy`、ベースは旋律的に動き次の和音へ `3xx` で滑る。
+- 区別: neo-soul は拍のよれと EP 中心・より複雑なテンション。city-pop は速くカッティングがある。
+
+#### 12.7.24 `synthwave` — シンセウェイブ（genre、E6）
+- 説明: 「シンセウェイブ。80年代のシンセとゲートスネア、8分で脈打つベース」／"Synthwave: 80s synths, gated snare and a pulsing eighth-note bass"
+- 音色: `drum_pop_kick`・`drum_gated_snare`、`nostalgic_hihat`（16分）、`bass_synth_saw`（8分のオクターブ）、`syn_poly_pad`、`syn_saw_lead`（`4xy`）、`syn_arp_bell`
+- 和声: i–VI–III–VII、VI–VII–i、i–iv–VI–V。
+- 構成: intro（アルペジオ）, verse, chorus, verse, chorus, solo, chorus, outro
+- 区別: jpop-80s は明るい長調の歌もの。synthwave は短調でリードとアルペジオが主役。
+
+#### 12.7.25 `techno` — ミニマル・テクノ（genre、T4）
+- 説明: 「テクノ。繰り返しの中で少しずつ変わるシーケンスと4つ打ち」／"Minimal techno: a hypnotic four-on-the-floor with slowly mutating sequences"
+- 音色: `drum_909_kick`、`drum_909_hat`・`drum_909_open_hat`・`fb_clap`、`bass_synth_square`（短い）、`syn_stab`
+- 和声: 1和音（短調の m7）をほぼ固定し、4小節ごとにシーケンスの「鳴らす16分の位置」を1つずつ入れ替える。
+- 構成: 12〜16 pattern。8小節ごとにハット・クラップ・ベースを出し入れ（intensity）。
+- 区別: minimalism（既存）は電子音ではない位相音楽。house は和音のスタブと温かさがある。
+
+#### 12.7.26 `jpop-80s` — 80年代 J-POP 風（style、B6）
+- 説明: 「80年代 J-POP 風。明るいコードと都会的なブラス、軽快なビートと最後のサビの転調」／"80s J-pop style: bright chords, city brass, light beat and a final key change"
+- 音色: `drum_pop_kick`・`drum_gated_snare`、`perc_tambourine`・`nostalgic_hihat`、`bass_finger`（オクターブ）、`keys_ep`・`syn_brass`（決め）、`syn_square_lead`／`swing_sax_lead`
+- 和声: IVmaj7–V7–iii7–vi（王道進行）、IV–V–iii–vi、ii–V–Imaj7。
+- 構成: intro（ブラスの決め）, A, B, サビ, interlude, A, B, サビ, サビ（+1 か +2 転調）, outro
+- 区別: city-pop はより遅く、丸サ進行とカッティング中心。pop は現代的な音色。
+
+#### 12.7.27 `jrock-90s` — 90年代 J-ROCK 風（style、B6）
+- 説明: 「90年代 J-ROCK 風。歪んだギターが前に出る速いビートとギターソロ」／"90s J-rock style: loud guitars over a fast beat with a guitar solo"
+- 音色: `prog_kick`・`prog_snare`、`nostalgic_hihat`・`march_crash_cymbal`、`bass_pick`、`gtr_crunch`（強め）、`prog_lead_gtr`（ソロは `3xx` のベンドと `4xy`）、`gtr_clean_arp`（Aメロの刻み）
+- 和声: vi–IV–V–I、i–VI–VII–i、IV–V–iii–vi。
+- 構成: intro（リフ）, A, B, サビ, A, B, サビ, solo, サビ, サビ（+1 転調）, outro
+- 区別: rock は洋楽的なリフ中心の構成。energetic は長調のパンク寄りで転調しない。
+
+#### 12.7.28 `anime-ost` — アニメの劇伴風（style、B6）
+- 説明: 「アニメ劇伴風。刻むストリングスとジャズの和声、ブラスの決め」／"Anime soundtrack style: driving strings with jazz harmony and brass hits"
+- 音色: `prog_kick`・`swing_brush_snare`・`swing_ride`、`swing_walk_bass`、`keys_piano`（7th のコンピング）、`str_spiccato`（16分の刻み）、`march_brass_section`・`swing_sax_lead`（旋律と決め）、`orch_violin` 系の対旋律
+- 和声: i–iv–VII–III（五度圏）、iim7b5–V7–i、VImaj7–V7–i。
+- 構成: intro（弦の刻み）, A（サックスの主題）, B（弦）, break（ドラムの見せ場）, A, climax, outro（決めで終わる）
+- 区別: swing-jazz は小編成のジャズそのもの。anime-ost は弦と管の劇伴にジャズの和声を混ぜる。
+
+#### 12.7.29 `jrpg` — JRPG のフィールド曲風（style、B6）
+- 説明: 「ゲーム音楽風（JRPG）。旋律を重視した冒険のテーマ、ハープと弦とホルン」／"JRPG game music style: melodic adventure theme with harp, strings and horn"
+- 音色: `orch_timpani`・`march_snare`（軽く）、`orch_cello`（低音）、`keys_harp`（分散和音）、`orch_violin` 系のパッド、`wind_flute`／`orch_trumpet`（旋律）、`march_brass_section`（対旋律）
+- 和声: I–V–vi–iii–IV–I–IV–V（カノン型）、vi–IV–V–I、I–bVII–IV–I（冒険感）。
+- 構成: intro（ファンファーレ）, a, a2, b, a（ゲーム音楽らしく主題が戻る）, ending
+- 文法: 旋律は楽節（4＋4小節の前後楽節）と動機の反復・ゼクエンツ（同じ動機を2度ずつ上げる）で作る。ハープは16分の上行分散和音。
+- 区別: march は軍楽の行進曲。orchestral・cinematic は旋律より響き中心。jrpg は覚えやすい主旋律が主役。
+
+#### 12.7.30 `lofi-chill` — ローファイ・プロデューサー風のチル（style、B6）
+- 説明: 「ローファイ・チル。柔らかいギターとフルート、うねるサイドチェインと雨音」／"Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience"
+- 音色: `drum_boombap_kick`・`drum_rim`、`perc_shaker`、`bass_finger`、`gtr_nylon`（和音）、`wind_flute`（旋律）、`fx_rain`・`fx_vinyl`
+- 和声: Imaj7–iii7–vi7–IVmaj7、ivm7（同主短調の借用）を混ぜる。
+- 構成: intro, a, a, b, a, outro
+- 文法: 16分スウィング、kick をトリガにギターと雨音にサイドチェイン（うねり）。スネアの代わりにリム。
+- 区別: lofi-hiphop はジャジーなエレピとブーンバップ。focus は旋律なし。**lofi-hiphop とかなり近い**ので、別ジャンルにするか統合するかを §12.9 Q1 で決める。
+
+#### 12.7.31 `indie-rock` — インディー・ロック風（style、B6）
+- 説明: 「インディー・ロック風。生音のドラムと鳴り響くギターのアルペジオ、軽い歪み」／"Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive"
+- 音色: `prog_kick`・`drum_pop_snare`、`perc_tambourine`・`nostalgic_hihat`、`bass_pick`（8分・旋律的）、`gtr_clean_arp`、`gtr_crunch`（弱め）、`syn_square_lead` または `gtr_clean_arp` の単音リフ
+- 和声: I–IV–vi–V、I–iii–IV–iv、vi–IV–I–V。
+- 構成: intro（ギターのリフ）, verse, chorus, verse, chorus, bridge, chorus, outro
+- 文法: 半数の seed でキックを4つ打ち（ダンス寄り）、ギターのアルペジオは8分で開放弦のように同じ高音を保つ（ペダル音）。
+- 区別: rock はパワーコードのリフ。jrock-90s は強い歪みと速さ。
+
+#### 12.7.32 `trailer` — 映画予告編風（style、O8）
+- 説明: 「映画予告編風。大太鼓と金管の衝撃、刻む弦、合唱で盛り上がる3幕構成」／"Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts"
+- チャンネル: 1 taiko／2 タム・スネアの合奏／3 低い金管（braam）／4 刻む弦（spiccato）／5 チェロ・コントラバス／6 合唱／7 高弦の旋律／8 効果音（riser・impact）
+- 和声: i–VI–III–VII、i–bVI–bVII–i。第3幕で半音上へ転調。
+- 構成: act1（衝撃と無音の間）, act1, act2（刻みが入り打楽器が増える）, act2, riser, act3（全合奏）, act3, final（最後の一撃と余韻）
+- 区別: dark-tense は一定のパルスで起伏が少ない。cinematic は情感の旋律。trailer は衝撃・無音・加速で3段階に盛り上がる。
+
+#### 12.7.33 `ambient-drone` — アンビエント・ドローン風（style、A4）
+- 説明: 「ドローン。長く伸びる持続音がゆっくり移ろう、変化の少ない響き」／"Ambient drone: long sustained tones that shift very slowly"
+- 音色: `low_drone_bass`、`maqam_nay` 系のデチューンした持続音、`pad_glass`、`free_cymbal_swell`
+- 和声: 主音と5度のドローンを通して保ち、上に乗る音だけ8小節ごとに1音変える（ドリアン／エオリアンの音から）。
+- 構成: 8〜12 pattern。音量の大きな弧（intensity 0.2→0.8→0.2）。
+- 文法: 旋律・打楽器なし。4小節ごとの `fade_cells` による音量のうねり。
+- 区別: ambient は和音が変わりベルがある。ambient-drone はほとんど変化しない。
+
+#### 12.7.34 `acoustic-ssw` — アコースティック弾き語り風（style、B4）
+- 説明: 「弾き語り風。指弾きのギターと軽いパーカッション、歌のような旋律」／"Acoustic singer-songwriter style: fingerpicked guitar, light percussion and a vocal-like melody"
+- 音色: `perc_cajon`・`perc_shaker`、`bass_finger`（弱く）、`gtr_acoustic`（`fingerpick`）、`vox_ooh`（旋律）
+- 和声: I–V–vi–IV、vi–IV–I–V、I–iii–vi–IV。
+- 構成: intro（ギターのみ）, verse, chorus, verse, chorus, bridge, chorus, outro（ギターのみ）
+- 文法: トラヴィス奏法（親指が根音と5度を4分で交互、他の指が8分裏で上声）。旋律は歌の息継ぎ（§12.6）を強めに入れる。
+- 区別: folk はストロークとフィドル。warm はピアノの旋律。
+
+#### 12.7.35 `neo-soul` — ネオ・ソウル風（style、B6）
+- 説明: 「ネオソウル風。よれたビートとエレピ主体の豊かなテンションコード」／"Neo soul style: laid-back off-grid beats and lush electric piano chords"
+- 音色: `drum_boombap_kick`・`drum_pop_snare`、`drum_rim`・`nostalgic_hihat`、`bass_finger`（`3xx` のスライド）、`keys_ep`（maj9・m11・dom13）、`vox_ooh`／`gtr_clean_arp`（合いの手）、2台目の `keys_ep`（トレモロ `7xy` は使わず音量の刻みで近似）
+- 和声: IVmaj9–iii7–vi9、ii9–V13–iii7–VI7、im11–IV9（ドリアン）。
+- 構成: intro, verse, chorus, verse, chorus, bridge, outro
+- 文法: 強い16分スウィング `(8, 4)`、スネアとハットの一部に `EDx`（1〜2 tick）の遅れ（§12.6）。
+- 区別: rnb-soul はきれいなグリッドのスロー・ジャムと弦。neo-soul は拍のよれと EP の複雑な和音。
+
+### 12.8 既存コードの修正が必要かどうか
+
+**必要なもの（小さく、既存ジャンルの出力は変えない）**
+
+| # | 対象 | 内容 | 理由 |
+|:---|:---|:---|:---|
+| C1 | `core/pitch.py` の `CHORD_QUALITIES` | `6`・`m6`・`maj9`・`m9`・`dom9`・`dom13`・`m11`・`add9`・`sus2`・`sus4`・`7sus4`・`m7b5`・`dim7`・`aug` を追加 | 現在は6種類（三和音と4種の7th）だけで、city-pop・neo-soul・rnb-soul・jazz などの和音を `voice()` で作れない。辞書への追加だけで、`voice()` のアルペジオ（第3音・第5音）もそのまま動く |
+| C2 | `core/pitch.py` の `MODES` | `lydian`・`harmonic_minor`・`melodic_minor`・`major_pent`・`minor_pent`・`blues` を追加 | リディアン（calm・dreamy・ambient）、和声的短音階の V（melancholic・classical・dark-tense）、ペンタトニック（ソロ・フック）に要る |
+| C3 | `profiles/base.py`・`cli.py` | `GenreProfile.category`（`"mood"`・`"genre"`・`"style"`）を追加し、`--list-genres` を区分ごとにまとめて表示する。`--help` の末尾は47ジャンルの全説明ではなく区分ごとの id の一覧＋「説明は `--list-genres`」にする | 47ジャンル（94行）を1列に並べると一覧・ヘルプとも読めない。現在の `--help` は58行で、そのままだと約130行になる（§12.9 Q3） |
+| C4 | `profiles/base.py`・テスト | `GenreProfile.rows_per_beat`（既定 4）を追加。swing-jazz と jazz は 2 | 「1拍の row 数」が今はテスト内の辞書（`ROWS_PER_BEAT = {"swing-jazz": 2}`）に直書きされている。8分格子のジャンルが増えるので、ジャンル自身が宣言し、テンポの実プレイヤー検査とスウィングの規則（Speed の和＝`48 / rows_per_beat`）がそれを使う |
+| C5 | 検査 V15 の扱い | 6ch・8ch のジャンルが多数加わる。V15 を「4ch の曲だけ検査する」に変えるか、各ジャンルが `allow_volume_sum_over` を宣言するか（§12.9 Q4） | V15 の左右モデルは Amiga の 4ch 前提の目安で、多チャンネルでは音割れしなくても超える（orchestral で確認済み）。音割れは実プレイヤーの検査が全ジャンルを見る |
+| C6 | `tests/realplayer/test_clipping.py` | 「V15 を免除しているのは orchestral だけ」という検査を C5 に合わせて直す | C5 の結果 |
+
+**推奨（なくても実装できる）**
+
+| # | 対象 | 内容 | なくした場合 |
+|:---|:---|:---|:---|
+| C7 | `core/synth.py` の `WeightedLayer` | `offset_ms`（レイヤーの鳴り始めを遅らせる。OneShot のみ）を追加 | ギターのストローク（弦ごとに少しずつ遅れて鳴る）が作れず、和音が「同時に鳴るブロック」になる（warm・folk・bossa-nova などで響きが硬くなる） |
+| C8 | `core/synth_presets.py` | 約55のプリセットが増え 880 行→約1,900 行になるので、系統ごとのファイルに分けたパッケージにする（`core/synth_presets/` の `__init__.py` が `PRESETS`・`find()` を今と同じ形で公開） | 1ファイルが大きくなるだけで動作は同じ |
+| C9 | テストの実行時間 | 実プレイヤー検査（音割れ: 全ジャンル×4形式×2 seed、テンポ: 全ジャンル）が35ジャンル分増え、全テストは約90秒→約5〜7分の見込み。`@pytest.mark.slow` を付けて、普段は `-m "not slow"` で速く回せるようにする | 毎回5〜7分かかる |
+| C10 | README | ジャンルの表を区分ごとに分ける | 47行の1枚の表になる |
+
+**変更が要らないことを確かめたもの**
+
+- **作曲の枠組み**: `engine`（`compose_song`・`apply_tempo`・`D00`・`post_processors`）、`GenreProfile` のフック、`MeasureBuffer` の衝突解決、`voice()`、`MelodyGenerator`（`beat_rows` で1拍の row 数を変えられる）。
+- **拍子とテンポ**: 3/4（classical）は既存の可変小節で書ける（12 row の measure を4つ＋`D00`）。16分スウィングは既存の `SwingConfig` がそのまま使える（Speed の和を 12 にするだけ。現在の「和は 24」という説明は8分格子の場合の話）。転調は `PatternPlan.key_offset`、テンポの揺れは `TempoCurve` で足りる。
+- **チャンネル数と出力形式**: 6ch・8ch は MOD（`6CHN`・`8CHN`）・XM・S3M（上限16）・IT・MIDI・MP3 のすべてで既に扱える。`channel_pans` の宣言も既にある。
+- **MIDI**: 拍子は小節の tick 数から求めるので 3/4・2/4 も正しい。新しい楽器は `gm_voices` の宣言だけ。
+- **効果**: サイドチェイン（`mixer`）、ポルタメント・ビブラート・リトリガ・ノートディレイ（`EDx`）、サンプルオフセットは既存。残響エフェクトは MOD に無いので、パターン側のエコー（`band_common.echo`）で表現する。
+- **ジャンルの登録**: `genres/` に置くだけで登録され、説明（日本語・英語）・`gm_voices`・1ファイル1ジャンル・音割れの検査は既存のテストが自動で全ジャンルに掛かる。読み込み時間は12ジャンルで 0.15 秒なので47でも問題ない。1ジャンルのサンプルは最大31で、最も多い構成（8ch）でも収まる。
+- **ノイズ系の音色**: レコードのノイズ・雨音は、ループにはできない（ループは ToneLayer のみ）が、長い OneShot を小節頭で鳴らし直せば足りる。
+
+### 12.9 決めていただきたい点
+
+| # | 論点 | 推奨 | 代案 |
+|:---|:---|:---|:---|
+| Q1 | 既存ジャンルとほぼ同じになるもの（**Jazz** ≒ swing-jazz、**HipHop / Trap** の trap 部分 ≒ trap、**Lo-fi Producer風** ≒ Lo-fi HipHop） | 別ジャンルとして作り、既存とはっきり違う方向に寄せる（jazz＝モーダル・ジャズ、hiphop＝ブーンバップ、lofi-chill＝ギターとサイドチェインのうねり）。35ジャンルすべてを作る | 重なるものは作らず、既存ジャンルの別名にする（`jazz`→swing-jazz、`hiphop`→trap、`lofi-chill`→lofi-hiphop）。その場合は32ジャンル |
+| Q2 | 実在の人名（山下達郎・竹内まりや、B'z・GLAY、菅野よう子） | id・表示名・説明には入れず、音楽的特徴で書く（§12.7.26〜28） | 説明に「〜系」として人名を入れる |
+| Q3 | 47ジャンルの一覧とヘルプの表示 | 区分（mood／genre／style）を持たせて一覧を区分ごとに表示し、`--help` 末尾は id だけ（C3） | 今のまま全ジャンルの説明を並べる |
+| Q4 | 多チャンネル曲の V15 | V15 は 4ch の曲だけ検査する（`allow_volume_sum_over` は廃止）。音割れは実プレイヤー検査で全ジャンルを確認（C5） | 6ch・8ch の各ジャンルが `allow_volume_sum_over=True` を宣言する |
+| Q5 | mood の「相性」（晴れ・夜・雨など） | 今回は説明文にも入れず設計書に記録するだけ。天気や時間帯から選ぶ機能を作るときに属性（例: `affinity`）として足す | 今回 `GenreProfile.affinity` を足して値を入れておく（使う機能はまだ無い） |
+| Q6 | ギターのストローク（C7） | `WeightedLayer.offset_ms` を足す | 足さずにブロック和音で我慢する |
+| Q7 | テストの実行時間（C9） | 実プレイヤー検査に `slow` の印を付け、普段は省略できるようにする（マージ前には全部流す） | 印を付けず毎回全部流す |
+| Q8 | 実装の進め方 | 基盤（C1〜C8・`band_common`・音色ライブラリ）→ 近いものどうし約5ジャンルずつ7回に分け、各回でテストが通ったらコミット | 35ジャンルを一度に実装 |

@@ -8,12 +8,14 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..core.pitch import fold_into_range
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, _scale_vol, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, Section, _scale_vol, hits,
+    keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_CYM, CH_BASS, CH_PIANO, CH_LEAD, CH_STR = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_KS, CH_CYM, CH_BASS, CH_PIANO, CH_LEAD, CH_STR, CH_X_LEAD_ECHO, CH_X_VIOLIN_LINE = range(8)
 
 MAIN = (hits("kick", (0, 10), 56) + hits("snare", (4, 12), 46) + hits("snare", (7, 15), 22, 0.5)
         + hits("ride", (0, 4, 6, 8, 12, 14), 30))
@@ -57,6 +59,8 @@ class AnimeOstProfile(BandProfile):
         ChannelDef("piano", ("piano",), pan=88),
         ChannelDef("lead", ("sax", "vln", "brass"), pan=150),
         ChannelDef("strings/brass", ("spic", "brass"), (("brass", 2),), pan=64),
+        ChannelDef("lead echo", ("sax", "vln", "brass",), pan=96),
+        ChannelDef("violin line", ("vln",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "ride": CH_CYM, "crash": CH_CYM}
     KEYS = (2, 7)
@@ -87,6 +91,14 @@ class AnimeOstProfile(BandProfile):
     LEAD = LeadSpec("sax", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7)), LEAD_MOTIFS,
                     vol=46, gate=0.85, vibrato=0x23)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("vln", CH_X_VIOLIN_LINE, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "ride/crash"), (("snare", 4), ("kick", 3), ("crash", 2))),
+            *keep("bass", "piano", "lead")),
+        6: keep("kick/snare", "ride/crash", "bass", "piano", "lead", "strings/brass"),
+        8: keep("kick/snare", "ride/crash", "bass", "piano", "lead", "strings/brass", "lead echo", "violin line"),
+    }
     def lead_key(self, sec):
         return LEAD_BY_SECTION.get(sec.kind, "sax")
 

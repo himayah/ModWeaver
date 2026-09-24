@@ -6,7 +6,7 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..core.pitch import fold_into_range
 from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, _scale_vol, preset,
+    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, _scale_vol, keep, preset,
 )
 from ..profiles.registry import register_profile
 
@@ -78,6 +78,11 @@ class CinematicProfile(BandProfile):
     LEAD = LeadSpec("vln", CH_VLN, ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7, 8)), LEAD_MOTIFS,
                     vol=48, gate=1.0, vibrato=0x23)
 
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 6ch＝ヴィオラとコントラバスを省いた縮小編成
+        6: keep("piano", "violin", "cello", "horn", "choir", "timpani"),
+        8: keep("piano", "violin", "viola", "cello", "contrabass", "horn", "choir", "timpani"),
+    }
+    CHANNEL_WEIGHTS = {6: 1, 8: 2}
     def extra_measure(self, mctx, sec, st, rng, buf):
         ins = mctx.instruments
         chord = mctx.chord

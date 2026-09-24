@@ -4,12 +4,13 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, hits, preset,
+    ArpSpec, BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep,
+    preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_ARP = range(6)
+CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_ARP, CH_X_LEAD_ECHO, CH_X_STRINGS = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = hits("kick", (0, 3, 8, 10), 60) + hits("snare", (4, 12), 56) + hits("hat", range(0, 16, 2), 34)
 DRIVE = hits("kick", (0, 2, 8, 10), 60) + hits("snare", (4, 12), 58) + hits("hat", range(0, 16, 2), 36)
@@ -39,6 +40,7 @@ class JRock90sProfile(BandProfile):
         ("kick", preset("prog_kick")), ("snare", preset("prog_snare")), ("hat", preset("nostalgic_hihat")),
         ("crash", preset("march_crash_cymbal")), ("bass", preset("bass_pick")),
         ("gtr", preset("gtr_crunch", saturate=2.8)), ("lead", preset("prog_lead_gtr")), ("arp", preset("gtr_clean_arp")),
+        ("line", preset("orch_violin", volume=30)),
     )
     CHANNELS = (
         ChannelDef("kick/snare", ("kick", "snare"), (("snare", 2),), pan=128),
@@ -47,6 +49,8 @@ class JRock90sProfile(BandProfile):
         ChannelDef("dist gtr", ("gtr",), pan=72),
         ChannelDef("lead gtr", ("lead",), pan=184),
         ChannelDef("clean gtr", ("arp",), pan=96),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("strings", ("line",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_CYM, "crash": CH_CYM}
     KEYS = (4, 9, 2)
@@ -81,6 +85,16 @@ class JRock90sProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
                     vol=48, gate=0.9, vibrato=0x46)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("line", CH_X_STRINGS, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "cymbal"), (("snare", 4), ("kick", 3), ("crash", 2))),
+            *keep("bass"),
+            Fold("guitars", ("dist gtr", "clean gtr")),
+            *keep("lead gtr")),
+        6: keep("kick/snare", "cymbal", "bass", "dist gtr", "lead gtr", "clean gtr"),
+        8: keep("kick/snare", "cymbal", "bass", "dist gtr", "lead gtr", "clean gtr", "lead echo", "strings"),
+    }
     def comp(self, mctx, sec, rng, buf):
         """歪んだパワーコードの8分の刻み。"""
         inst = mctx.instruments["gtr"]

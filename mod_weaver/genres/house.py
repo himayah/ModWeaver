@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, PadSpec, Section, hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KICK, CH_PERC, CH_BASS, CH_STAB, CH_PAD, CH_SHAKE = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_KICK, CH_PERC, CH_BASS, CH_STAB, CH_PAD, CH_SHAKE, CH_X_STAB_ECHO, CH_X_VOCAL_CHOP = range(8)
 
 DEEP = (hits("kick", (0, 4, 8, 12), 60) + hits("clap", (4, 12), 42) + hits("ohat", (2, 6, 10, 14), 28)
         + hits("shaker", range(1, 16, 2), 18, 0.8) + hits("rim", (7, 15), 24, 0.5))
@@ -28,6 +29,7 @@ class HouseProfile(BandProfile):
     KIT = (
         ("kick", preset("drum_909_kick")), ("clap", preset("fb_clap")), ("ohat", preset("drum_909_open_hat")),
         ("rim", preset("drum_rim")), ("shaker", preset("perc_shaker")), ("bass", preset("bass_deep")),
+        ("chop", preset("fb_vocal_chop", volume=34)),
     )
     CHORD_KITS = {"stab": (preset("keys_house_stab"), 0.0), "pad": (preset("pad_warm"), 0.0)}
     CHANNELS = (
@@ -37,6 +39,8 @@ class HouseProfile(BandProfile):
         ChannelDef("stab", ("stab",), pan=96),
         ChannelDef("pad", ("pad",), pan=64),
         ChannelDef("shaker", ("shaker",), pan=184),
+        ChannelDef("stab echo", ("stab",), pan=96),
+        ChannelDef("vocal chop", ("chop",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KICK, "clap": CH_PERC, "ohat": CH_PERC, "rim": CH_PERC, "shaker": CH_SHAKE}
     KEYS = (9, 2, 7)
@@ -60,3 +64,11 @@ class HouseProfile(BandProfile):
     BASS = BassSpec("bass", CH_BASS, kind="house", vol=56)
     COMP = CompSpec("stab", CH_STAB, kind="offbeat", vol=40)
     PAD = PadSpec("pad", CH_PAD, vol=28)
+    ECHO = (EchoSpec(CH_STAB, CH_X_STAB_ECHO, delay=3, ratio=0.45),)
+    LAYERS = (LayerSpec("chop", CH_X_VOCAL_CHOP, follow="comp", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick", "clap/hat", "shaker"), (("kick", 4), ("clap", 3), ("rim", 2))),
+            *keep("bass", "stab", "pad")),
+        6: keep("kick", "clap/hat", "bass", "stab", "pad", "shaker"),
+        8: keep("kick", "clap/hat", "bass", "stab", "pad", "shaker", "stab echo", "vocal chop"),
+    }

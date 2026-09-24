@@ -5,11 +5,13 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.midi import GmVoice
 from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, hits, preset
+from ..profiles.band_common import (
+    BandProfile, BassSpec, ChannelDef, CompSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep, preset,
+)
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_PERC, CH_BASS, CH_GTR, CH_FIDDLE = range(4)
+CH_PERC, CH_TAMB, CH_BASS, CH_GTR, CH_FIDDLE, CH_X_WHISTLE = range(6)   # 6 番目は 6ch の編成だけ
 
 STOMP_CLAP = hits("stomp", (0, 8), 56) + hits("clap", (4, 12), 44) + hits("tamb", (2, 6, 10, 14), 20, 0.7)
 LEAD_MOTIFS = {
@@ -34,16 +36,19 @@ class FolkProfile(BandProfile):
     KIT = (
         ("stomp", preset("perc_stomp")), ("clap", preset("fb_clap")), ("tamb", preset("perc_tambourine")),
         ("bass", preset("swing_walk_bass")), ("fiddle", preset("orch_violin", name="Fiddle", volume=42)),
+        ("whistle", preset("wind_flute", name="Whistle", volume=30)),
     )
     CHORD_KITS = {"gtr": (preset("gtr_acoustic"), 14.0)}
-    GM = {"fiddle": GmVoice(program=110)}
+    GM = {"fiddle": GmVoice(program=110), "whistle": GmVoice(program=78)}
     CHANNELS = (
-        ChannelDef("stomp/clap", ("stomp", "clap", "tamb"), (("clap", 3), ("stomp", 2))),
-        ChannelDef("upright bass", ("bass",)),
-        ChannelDef("guitar", ("gtr",)),
-        ChannelDef("fiddle", ("fiddle",)),
+        ChannelDef("stomp/clap", ("stomp", "clap"), (("clap", 3), ("stomp", 2)), pan=128),
+        ChannelDef("tambourine", ("tamb",), pan=164),
+        ChannelDef("upright bass", ("bass",), pan=128),
+        ChannelDef("guitar", ("gtr",), pan=84),
+        ChannelDef("fiddle", ("fiddle",), pan=172),
+        ChannelDef("whistle", ("whistle",), pan=100),
     )
-    DRUM_CHANNEL = {"stomp": CH_PERC, "clap": CH_PERC, "tamb": CH_PERC}
+    DRUM_CHANNEL = {"stomp": CH_PERC, "clap": CH_PERC, "tamb": CH_TAMB}
     KEYS = (7, 2, 0, 9)
     PROGRESSIONS = (
         ("I-IV-I-V", (C(0, "maj", label="I"), C(5, "maj", label="IV"), C(0, "maj", label="I"), C(7, "maj", label="V"))),
@@ -65,6 +70,13 @@ class FolkProfile(BandProfile):
     LEAD = LeadSpec("fiddle", CH_FIDDLE, ScaleRules(leap_probability=0.12, leap_semitones=(3, 4, 5)), LEAD_MOTIFS,
                     vol=46, gate=0.9, vibrato=0x23)
 
+    LAYERS = (LayerSpec("whistle", CH_X_WHISTLE, follow="lead", vol=24, register=(24, 35)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝打楽器を1チャンネルで共有、6ch＝2系統＋ホイッスルの対旋律
+        4: (Fold("stomp/clap", ("stomp/clap", "tambourine"), (("clap", 3), ("stomp", 2))),
+            *keep("upright bass", "guitar", "fiddle")),
+        6: keep("stomp/clap", "tambourine", "upright bass", "guitar", "fiddle", "whistle"),
+    }
+    CHANNEL_WEIGHTS = {4: 2, 6: 1}
     def lead(self, mctx, sec, st, rng, buf):
         """フィドルの前打音: 直前の row が空いている音に、確率で1つ上の音階音を16分で先行させる。"""
         super().lead(mctx, sec, st, rng, buf)

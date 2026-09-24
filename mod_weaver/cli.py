@@ -21,11 +21,14 @@ from typing import Optional, Sequence
 from . import __url__, __version__, profiles
 from .profiles import registry
 from .core import formats
-from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, generate
-from .errors import ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError
+from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, channel_choices, generate
+from .errors import (
+    ChannelCountError, ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError,
+)
 
 DEFAULT_GENRE = "nostalgic"
 RANDOM_GENRE = ("random", "r")   # --genre に指定するとジャンルをランダムに選ぶ（registry.RESERVED_NAMES と同じ）
+CHANNEL_CHOICES = (4, 6, 8)      # --channels に指定できる数（奇数は MOD の互換性のため使わない。DESIGN.md §6.14）
 LINE = "=" * 50
 THIN = "-" * 50
 
@@ -45,6 +48,7 @@ MESSAGES = {
         "output": "出力先パス（既定: output/<ジャンル>_<シード>.<拡張子>。拡張子は --format に従う）",
         "tempo": "テンポ（4分音符の BPM、{lo}〜{hi}）。80-100 のように範囲を指定するとその中からランダムに決める"
                  "（既定: ジャンルごとに自動）",
+        "channels": "チャンネル数（{choices}）。選べる数はジャンルによる（既定: ジャンルが曲ごとに選ぶ）",
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
@@ -56,6 +60,7 @@ MESSAGES = {
         "format_label": "出力形式",
         "seed_label": "シード",
         "tempo_label": "テンポ",
+        "channels_label": "チャンネル",
         "output_label": "出力ファイル",
         "random": "ランダム",
         "requested": "指定",
@@ -72,6 +77,8 @@ MESSAGES = {
         "output": "output file path (default: output/<genre>_<seed>.<ext>, extension follows --format)",
         "tempo": "tempo in quarter-note BPM ({lo}-{hi}); a range such as 80-100 picks a random BPM within it "
                  "(default: chosen by the genre)",
+        "channels": "number of channels ({choices}); which numbers are available depends on the genre "
+                    "(default: chosen by the genre for each song)",
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
         "version": "print the version and the GitHub repository URL, then exit",
@@ -83,6 +90,7 @@ MESSAGES = {
         "format_label": "Format",
         "seed_label": "Seed",
         "tempo_label": "Tempo",
+        "channels_label": "Channels",
         "output_label": "Output File",
         "random": "random",
         "requested": "requested",
@@ -148,16 +156,21 @@ def genre_ids_by_category(lang: str = "ja", width: int = 78) -> str:
     return "\n".join(lines)
 
 
-def pick_random_genre(tempo: Optional[TempoRequest] = None) -> str:
+def pick_random_genre(tempo: Optional[TempoRequest] = None, channels: Optional[int] = None) -> str:
     """``--genre random`` の選択（DESIGN.md §8.3）。候補は正規 id のみ（別名で確率が偏らないように）。
 
-    ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけを候補にする。乱数は seed と独立。"""
+    ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけ、``--channels`` があればその数を選べる
+    ジャンルだけを候補にする。乱数は seed と独立。"""
     candidates = [
         p.id for p in profiles.list_profiles()
         if tempo is None or max(tempo.lo, p.tempo_range[0]) <= min(tempo.hi, p.tempo_range[1])
     ]
     if not candidates:
         raise TempoRangeError(f"no genre supports tempo {tempo}")
+    if channels is not None:
+        candidates = [g for g in candidates if channels in channel_choices(profiles.get_profile(g))]
+        if not candidates:
+            raise ChannelCountError(f"no genre supports {channels} channels" + (f" at tempo {tempo}" if tempo else ""))
     return random.choice(candidates)
 
 
@@ -225,6 +238,8 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
     opts.add_argument("--output", "-o", type=str, default=None, help=m["output"])
     opts.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
                       help=m["tempo"].format(lo=TEMPO_MIN, hi=TEMPO_MAX))
+    opts.add_argument("--channels", "-c", type=int, choices=CHANNEL_CHOICES, default=None, metavar="N",
+                      help=m["channels"].format(choices="/".join(map(str, CHANNEL_CHOICES))))
     opts.add_argument("--list-genres", action="store_true", help=m["list_genres"])
     opts.add_argument("--english", "-e", action="store_true", help=m["english"])
     opts.add_argument("--version", "-v", action="version", version=f"ModWeaver {__version__}\n{__url__}",
@@ -249,6 +264,8 @@ def print_banner(profile, result: Result, repro: str, random_genre: bool = False
     requested = result.tempo_request
     note = f" ({m['requested']} {requested})" if requested is not None and requested.lo != requested.hi else ""
     print(_label(m["tempo_label"]) + f"BPM {result.plan.bpm}{note}")
+    n = len(result.plan.channel_plan if result.plan.channel_plan is not None else profile.channel_plan)
+    print(_label(m["channels_label"]) + str(n) + (f" ({m['requested']})" if result.channels_request else ""))
     for line in result.plan.summary:
         print(line)
     print(THIN)
@@ -292,7 +309,7 @@ def main(
 
     random_genre = args.genre in RANDOM_GENRE
     try:
-        profile = profiles.get_profile(pick_random_genre(args.tempo) if random_genre else args.genre)
+        profile = profiles.get_profile(pick_random_genre(args.tempo, args.channels) if random_genre else args.genre)
         seed = args.seed if args.seed is not None else random.randint(*SEED_RANGE)
         fmt = args.format or formats.DEFAULT_FORMAT
         if args.output:
@@ -303,8 +320,8 @@ def main(
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
-        result = generate(profile, seed, out, tempo=args.tempo, fmt=fmt)
-    except (ProfileNotFoundError, TempoRangeError) as e:
+        result = generate(profile, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels)
+    except (ProfileNotFoundError, TempoRangeError, ChannelCountError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except OutputError as e:
@@ -326,6 +343,8 @@ def main(
         repro += f" --format {args.format}"
     if args.tempo is not None:
         repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
+    if args.channels is not None:
+        repro += f" --channels {args.channels}"   # 指定しなければ seed で同じ編成になる
     print_banner(profile, result, repro, random_genre, lang)
     return 0
 

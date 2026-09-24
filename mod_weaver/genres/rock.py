@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, hits, preset
+from ..profiles.band_common import (
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep, preset,
+)
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_TOM = range(6)
+CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_TOM, CH_X_LEAD_ECHO, CH_X_ORGAN = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = hits("kick", (0, 8, 10), 60) + hits("snare", (4, 12), 54) + hits("hat", range(0, 16, 2), 32)
 RIDE = hits("kick", (0, 8, 10), 60) + hits("snare", (4, 12), 56) + hits("ride", range(0, 16, 2), 34)
@@ -36,6 +38,7 @@ class RockProfile(BandProfile):
         ("kick", preset("prog_kick")), ("snare", preset("prog_snare")), ("hat", preset("nostalgic_hihat")),
         ("ride", preset("swing_ride")), ("crash", preset("march_crash_cymbal")), ("tom", preset("drum_tom")),
         ("bass", preset("bass_pick")), ("gtr", preset("gtr_crunch")), ("lead", preset("prog_lead_gtr")),
+        ("organ", preset("keys_organ", volume=30)),
     )
     CHANNELS = (
         ChannelDef("kick/snare", ("kick", "snare"), (("snare", 2),), pan=128),
@@ -44,6 +47,8 @@ class RockProfile(BandProfile):
         ChannelDef("rhythm gtr", ("gtr",), pan=72),
         ChannelDef("lead gtr", ("lead",), pan=184),
         ChannelDef("tom", ("tom",), pan=110),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("organ", ("organ",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_CYM, "ride": CH_CYM, "crash": CH_CYM, "tom": CH_TOM}
     KEYS = (4, 9, 2)                           # E / A / D
@@ -68,6 +73,14 @@ class RockProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7), dissonance_weight=0.05),
                     LEAD_MOTIFS, vol=48, gate=0.9, vibrato=0x44)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("organ", CH_X_ORGAN, follow="lead", vol=26),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "cymbal", "tom"), (("snare", 4), ("kick", 3), ("tom", 3), ("crash", 2))),
+            *keep("bass", "rhythm gtr", "lead gtr")),
+        6: keep("kick/snare", "cymbal", "bass", "rhythm gtr", "lead gtr", "tom"),
+        8: keep("kick/snare", "cymbal", "bass", "rhythm gtr", "lead gtr", "tom", "lead echo", "organ"),
+    }
     def comp(self, mctx, sec, rng, buf):
         """パワーコードのリフ: 根音を8分で刻み、2小節ごとに5度・短7度へ動く（ミクソリディアンのリフ）。"""
         inst = mctx.instruments["gtr"]

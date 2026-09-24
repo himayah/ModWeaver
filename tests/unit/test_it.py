@@ -65,4 +65,4 @@ def test_too_many_channels_rejected():
 def test_all_genres_serialize_cleanly(genre):
     p = profiles.get_profile(genre)
     song_, plan = engine.compose_song(p, 1)
-    assert not has_errors(it.verify_it(engine.serialize(p, song_, plan, "it"), p.channel_plan))
+    assert not has_errors(it.verify_it(engine.serialize(p, song_, plan, "it"), engine.effective_channel_plan(p, plan)))

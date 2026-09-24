@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, hits, preset
+from ..profiles.band_common import (
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep, preset,
+)
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_TOM = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_TOM, CH_X_LEAD_ECHO, CH_X_SYNTH_BRASS = range(8)
 
 DOUBLE = hits("kick", (0, 6, 8, 14), 60) + hits("snare", (4, 12), 56) + hits("hat", range(0, 16, 2), 34)
 HALF = hits("kick", (0, 10), 58) + hits("snare", (8,), 56) + hits("hat", range(0, 16, 2), 28)
@@ -36,6 +39,7 @@ class EnergeticProfile(BandProfile):
         ("kick", preset("prog_kick")), ("snare", preset("prog_snare")), ("hat", preset("nostalgic_hihat")),
         ("crash", preset("march_crash_cymbal")), ("tom", preset("drum_tom")), ("bass", preset("bass_pick")),
         ("gtr", preset("gtr_crunch")), ("lead", preset("syn_square_lead")),
+        ("sbrass", preset("syn_brass", volume=30)),
     )
     CHANNELS = (
         ChannelDef("kick/snare", ("kick", "snare"), (("snare", 2),), pan=128),
@@ -44,6 +48,8 @@ class EnergeticProfile(BandProfile):
         ChannelDef("gtr", ("gtr",), pan=76),
         ChannelDef("lead", ("lead",), pan=180),
         ChannelDef("tom", ("tom",), pan=110),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("synth brass", ("sbrass",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_CYM, "crash": CH_CYM, "tom": CH_TOM}
     KEYS = (4, 9, 2)
@@ -68,6 +74,14 @@ class EnergeticProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(4, 5, 7)), LEAD_MOTIFS,
                     vol=46, gate=0.8)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("sbrass", CH_X_SYNTH_BRASS, follow="lead", vol=26),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "cymbal", "tom"), (("snare", 4), ("kick", 3), ("tom", 3), ("crash", 2))),
+            *keep("bass", "gtr", "lead")),
+        6: keep("kick/snare", "cymbal", "bass", "gtr", "lead", "tom"),
+        8: keep("kick/snare", "cymbal", "bass", "gtr", "lead", "tom", "lead echo", "synth brass"),
+    }
     def comp(self, mctx, sec, rng, buf):
         """パワーコードを8分で刻む（強拍を強く）。"""
         inst = mctx.instruments["gtr"]

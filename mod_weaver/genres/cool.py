@@ -4,12 +4,12 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, EchoSpec, LeadSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_PAD, CH_LEAD, CH_ECHO = range(6)
+CH_KS, CH_HAT, CH_BASS, CH_PAD, CH_LEAD, CH_ECHO, CH_X_VOICE, CH_X_BELL = range(8)   # 7・8 番目は 8ch の編成だけ
 
 TWO_STEP = (hits("kick", (0, 10), 56) + hits("snare", (4, 12), 42)
             + hits("hat", (2, 6, 10, 14), 26) + hits("rim", (7, 13), 22, 0.6))
@@ -31,6 +31,8 @@ class CoolProfile(BandProfile):
     KIT = (
         ("kick", preset("drum_pop_kick")), ("snare", preset("drum_rim", volume=40)), ("hat", preset("drum_909_hat")),
         ("rim", preset("perc_clave")), ("bass", preset("fb_sub")), ("lead", preset("syn_pluck")),
+        ("voice", preset("vox_ooh", volume=30)),
+        ("bell", preset("keys_bell", volume=30)),
     )
     CHORD_KITS = {"pad": (preset("pad_glass"), 0.0)}
     CHANNELS = (
@@ -40,6 +42,8 @@ class CoolProfile(BandProfile):
         ChannelDef("glass pad", ("pad",), pan=84),
         ChannelDef("pluck", ("lead",), pan=150),
         ChannelDef("echo", ("lead",), pan=100),
+        ChannelDef("voice", ("voice",), pan=96),
+        ChannelDef("bell", ("bell",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT, "rim": CH_HAT}
     KEYS = (6, 11, 1)
@@ -64,3 +68,11 @@ class CoolProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
                     vol=42, gate=0.6)
     ECHO = (EchoSpec(CH_LEAD, CH_ECHO, delay=3, ratio=0.5, repeats=2),)
+    LAYERS = (LayerSpec("voice", CH_X_VOICE, follow="lead", vol=24, register=(19, 31)),
+              LayerSpec("bell", CH_X_BELL, follow="lead", vol=22, register=(24, 35)))
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3), ("rim", 2))),
+            *keep("sub", "glass pad", "pluck")),
+        6: keep("kick/snare", "hat", "sub", "glass pad", "pluck", "echo"),
+        8: keep("kick/snare", "hat", "sub", "glass pad", "pluck", "echo", "voice", "bell"),
+    }

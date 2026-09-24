@@ -31,9 +31,10 @@ def test_real_playback_does_not_clip(genre, fmt, seed):
 def test_multichannel_genres_generate_without_v15_warnings(tmp_path):
     """多チャンネル（orchestral の全合奏など）では V15 を出さない（4ch の曲だけが対象）。"""
     for p in profiles.list_profiles():
-        if len(p.channel_plan) != 4:
-            res = engine.generate(profiles.get_profile(p.id), 11, tmp_path / f"{p.id}.mod")
-            assert not any(i.code == "V15" for i in res.issues), p.id
+        for n in engine.channel_choices(p):
+            if n != 4:
+                res = engine.generate(profiles.get_profile(p.id), 11, tmp_path / f"{p.id}_{n}.mod", channels=n)
+                assert not any(i.code == "V15" for i in res.issues), (p.id, n)
 
 
 @pytest.mark.parametrize("genre,fmt", [("march", "mod"), ("orchestral", "xm")])
@@ -44,3 +45,14 @@ def test_detects_clipping(genre, fmt):
     square = bytes(0x7F if (i // 8) % 2 else 0x81 for i in range(4096))
     song.samples = [dataclasses.replace(s, data=square, volume=64, loop=(0, len(square) // 2)) for s in song.samples]
     assert peak(engine.serialize(p, song, plan, fmt), f".{fmt}") > CLIP
+
+
+@pytest.mark.parametrize("fmt", ["mod", "xm"])
+@pytest.mark.parametrize("genre,channels", [
+    (p.id, n) for p in profiles.list_profiles() if p.channel_choices for n in p.channel_choices])
+def test_every_arrangement_does_not_clip(genre, channels, fmt):
+    """曲ごとに選べる編成（DESIGN.md §6.14）はどれも音割れしない。"""
+    p = profiles.get_profile(genre)
+    song, plan = engine.compose_song(p, 3, channels=channels)
+    pk = peak(engine.serialize(p, song, plan, fmt), f".{fmt}")
+    assert 0.05 < pk < CLIP, f"{genre} {channels}ch {fmt}: peak {pk:.3f}"

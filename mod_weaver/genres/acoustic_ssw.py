@@ -6,12 +6,13 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..core.pitch import fold_into_range
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, _arp_tones, _scale_vol, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LeadSpec, Section, _arp_tones, _scale_vol, hits,
+    keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_PERC, CH_BASS, CH_GTR, CH_VOX = range(4)
+CH_PERC, CH_SHAKER, CH_BASS, CH_GTR, CH_VOX, CH_X_ECHO = range(6)   # 6 番目は 6ch の編成だけ
 
 CAJON = hits("low", (0, 10), 44) + hits("slap", (4, 12), 38) + hits("shaker", range(2, 16, 4), 18, 0.8)
 # 歌の旋律。息継ぎを強めに（各小節の最後の拍は空け、4小節目は BandProfile.lead が後半を休ませる）
@@ -40,12 +41,14 @@ class AcousticSswProfile(BandProfile):
         ("bass", preset("bass_finger")), ("gtr", preset("gtr_acoustic")), ("vox", preset("vox_ooh")),
     )
     CHANNELS = (
-        ChannelDef("cajon/shaker", ("low", "slap", "shaker"), (("slap", 3), ("low", 2))),
-        ChannelDef("bass", ("bass",)),
-        ChannelDef("guitar", ("gtr",)),
-        ChannelDef("voice", ("vox",)),
+        ChannelDef("cajon", ("low", "slap"), (("slap", 3), ("low", 2)), pan=128),
+        ChannelDef("shaker", ("shaker",), pan=164),
+        ChannelDef("bass", ("bass",), pan=128),
+        ChannelDef("guitar", ("gtr",), pan=84),
+        ChannelDef("voice", ("vox",), pan=172),
+        ChannelDef("voice echo", ("vox",), pan=100),
     )
-    DRUM_CHANNEL = {"low": CH_PERC, "slap": CH_PERC, "shaker": CH_PERC}
+    DRUM_CHANNEL = {"low": CH_PERC, "slap": CH_PERC, "shaker": CH_SHAKER}
     KEYS = (7, 0, 2, 4)
     PROGRESSIONS = (
         ("I-V-vi-IV", (C(0, "maj", label="I"), C(7, "maj", label="V"), C(9, "min", label="vi"), C(5, "maj", label="IV"))),
@@ -67,6 +70,12 @@ class AcousticSswProfile(BandProfile):
     LEAD = LeadSpec("vox", CH_VOX, ScaleRules(leap_probability=0.15, leap_semitones=(3, 4, 5)), LEAD_MOTIFS,
                     vol=44, gate=0.85, vibrato=0x22)
 
+    ECHO = (EchoSpec(CH_VOX, CH_X_ECHO, delay=3, ratio=0.45, offs=True),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝打楽器を1チャンネルで共有、6ch＝2系統＋歌のエコー
+        4: (Fold("cajon/shaker", ("cajon", "shaker"), (("slap", 3), ("low", 2))), *keep("bass", "guitar", "voice")),
+        6: keep("cajon", "shaker", "bass", "guitar", "voice", "voice echo"),
+    }
+    CHANNEL_WEIGHTS = {4: 2, 6: 1}
     def comp(self, mctx, sec, rng, buf):
         """トラヴィス奏法: 親指が4分で根音と5度を交互に、他の指が8分裏で上声を弾く。"""
         chord = mctx.chord

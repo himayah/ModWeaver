@@ -4,12 +4,12 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, hits, preset,
+    ArpSpec, BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LeadSpec, PadSpec, Section, hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_PAD, CH_LEAD, CH_ARP = range(6)
+CH_KS, CH_HAT, CH_BASS, CH_PAD, CH_LEAD, CH_ARP, CH_X_LEAD_ECHO, CH_X_ARP_ECHO = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = hits("kick", (0, 8), 60) + hits("snare", (4, 12), 54) + hits("hat", range(16), 20, 0.85)
 LEAD_MOTIFS = {
@@ -41,6 +41,8 @@ class SynthwaveProfile(BandProfile):
         ChannelDef("poly pad", ("pad",), pan=80),
         ChannelDef("lead", ("lead",), pan=150),
         ChannelDef("arp", ("arp",), pan=190),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("arp echo", ("arp",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT}
     KEYS = (9, 4, 6)
@@ -64,3 +66,10 @@ class SynthwaveProfile(BandProfile):
     ARP = ArpSpec("arp", CH_ARP, rows=tuple(range(0, 16, 2)), vol=30, pattern="updown")
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
                     vol=44, gate=0.9, vibrato=0x44)
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),
+            EchoSpec(CH_ARP, CH_X_ARP_ECHO, delay=3, ratio=0.45))
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3))), *keep("bass", "poly pad", "lead")),
+        6: keep("kick/snare", "hat", "bass", "poly pad", "lead", "arp"),
+        8: keep("kick/snare", "hat", "bass", "poly pad", "lead", "arp", "lead echo", "arp echo"),
+    }

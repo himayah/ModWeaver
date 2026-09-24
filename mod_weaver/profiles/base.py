@@ -52,6 +52,11 @@ class GenreProfile(ABC):
     #   （推測はしない。tests/unit/test_midi.py が全ジャンルの網羅を検査する）
     post_processors: tuple[Callable[[Song, SongPlan], None], ...] = ()
     # ↑ 全 pattern 作成後・テンポ挿入前に順に適用する後処理（サイドチェイン等の装飾用）
+    channel_choices: tuple[int, ...] = ()
+    # ↑ 曲ごとに選べるチャンネル数（--channels・seed。DESIGN.md §6.14）。空なら channel_plan の数に固定。
+    #   選べるジャンルは arrange() で、作曲した論理チャンネルを選んだ数の物理チャンネルに畳む
+    channel_weights: Mapping[int, int] = MappingProxyType({})
+    # ↑ seed から選ぶときの重み（チャンネル数 → 重み。未記載は 1）
     variable_meter: bool = False        # EXT-2: True で pattern 合計行数 < 64 rows を許容し D00 を自動挿入する
     # ↑ True のとき rows_per_measure は「ChordSlot.rows 省略時の既定値」に過ぎなくなり、64 の約数である
     #   必要はなくなる（validate_timebase をスキップ）。ChordSlot.rows で measure ごとに行数を上書きできる。
@@ -72,6 +77,11 @@ class GenreProfile(ABC):
     @abstractmethod
     def compose_measure(self, mctx: MeasureCtx, state: Any, rng: Rng, buf: MeasureBuffer) -> None:
         ...
+
+    def arrange(self, song: Song, plan: SongPlan, channels: int) -> SongPlan:
+        """作曲後・後処理の前に、``song.patterns`` を ``channels`` の物理チャンネルに畳み、その構成
+        （``channel_plan``・``channel_pans``）を持つ ``SongPlan`` を返す。``channel_choices`` を持つジャンルだけが呼ばれる。"""
+        return plan
 
     def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: Any, rng: Rng) -> None:
         """フェード等の後処理。

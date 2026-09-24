@@ -26,7 +26,7 @@ from .core.model import (
     Song,
     SongPlan,
 )
-from .errors import PlanError, SampleConstraintError, TempoRangeError, VerificationError
+from .errors import ChannelCountError, PlanError, SampleConstraintError, TempoRangeError, VerificationError
 from .profiles.base import GenreProfile
 
 log = logging.getLogger("mod_weaver")
@@ -67,6 +67,7 @@ class Result:
     issues: list[verify_mod.Issue]
     tempo_request: Optional[TempoRequest] = None
     fmt: str = formats.DEFAULT_FORMAT
+    channels_request: Optional[int] = None
 
 
 # ------------------------------------------------------------
@@ -93,6 +94,8 @@ def validate_profile(profile: GenreProfile) -> None:
         validate_timebase(profile.rows_per_measure)
     if not 1 <= len(profile.channel_plan) <= MAX_PROFILE_CHANNELS:
         raise PlanError(f"{profile.id}: channel_plan must have 1..{MAX_PROFILE_CHANNELS} roles")
+    if any(not 1 <= n <= MAX_PROFILE_CHANNELS for n in profile.channel_choices):
+        raise PlanError(f"{profile.id}: channel_choices must be within 1..{MAX_PROFILE_CHANNELS}")
     if profile.tempo_policy not in ("engine", "profile"):
         raise PlanError(f"{profile.id}: invalid tempo_policy {profile.tempo_policy!r}")
     if profile.rng_mode not in ("single", "streams"):
@@ -175,6 +178,32 @@ def resolve_tempo(request: TempoRequest, seed: int, profile: GenreProfile) -> in
     return random.Random(f"{seed}:{profile.id}:tempo").randint(lo, hi)
 
 
+def channel_choices(profile: GenreProfile) -> tuple[int, ...]:
+    """ジャンルが選べるチャンネル数（固定のジャンルは宣言の数だけ）。"""
+    return tuple(profile.channel_choices) or (len(profile.channel_plan),)
+
+
+def resolve_channels(request: Optional[int], seed: int, profile: GenreProfile) -> int:
+    """``--channels`` の要求を確かめ、無ければ seed から選ぶ（DESIGN.md §6.14）。
+
+    選択は専用ストリーム（``RngStreams`` と同じ命名規約）で行い、他の乱数消費を一切変えない。"""
+    choices = channel_choices(profile)
+    if request is not None:
+        if request not in choices:
+            allowed = "/".join(map(str, choices))
+            raise ChannelCountError(f"genre {profile.id!r} cannot use {request} channels (supports {allowed})")
+        return request
+    if len(choices) == 1:
+        return choices[0]
+    weights = [profile.channel_weights.get(n, 1) for n in choices]
+    return random.Random(f"{seed}:{profile.id}:channels").choices(choices, weights=weights)[0]
+
+
+def effective_channel_plan(profile: GenreProfile, plan: SongPlan):
+    """曲の物理チャンネル構成（``arrange()`` が決めたもの、無ければジャンルの宣言）。"""
+    return plan.channel_plan if plan.channel_plan is not None else profile.channel_plan
+
+
 def apply_tempo(song: Song, bpm: int) -> None:
     """``order[0]`` の pattern の row 0 に ``F bpm`` を挿入する（tempo_policy="engine"）。
 
@@ -185,13 +214,15 @@ def apply_tempo(song: Song, bpm: int) -> None:
 
 
 def compose_song(
-    profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None,
+    profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None, channels: Optional[int] = None,
 ) -> tuple[Song, SongPlan]:
     """純粋関数（I/O なし）。Song と SongPlan を返す。
 
     ``tempo`` を渡すと ``plan()`` が選んだ BPM を上書きする。``plan()`` 自体は従来どおり BPM を引く
-    （引いた値を捨てる）ので他の乱数消費は変わらず、「同じ seed・別テンポ＝同じ曲の速さ違い」になる。"""
+    （引いた値を捨てる）ので他の乱数消費は変わらず、「同じ seed・別テンポ＝同じ曲の速さ違い」になる。
+    ``channels`` は曲のチャンネル数（``channel_choices`` を持つジャンルだけ。無ければ seed から選ぶ）。"""
     validate_profile(profile)
+    n_channels = resolve_channels(channels, seed, profile)
     rng = _make_rng(profile, seed)
 
     specs, instruments = make_instruments(profile)
@@ -243,6 +274,11 @@ def compose_song(
         patterns.append(pattern)
 
     song = Song(profile.title, specs, patterns, list(plan.order), instrument_names=tuple(instruments))
+    if profile.channel_choices:
+        plan = profile.arrange(song, plan, n_channels)
+    physical = effective_channel_plan(profile, plan)
+    if len(physical) != n_channels or any(p.channels != n_channels for p in song.patterns):
+        raise PlanError(f"[{profile.id}] arrange() produced patterns that do not have {n_channels} channels")
     for post in profile.post_processors:
         post(song, plan)
     if profile.tempo_policy == "engine":
@@ -250,16 +286,18 @@ def compose_song(
     return song, plan
 
 
-def build_song(profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None) -> Song:
+def build_song(profile: GenreProfile, seed: int, *, tempo: Optional[TempoRequest] = None,
+               channels: Optional[int] = None) -> Song:
     """純粋関数（I/O なし）。テストは Song／bytes を直接検査できる。"""
-    return compose_song(profile, seed, tempo=tempo)[0]
+    return compose_song(profile, seed, tempo=tempo, channels=channels)[0]
 
 
 def write_options(profile: GenreProfile, song: Song, plan: SongPlan) -> formats.WriteOptions:
     """形式中立な付帯情報（チャンネルパン・初期テンポ・MIDI 用の音色表と拍子）をまとめる。"""
     rpm = profile.rows_per_measure
     return formats.WriteOptions(
-        channel_pans=formats.channel_pans(song, profile.channel_pans),
+        channel_pans=formats.channel_pans(
+            song, plan.channel_pans if plan.channel_plan is not None else profile.channel_pans),
         initial_bpm=plan.bpm,
         instrument_names=song.instrument_names,
         gm_voices=dict(getattr(profile, "gm_voices", {}) or {}),
@@ -284,19 +322,21 @@ def generate(
     verify: bool = True,
     tempo: Optional[TempoRequest] = None,
     fmt: str = formats.DEFAULT_FORMAT,
+    channels: Optional[int] = None,
 ) -> Result:
     """Song を生成し、検査して ``fmt`` 形式（既定 mod）のファイルを書き出す。
     検査 ERROR があればファイルを書かない。"""
     output = formats.get_format(fmt)
-    formats.check_channels(output, len(profile.channel_plan), profile.id)
     if seed is None:
         seed = random.randint(*SEED_RANGE)
-    song, plan = compose_song(profile, seed, tempo=tempo)
+    song, plan = compose_song(profile, seed, tempo=tempo, channels=channels)
+    physical = effective_channel_plan(profile, plan)
+    formats.check_channels(output, len(physical), profile.id)
     data = output.serialize(song, write_options(profile, song, plan))
 
     issues: list[verify_mod.Issue] = []
     if verify and output.verify is not None:
-        issues = output.verify(data, profile.channel_plan)
+        issues = output.verify(data, physical)
         for i in issues:
             if i.level == "WARN":
                 log.warning("%s %s", i.code, i.message)
@@ -308,4 +348,5 @@ def generate(
 
     path = Path(out)
     writer.write_file(path, data)
-    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues, tempo_request=tempo, fmt=fmt)
+    return Result(seed=seed, path=path, song=song, plan=plan, issues=issues, tempo_request=tempo, fmt=fmt,
+                  channels_request=channels)

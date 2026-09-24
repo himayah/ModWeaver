@@ -13,6 +13,10 @@
 - ``GROOVES``: ドラムの型（``Groove``）。``BASS``・``COMP``・``LEAD``・``PAD``・``ARP``: 各パートの鳴らし方。
 
 ``channel_plan``・``gm_voices``・``channel_pans`` は ``__init_subclass__`` がクラス定義時に宣言から作る。
+
+曲ごとにチャンネル数を選ぶジャンル（DESIGN.md §6.14）は、最も厚い編成の全パートを ``CHANNELS``（論理チャンネル）に
+宣言し、``ARRANGEMENTS``（チャンネル数 → ``Fold`` の列）で各編成の物理チャンネルを宣言する。作曲は常に論理
+チャンネルで行い、``arrange()`` が選んだ編成に畳む。
 """
 from __future__ import annotations
 
@@ -202,6 +206,38 @@ class EchoSpec:
     delay: int = 3
     ratio: float = 0.5
     repeats: int = 1
+    offs: bool = False                         # 消音セルも遅らせて写す（ループ音色の旋律のエコーが鳴り続けないように）
+
+
+@dataclass(frozen=True)
+class LayerSpec:
+    """任意パートの層（DESIGN.md §6.14）: 和音の変わり目に、和音サンプル（``chordal``）か第3音の長音を置く。
+    ``follow`` のパートが鳴る区間だけ鳴る。乱数を使わない（他のパートの乱数列を変えない）。"""
+    key: str                                   # KIT 名（chordal なら CHORD_KITS の接頭辞）
+    channel: int
+    follow: str = "lead"
+    vol: int = 30
+    chordal: bool = False
+    register: tuple[int, int] = (14, 26)       # 単音のときの音域
+
+
+@dataclass(frozen=True)
+class Fold:
+    """編成の物理チャンネル1つ（DESIGN.md §6.14）。``sources`` の論理チャンネル（``CHANNELS`` の name）を1つに畳む。
+
+    複数を畳むのは OneShot の音色だけ（ループは途中で切れるため。クラス定義時に検査）。row ごとに優先度の高い
+    セルを1つ選ぶ（同じなら ``sources`` の先のもの）。優先度は ``priority``（楽器名か和音の接頭辞）、未記載なら
+    各論理チャンネルの宣言。``gain`` は音量の倍率（4ch の V15 用）。"""
+    name: str
+    sources: tuple[str, ...]
+    priority: tuple[tuple[str, int], ...] = ()
+    pan: Optional[int] = None                  # None なら最初の論理チャンネルのパン
+    gain: float = 1.0
+
+
+def keep(*names: str) -> tuple[Fold, ...]:
+    """論理チャンネルをそのまま写す ``Fold`` の列。"""
+    return tuple(Fold(n, (n,)) for n in names)
 
 
 @dataclass
@@ -244,6 +280,9 @@ class BandProfile(GenreProfile):
     ECHO: tuple[EchoSpec, ...] = ()
     SWING: Optional[groove_mod.SwingConfig] = None
     SIDECHAIN: tuple[tuple[str, int, float, int], ...] = ()   # (トリガの KIT 名, 対象チャンネル, 比, 戻る row 数)
+    LAYERS: tuple[LayerSpec, ...] = ()         # 任意パートの層（厚い編成でだけ残す対旋律・パッド）
+    ARRANGEMENTS: dict[int, tuple[Fold, ...]] = {}   # チャンネル数 → 物理チャンネル。空なら CHANNELS のまま固定
+    CHANNEL_WEIGHTS: dict[int, int] = {}       # seed から選ぶときの重み。空なら §12 の既定（3択 4:1・6:2・8:1 等）
     LATE: tuple[tuple[str, float], ...] = ()   # (ドラムの KIT 名, EDx で遅らせる確率)
     HUMANIZE: int = 4                          # ドラムの音量ゆらぎ（±）
     tempo_policy = "engine"
@@ -279,8 +318,42 @@ class BandProfile(GenreProfile):
                 # 音程のある楽器を音高なしで置くと Instrument.cell() は休符（音量だけのセル）になり鳴らない
                 if kit[h.key].pitched and h.note is None:
                     raise PlanError(f"{cls.__name__}: GROOVES[{gname!r}] plays pitched {h.key!r} without a note")
-        if cls.SWING is not None or cls.SIDECHAIN:
-            cls.post_processors = (cls._post,)
+        cls.post_processors = (cls._post,)
+        cls._arr = {n: cls._build_arrangement(n, folds, roles, base_patch) for n, folds in cls.ARRANGEMENTS.items()}
+        if cls.ARRANGEMENTS:
+            cls.channel_choices = tuple(sorted(cls.ARRANGEMENTS))
+            cls.channel_weights = dict(cls.CHANNEL_WEIGHTS) or _default_weights(cls.channel_choices)
+
+    @classmethod
+    def _build_arrangement(cls, n: int, folds: tuple[Fold, ...], roles: list[ChannelRole], base_patch: dict):
+        """編成 ``n`` の物理 ChannelPlan・パン・畳み方を作り、宣言を検査する。"""
+        names = [cd.name for cd in cls.CHANNELS]
+        if len(folds) != n:
+            raise PlanError(f"{cls.__name__}: arrangement {n} has {len(folds)} channels")
+        used = [s for f in folds for s in f.sources]
+        if len(used) != len(set(used)) or any(s not in names for s in used):
+            raise PlanError(f"{cls.__name__}: arrangement {n}: unknown or repeated source in {used}")
+        phys, sources = [], []
+        for f in folds:
+            idx = tuple(names.index(s) for s in f.sources)
+            slots = frozenset().union(*(roles[i].allowed for i in idx))
+            if len(idx) > 1:
+                loops = [k for k in cls._sample_keys if cls._slot[k] in slots
+                         and isinstance(base_patch[_base_key(cls, k)].finish, Loop)]
+                if loops:
+                    raise PlanError(f"{cls.__name__}: arrangement {n} folds looping sounds {loops} into {f.name!r}")
+            explicit = dict(f.priority)
+            priority = {}
+            for i in idx:
+                for s, pr in roles[i].priority.items():
+                    key = next(k for k in cls._sample_keys if cls._slot[k] == s)
+                    priority[s] = explicit.get(key, explicit.get(key.rsplit("_", 1)[0], pr))
+            phys.append(ChannelRole(f.name, slots, priority))
+            sources.append(idx)
+        to_phys = tuple(next((j for j, idx in enumerate(sources) if i in idx), None) for i in range(len(names)))
+        pans = tuple(f.pan if f.pan is not None else cls.CHANNELS[idx[0]].pan
+                     for f, idx in zip(folds, sources)) if n != 4 else None
+        return tuple(phys), pans, tuple(sources), tuple(f.gain for f in folds), to_phys
 
     @classmethod
     def _expand(cls, key: str) -> list[str]:
@@ -374,7 +447,24 @@ class BandProfile(GenreProfile):
                 self.lead(mctx, sec, st, rng, buf)
             else:
                 self._silence(buf, self.LEAD.channel, self.LEAD.key, ins, mctx)
+        for layer in self.LAYERS:
+            if layer.follow in parts:
+                self.layer(mctx, sec, layer, buf)
+            else:
+                self._silence(buf, layer.channel, layer.key, ins, mctx)
         self.extra_measure(mctx, sec, st, rng, buf)
+
+    def layer(self, mctx: MeasureCtx, sec: Section, spec: LayerSpec, buf: MeasureBuffer) -> None:
+        """任意パートの層: 和音の変わり目に和音サンプル（chordal）か第3音の長音を置く（乱数を使わない）。"""
+        if not self._is_chord_change(mctx):
+            return
+        chord = mctx.chord
+        if spec.chordal:
+            inst, note = mctx.instruments[self._chord_key(spec.key, mctx)], chord.harmony
+        else:
+            pcs = sorted({t % 12 for t in chord.chord_tones}, key=lambda pc: (pc - chord.harmony) % 12)
+            inst, note = mctx.instruments[spec.key], fold_into_range(pcs[1] if len(pcs) > 1 else pcs[0], *spec.register)
+        buf.put(0, spec.channel, inst.cell(note, vol=_scale_vol(spec.vol, sec)))
 
     def extra_measure(self, mctx: MeasureCtx, sec: Section, st: BandState, rng: RngStreams,
                       buf: MeasureBuffer) -> None:
@@ -382,12 +472,38 @@ class BandProfile(GenreProfile):
 
     def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, st: BandState, rng: RngStreams) -> None:
         for e in self.ECHO:
-            echo(pattern, e.src, e.dst, e.delay, e.ratio, e.repeats)
-        if self.SWING is not None:
-            make_room_for_row_commands(pattern)
-        if pctx.is_first_in_order:
-            need = 2 if self.SWING is not None else 1
-            reserve_row0(pattern, need)
+            echo(pattern, e.src, e.dst, e.delay, e.ratio, e.repeats, offs=e.offs)
+
+    # --- 編成（DESIGN.md §6.14） ---
+    def arrange(self, song, plan: SongPlan, channels: int) -> SongPlan:
+        """論理チャンネルで作った pattern を、編成 ``channels`` の物理チャンネルに畳む。"""
+        roles, pans, sources, gains, to_phys = self._arr[channels]
+        volumes = [s.volume for s in song.samples]
+        folded = []
+        for pt in song.patterns:
+            out = Pattern(roles, False, rows=pt.rows)
+            for row in range(pt.rows):
+                for pc, (idx, gain) in enumerate(zip(sources, gains)):
+                    best = None
+                    for lc in idx:
+                        cell = pt.get(row, lc)
+                        if cell.is_empty:
+                            continue
+                        pr = 0 if cell.sample == 0 else roles[pc].priority.get(cell.sample, 1)
+                        if best is None or pr > best[0]:
+                            best = (pr, cell)
+                    if best is None:
+                        continue
+                    cell = best[1]
+                    if gain != 1.0 and cell.sample:
+                        vol = cell.vol if cell.vol is not None else volumes[cell.sample - 1]
+                        cell = dataclasses.replace(cell, vol=max(1, round(vol * gain)))
+                    out.replace(row, pc, cell)
+            folded.append(out)
+        song.patterns[:] = folded
+        for pp in plan.patterns:
+            pp.extra["channel_map"] = to_phys
+        return dataclasses.replace(plan, channel_plan=roles, channel_pans=pans)
 
     # --- 各パート（サブクラスで上書きしてよい） ---
     def _chord_key(self, prefix: str, mctx: MeasureCtx) -> str:
@@ -494,8 +610,19 @@ class BandProfile(GenreProfile):
     # --- 後処理（スウィング・サイドチェイン） ---
     @classmethod
     def _post(cls, song, plan) -> None:
+        """畳んだ後（編成を選ぶジャンル）に、row コマンドの場所作り → サイドチェイン → スウィング。"""
+        to_phys = plan.patterns[0].extra.get("channel_map")
+        for i, pattern in enumerate(song.patterns):
+            if cls.SWING is not None:
+                make_room_for_row_commands(pattern)
+            if i == song.order[0]:
+                reserve_row0(pattern, 2 if cls.SWING is not None else 1)
         if cls.SIDECHAIN:
-            rules = [mixer.SidechainRule(cls._slot[k], ch, ratio, rel) for k, ch, ratio, rel in cls.SIDECHAIN]
+            rules = []
+            for k, ch, ratio, rel in cls.SIDECHAIN:
+                target = ch if to_phys is None else to_phys[ch]
+                if target is not None:                     # 省いたパートは対象外
+                    rules.append(mixer.SidechainRule(cls._slot[k], target, ratio, rel))
             mixer.apply_sidechain(song, rules)
         if cls.SWING is not None:
             for pattern in song.patterns:
@@ -505,6 +632,13 @@ class BandProfile(GenreProfile):
 # ============================================================
 # 補助関数
 # ============================================================
+
+def _default_weights(choices: tuple[int, ...]) -> dict[int, int]:
+    """既定の重み: 3択は中央を 2（4:1・6:2・8:1）、それ以外は等しく（2択のジャンルは CHANNEL_WEIGHTS で宣言する）。"""
+    if len(choices) == 3:
+        return {choices[0]: 1, choices[1]: 2, choices[2]: 1}
+    return {n: 1 for n in choices}
+
 
 def _qualities(progressions) -> tuple[str, ...]:
     seen: dict[str, None] = {}
@@ -623,10 +757,18 @@ def buildup(mctx: MeasureCtx, buf: MeasureBuffer, ch: int, snare: Instrument, *,
         buf.put(0, fx_ch, riser.cell(vol=48))
 
 
-def echo(pattern: Pattern, src: int, dst: int, delay: int, ratio: float, repeats: int = 1) -> None:
-    """``src`` の発音を ``delay`` row 遅らせ、音量を ``ratio`` 倍にして ``dst`` の空き row に書く（残響の代わり）。"""
+def echo(pattern: Pattern, src: int, dst: int, delay: int, ratio: float, repeats: int = 1, *,
+         offs: bool = False) -> None:
+    """``src`` の発音を ``delay`` row 遅らせ、音量を ``ratio`` 倍にして ``dst`` の空き row に書く（残響の代わり）。
+    ``offs`` なら消音セル（音も効果も無い音量 0）も同じだけ遅らせて写す。"""
     for row in range(pattern.rows):
         cell = pattern.get(row, src)
+        if offs and cell.note is None and cell.vol == 0 and not cell.sample and not cell.has_effect:
+            for k in range(1, repeats + 1):
+                r = row + delay * k
+                if r < pattern.rows and pattern.get(r, dst).is_empty:
+                    pattern.replace(r, dst, Cell(None, 0, vol=0))
+            continue
         if cell.note is None or not cell.sample:
             continue
         vol = cell.vol if cell.vol is not None else 40

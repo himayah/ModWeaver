@@ -5,12 +5,14 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.midi import GmVoice
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, hits, keep,
+    preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_KEYS, CH_LEAD, CH_BRASS = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_KS, CH_HAT, CH_BASS, CH_KEYS, CH_LEAD, CH_BRASS, CH_X_LEAD_ECHO, CH_X_STRINGS = range(8)
 
 MAIN = hits("kick", (0, 8, 10), 58) + hits("snare", (4, 12), 54) + hits("hat", range(16), 22, 0.9) + hits("tamb", (4, 12), 26)
 FILL = hits("snare", (8, 10, 12, 13, 14, 15), 50)
@@ -39,6 +41,7 @@ class JPop80sProfile(BandProfile):
         ("kick", preset("drum_pop_kick")), ("snare", preset("drum_gated_snare")), ("hat", preset("nostalgic_hihat")),
         ("tamb", preset("perc_tambourine")), ("crash", preset("march_crash_cymbal")), ("bass", preset("bass_finger")),
         ("lead", preset("syn_square_lead")),
+        ("line", preset("orch_violin", volume=30)),
     )
     CHORD_KITS = {"ep": (preset("keys_ep"), 0.0), "brass": (preset("syn_poly_pad", name="BrassPad"), 0.0)}
     GM = {"brass": GmVoice(program=62)}
@@ -49,6 +52,8 @@ class JPop80sProfile(BandProfile):
         ChannelDef("e.piano", ("ep",), pan=84),
         ChannelDef("lead", ("lead",), pan=172),
         ChannelDef("synth brass", ("brass",), pan=56),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("strings", ("line",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT, "tamb": CH_HAT, "crash": CH_HAT}
     KEYS = (0, 2, 4)
@@ -79,6 +84,14 @@ class JPop80sProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(3, 4, 5, 7)), LEAD_MOTIFS,
                     vol=46, gate=0.8, vibrato=0x33)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("line", CH_X_STRINGS, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3), ("crash", 2))),
+            *keep("bass", "e.piano", "lead")),
+        6: keep("kick/snare", "hat", "bass", "e.piano", "lead", "synth brass"),
+        8: keep("kick/snare", "hat", "bass", "e.piano", "lead", "synth brass", "lead echo", "strings"),
+    }
     def pad(self, mctx, sec, rng, buf):
         """シンセブラス: サビ・イントロの頭は「決め」（短い3連打）、それ以外は和音を伸ばす。"""
         inst = mctx.instruments[self._chord_key("brass", mctx)]

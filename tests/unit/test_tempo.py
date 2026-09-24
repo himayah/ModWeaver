@@ -109,6 +109,7 @@ def test_whole_tempo_range_generates_clean_output(genre):
     p = profiles.get_profile(genre)
     lo, hi = p.tempo_range
     for bpm in sorted({lo, hi, *range(lo, hi + 1, 29)}):
-        song, _ = compose_song(p, 1, tempo=TempoRequest(bpm, bpm))
+        song, plan = compose_song(p, 1, tempo=TempoRequest(bpm, bpm))
+        physical = plan.channel_plan if plan.channel_plan is not None else p.channel_plan   # 曲ごとの編成（§6.14）
         for data, check in ((writer.serialize(song), verify.verify), (writer.serialize_xm(song), verify.verify_xm)):
-            assert not verify.has_errors(check(data, p.channel_plan)), (genre, bpm)
+            assert not verify.has_errors(check(data, physical)), (genre, bpm)

@@ -6,12 +6,12 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..core.pitch import fold_into_range
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, _scale_vol, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, Fold, LayerSpec, LeadSpec, Section, _scale_vol, hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_PERC, CH_BASS, CH_GTR, CH_LEAD = range(4)
+CH_PERC, CH_SHAKER, CH_BASS, CH_GTR, CH_LEAD, CH_X_EP = range(6)   # 6 番目は 6ch の編成だけ
 
 # ボサノバのクラーベ（2小節＝16分×16 の 0,3,6 | 10,13）。偶数小節と奇数小節で別の型
 CLAVE = ((0, 3, 6), (2, 5))
@@ -40,15 +40,18 @@ class BossaNovaProfile(BandProfile):
     KIT = (
         ("rim", preset("drum_rim")), ("shaker", preset("perc_shaker")), ("surdo", preset("perc_surdo")),
         ("bass", preset("bass_finger")), ("flute", preset("wind_flute", volume=38)),
+        ("ep", preset("keys_ep", volume=34)),
     )
     CHORD_KITS = {"gtr": (preset("gtr_nylon"), 10.0)}
     CHANNELS = (
-        ChannelDef("rim/perc", ("rim", "shaker", "surdo"), (("rim", 3), ("surdo", 2))),
-        ChannelDef("bass", ("bass",)),
-        ChannelDef("guitar", ("gtr",)),
-        ChannelDef("flute", ("flute",)),
+        ChannelDef("rim/surdo", ("rim", "surdo"), (("rim", 3), ("surdo", 2)), pan=128),
+        ChannelDef("shaker", ("shaker",), pan=164),
+        ChannelDef("bass", ("bass",), pan=128),
+        ChannelDef("guitar", ("gtr",), pan=84),
+        ChannelDef("flute", ("flute",), pan=172),
+        ChannelDef("e.piano", ("ep",), pan=100),
     )
-    DRUM_CHANNEL = {"rim": CH_PERC, "shaker": CH_PERC, "surdo": CH_PERC}
+    DRUM_CHANNEL = {"rim": CH_PERC, "shaker": CH_SHAKER, "surdo": CH_PERC}
     KEYS = (5, 0, 7, 2)
     MODE_BY_QUALITY = {"m7": "dorian", "dom7": "mixolydian", "m7b5": "locrian"}
     PROGRESSIONS = (
@@ -74,6 +77,12 @@ class BossaNovaProfile(BandProfile):
     LEAD = LeadSpec("flute", CH_LEAD, ScaleRules(leap_probability=0.2, leap_semitones=(3, 4, 5)), LEAD_MOTIFS,
                     vol=42, gate=0.9, vibrato=0x32)
 
+    LAYERS = (LayerSpec("ep", CH_X_EP, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝打楽器を1チャンネルで共有、6ch＝2系統＋エレピの長音
+        4: (Fold("rim/perc", ("rim/surdo", "shaker"), (("rim", 3), ("surdo", 2))), *keep("bass", "guitar", "flute")),
+        6: keep("rim/surdo", "shaker", "bass", "guitar", "flute", "e.piano"),
+    }
+    CHANNEL_WEIGHTS = {4: 2, 6: 1}
     def drums(self, mctx, sec, rng, buf):
         super().drums(mctx, sec, rng, buf)
         rim = mctx.instruments["rim"]

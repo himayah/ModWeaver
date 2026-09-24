@@ -37,6 +37,10 @@ class TempoRangeError(ModGenError):
     """``--tempo`` の要求範囲がジャンルの許容範囲（``GenreProfile.tempo_range``）と重ならない。"""
 
 
+class ChannelCountError(ModGenError):
+    """``--channels`` の要求がジャンルの選べるチャンネル数（``GenreProfile.channel_choices``）に無い。"""
+
+
 class PlanError(ModGenError):
     """64 row 不一致、order 不正、pattern 数超過、tempo が tempo_choices 外。"""
 

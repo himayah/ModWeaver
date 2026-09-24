@@ -15,3 +15,12 @@ from __future__ import annotations
 
 from ._registry import DESCRIPTIONS, PRESETS, find, register  # noqa: F401
 from .genre_kits import *  # noqa: F401,F403
+from .drums import *  # noqa: F401,F403
+from .perc import *  # noqa: F401,F403
+from .bass import *  # noqa: F401,F403
+from .keys import *  # noqa: F401,F403
+from .guitar import *  # noqa: F401,F403
+from .synths import *  # noqa: F401,F403
+from .pads import *  # noqa: F401,F403
+from .orch import *  # noqa: F401,F403
+from .fx import *  # noqa: F401,F403

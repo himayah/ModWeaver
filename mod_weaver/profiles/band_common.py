@@ -584,6 +584,23 @@ def comp_rows(kind: str, rows: int, rng) -> list[tuple[int, bool]]:
     return [(at(r), a) for r, a in table[kind]]
 
 
+def buildup(mctx: MeasureCtx, buf: MeasureBuffer, ch: int, snare: Instrument, *, n_measures: int = 4,
+            riser: Optional[Instrument] = None, fx_ch: Optional[int] = None) -> None:
+    """EDM 系のビルドアップ（DESIGN.md §12.5）: スネアの連打が 4分→8分→16分→E9x リトリガと加速し、
+    音量が上がる。最後から2つ目の measure の頭に上昇音（``riser``、約2秒）を置く。"""
+    rows = mctx.measure_rows
+    m = mctx.measure_idx % n_measures
+    step = (4, 2, 1, 1)[min(m, 3)]
+    for i, row in enumerate(range(0, rows, step)):
+        vol = min(64, 30 + round(30 * (m * rows + row) / (n_measures * rows)))
+        if m == 3 and row >= rows // 2:
+            buf.put(row, ch, snare.cell(effect=0x0E, param=groove_mod.retrigger_param(3)))
+        else:
+            buf.put(row, ch, snare.cell(vol=vol))
+    if riser is not None and fx_ch is not None and m == n_measures - 2:
+        buf.put(0, fx_ch, riser.cell(vol=48))
+
+
 def echo(pattern: Pattern, src: int, dst: int, delay: int, ratio: float, repeats: int = 1) -> None:
     """``src`` の発音を ``delay`` row 遅らせ、音量を ``ratio`` 倍にして ``dst`` の空き row に書く（残響の代わり）。"""
     for row in range(pattern.rows):

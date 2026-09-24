@@ -119,6 +119,7 @@ MODES: dict[str, tuple[int, ...]] = {
     "dorian": (0, 2, 3, 5, 7, 9, 10),
     "mixolydian": (0, 2, 4, 5, 7, 9, 10),
     "lydian": (0, 2, 4, 6, 7, 9, 11),
+    "locrian": (0, 1, 3, 5, 6, 8, 10),
     "harmonic_minor": (0, 2, 3, 5, 7, 8, 11),
     "melodic_minor": (0, 2, 3, 5, 7, 9, 11),
     "major_pent": (0, 2, 4, 7, 9),
@@ -149,6 +150,7 @@ CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット
     "m7b5": (0, 3, 6, 10),
     "dim7": (0, 3, 6, 9),
     "aug": (0, 4, 8),
+    "quartal": (0, 5, 10, 15, 19),   # 4度堆積（D–G–C–F–A。モーダル・ジャズの m11 の響き）
 }
 
 

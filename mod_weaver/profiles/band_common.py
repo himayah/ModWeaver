@@ -224,6 +224,8 @@ class BandProfile(GenreProfile):
     ARP_REGISTER: tuple[int, int] = (24, 35)
     PROGRESSIONS: tuple[tuple[str, tuple[ChordSpec, ...]], ...] = ()
     N_PROGRESSIONS: int = 2
+    FIXED_PROGRESSIONS: bool = False           # True: 進行を宣言順にすべて使う（区間ごとに和声の役割が決まっている曲）
+    MEASURES_PER_PATTERN: Optional[int] = None  # None なら 64 // rows_per_measure（variable_meter の 3/4 等で指定）
     SECTIONS: dict[str, Section] = {}
     FORM: tuple[str, ...] = ()
     GROOVES: dict[str, Groove] = {}
@@ -287,8 +289,11 @@ class BandProfile(GenreProfile):
     def plan(self, rng: RngStreams) -> SongPlan:
         bpm = rng.plan.choice(list(self.tempo_choices))
         key_pc = rng.plan.choice(list(self.KEYS))
-        chosen = rng.plan.sample(range(len(self.PROGRESSIONS)), k=min(self.N_PROGRESSIONS, len(self.PROGRESSIONS)))
-        progs = [self.PROGRESSIONS[i] for i in chosen]
+        if self.FIXED_PROGRESSIONS:
+            progs = list(self.PROGRESSIONS)
+        else:
+            chosen = rng.plan.sample(range(len(self.PROGRESSIONS)), k=min(self.N_PROGRESSIONS, len(self.PROGRESSIONS)))
+            progs = [self.PROGRESSIONS[i] for i in chosen]
         names = list(dict.fromkeys(self.FORM))
         patterns = [self._pattern_plan(self.SECTIONS[n], progs, key_pc) for n in names]
         order = [names.index(n) for n in self.FORM]
@@ -300,7 +305,7 @@ class BandProfile(GenreProfile):
 
     def _pattern_plan(self, sec: Section, progs, key_pc: int) -> PatternPlan:
         rpm = self.rows_per_measure
-        n_measures = ROWS_PER_PATTERN // rpm
+        n_measures = self.MEASURES_PER_PATTERN or ROWS_PER_PATTERN // rpm
         _pname, specs = progs[sec.prog % len(progs)]
         per = max(1, n_measures // len(specs))
         tonic = (key_pc + sec.key_offset) % 12
@@ -462,12 +467,16 @@ class BandProfile(GenreProfile):
         if cadence:
             events = [dataclasses.replace(e, dur=min(e.dur, mctx.measure_rows // 2 - e.row)) for e in events]
             events = [e for e in events if e.dur > 0]
-        articulate(buf, spec.channel, events, mctx.instruments[spec.key], gate=spec.gate)
+        inst = mctx.instruments[self.lead_key(sec)]
+        articulate(buf, spec.channel, events, inst, gate=spec.gate)
         if spec.vibrato:
             for e in events:
                 if e.dur >= 6 and e.row + 2 < mctx.measure_rows and buf.get(e.row + 2, spec.channel).is_empty:
-                    buf.put(e.row + 2, spec.channel,
-                            mctx.instruments[spec.key].cell(effect=0x4, param=spec.vibrato))
+                    buf.put(e.row + 2, spec.channel, inst.cell(effect=0x4, param=spec.vibrato))
+
+    def lead_key(self, sec: Section) -> str:
+        """区間で旋律を奏でる楽器（既定は LEAD.key。区間ごとに持ち替えるジャンルが上書きする）。"""
+        return self.LEAD.key
 
     # --- 後処理（スウィング・サイドチェイン） ---
     @classmethod

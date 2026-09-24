@@ -4,12 +4,14 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, buildup, hits, preset,
+    ArpSpec, BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, buildup,
+    hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KICK, CH_PERC, CH_BASS, CH_CHORD, CH_ARP, CH_LEAD = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_KICK, CH_PERC, CH_BASS, CH_CHORD, CH_ARP, CH_LEAD, CH_X_LEAD_ECHO, CH_X_CHOIR = range(8)
 
 FLOOR = hits("kick", (0, 4, 8, 12), 62) + hits("clap", (4, 12), 44) + hits("ohat", (2, 6, 10, 14), 30)
 BREAK = hits("ohat", (2, 6, 10, 14), 20)
@@ -34,7 +36,7 @@ class UpliftingProfile(BandProfile):
         ("snare", preset("drum_pop_snare")), ("bass", preset("bass_synth_saw")), ("arp", preset("syn_pluck")),
         ("lead", preset("syn_saw_lead")),
     )
-    CHORD_KITS = {"saw": (preset("fb_supersaw"), 0.0)}
+    CHORD_KITS = {"saw": (preset("fb_supersaw"), 0.0), "choir": (preset("vox_choir", volume=30), 0.0)}
     CHANNELS = (
         ChannelDef("kick", ("kick",), pan=128),
         ChannelDef("clap/hat", ("clap", "ohat", "snare"), (("snare", 3), ("clap", 2)), pan=150),
@@ -42,6 +44,8 @@ class UpliftingProfile(BandProfile):
         ChannelDef("supersaw", ("saw",), pan=96),
         ChannelDef("arp", ("arp",), pan=176),
         ChannelDef("lead", ("lead",), pan=64),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("choir", ("choir",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KICK, "clap": CH_PERC, "ohat": CH_PERC, "snare": CH_PERC}
     KEYS = (2, 4, 5)
@@ -66,6 +70,14 @@ class UpliftingProfile(BandProfile):
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(4, 5, 7)), LEAD_MOTIFS,
                     vol=44, gate=0.85, vibrato=0x33)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("choir", CH_X_CHOIR, follow="pad", vol=26, chordal=True),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick", "clap/hat"), (("kick", 4), ("snare", 4), ("clap", 3))),
+            *keep("bass", "supersaw", "arp")),
+        6: keep("kick", "clap/hat", "bass", "supersaw", "arp", "lead"),
+        8: keep("kick", "clap/hat", "bass", "supersaw", "arp", "lead", "lead echo", "choir"),
+    }
     def extra_measure(self, mctx, sec, st, rng, buf):
         if sec.kind == "build":
             buildup(mctx, buf, CH_PERC, mctx.instruments["snare"])

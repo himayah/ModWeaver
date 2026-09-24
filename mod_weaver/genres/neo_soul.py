@@ -5,12 +5,13 @@ from ..core import groove
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, hits, keep,
+    preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_EP2 = range(6)
+CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_EP2, CH_X_VOCAL_ECHO, CH_X_GUITAR = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = (hits("kick", (0, 3, 10), 58) + hits("kick", (7,), 44, 0.5) + hits("snare", (4, 12), 48)
         + hits("hat", range(0, 16, 2), 26) + hits("hat", (5, 13), 16, 0.5) + hits("rim", (15,), 22, 0.5))
@@ -36,6 +37,7 @@ class NeoSoulProfile(BandProfile):
     KIT = (
         ("kick", preset("drum_boombap_kick")), ("snare", preset("drum_pop_snare")), ("hat", preset("nostalgic_hihat")),
         ("rim", preset("drum_rim")), ("bass", preset("bass_finger")), ("lead", preset("vox_ooh")),
+        ("gtr", preset("gtr_clean_arp", volume=34)),
     )
     CHORD_KITS = {"ep": (preset("keys_ep"), 0.0)}
     CHANNELS = (
@@ -45,6 +47,8 @@ class NeoSoulProfile(BandProfile):
         ChannelDef("e.piano", ("ep",), pan=84),
         ChannelDef("vocal", ("lead",), pan=150),
         ChannelDef("e.piano 2", ("ep",), pan=180),
+        ChannelDef("vocal echo", ("lead",), pan=96),
+        ChannelDef("guitar", ("gtr",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT, "rim": CH_HAT}
     KEYS = (3, 8, 5)
@@ -72,3 +76,11 @@ class NeoSoulProfile(BandProfile):
     PAD = PadSpec("ep", CH_EP2, vol=30)
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(3, 4, 5, 7),
                                                 dissonance_weight=0.12), LEAD_MOTIFS, vol=46, gate=0.9, vibrato=0x42)
+    ECHO = (EchoSpec(CH_LEAD, CH_X_VOCAL_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("gtr", CH_X_GUITAR, follow="lead", vol=30, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3), ("rim", 2))),
+            *keep("bass", "e.piano", "vocal")),
+        6: keep("kick/snare", "hat", "bass", "e.piano", "vocal", "e.piano 2"),
+        8: keep("kick/snare", "hat", "bass", "e.piano", "vocal", "e.piano 2", "vocal echo", "guitar"),
+    }

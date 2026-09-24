@@ -308,8 +308,8 @@ def test_xm_round_trips_through_real_genres():
 
     for name in sorted(PROFILE_REGISTRY):
         profile = PROFILE_REGISTRY[name]()
-        song, _plan = engine.compose_song(profile, 1)
+        song, plan = engine.compose_song(profile, 1)
         data = serialize_xm(song)
         pm = parse_xm(data)
         assert pm.consumed == len(data), name
-        assert not has_errors(verify_xm(data, profile.channel_plan)), name
+        assert not has_errors(verify_xm(data, engine.effective_channel_plan(profile, plan))), name

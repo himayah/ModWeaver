@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, PadSpec, Section, hits, preset
+from ..profiles.band_common import (
+    BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LayerSpec, PadSpec, Section, hits, keep, preset,
+)
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_TAIKO, CH_TICK, CH_BASS, CH_STR, CH_BRAAM, CH_FX = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_TAIKO, CH_TICK, CH_BASS, CH_STR, CH_BRAAM, CH_FX, CH_X_CHOIR, CH_X_BRAAM_ECHO = range(8)
 
 PULSE = (hits("taiko", (0, 8), 60) + hits("tick", (0, 4, 8, 12), 28)
          + hits("tick", tuple(r for r in range(16) if r % 4), 18))
@@ -29,6 +32,7 @@ class DarkTenseProfile(BandProfile):
         ("str", preset("tension_strings")), ("braam", preset("brass_braam")), ("riser", preset("fx_riser")),
         ("impact", preset("fx_impact")),
     )
+    CHORD_KITS = {"choir": (preset("vox_choir", volume=30), 0.0)}
     CHANNELS = (
         ChannelDef("taiko", ("taiko",), pan=128),
         ChannelDef("tick", ("tick",), pan=176),
@@ -36,6 +40,8 @@ class DarkTenseProfile(BandProfile):
         ChannelDef("strings", ("str",), pan=72),
         ChannelDef("braam", ("braam",), pan=110),
         ChannelDef("fx", ("riser", "impact"), (("impact", 2),), pan=150),
+        ChannelDef("choir", ("choir",), pan=96),
+        ChannelDef("braam echo", ("braam",), pan=160),
     )
     DRUM_CHANNEL = {"taiko": CH_TAIKO, "tick": CH_TICK}
     KEYS = (0, 2)
@@ -57,6 +63,13 @@ class DarkTenseProfile(BandProfile):
     PAD = PadSpec("str", CH_STR, vol=34, chordal=False)
     REGISTERS = BandProfile.REGISTERS
 
+    ECHO = (EchoSpec(CH_BRAAM, CH_X_BRAAM_ECHO, delay=4, ratio=0.45),)
+    LAYERS = (LayerSpec("choir", CH_X_CHOIR, follow="lead", vol=26, chordal=True),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("percussion", ("taiko", "tick"), (("taiko", 4),)), *keep("bass", "strings", "braam")),
+        6: keep("taiko", "tick", "bass", "strings", "braam", "fx"),
+        8: keep("taiko", "tick", "bass", "strings", "braam", "fx", "choir", "braam echo"),
+    }
     def extra_measure(self, mctx, sec, st, rng, buf):
         ins = mctx.instruments
         if "lead" in sec.parts and mctx.measure_idx % 2 == 0:       # 2小節ごとの「ブラーム」

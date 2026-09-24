@@ -5,11 +5,13 @@ from __future__ import annotations
 from ..core import groove
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, Section, hits, preset
+from ..profiles.band_common import (
+    BandProfile, BassSpec, ChannelDef, CompSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep, preset,
+)
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_DRUMS, CH_BASS, CH_LOOP, CH_HORN = range(4)
+CH_DRUMS, CH_HAT, CH_BASS, CH_LOOP, CH_HORN, CH_X_STR = range(6)   # 6 番目は 6ch の編成だけ
 
 BOOMBAP = (hits("kick", (0, 7, 10), 60) + hits("snare", (4, 12), 52)
            + hits("hat", range(0, 16, 2), 22) + hits("kick", (15,), 44, 0.3))
@@ -33,14 +35,16 @@ class HiphopProfile(BandProfile):
         ("kick", preset("drum_boombap_kick")), ("snare", preset("drum_boombap_snare")),
         ("hat", preset("nostalgic_hihat")), ("bass", preset("bass_finger")), ("horn", preset("march_brass_horn")),
     )
-    CHORD_KITS = {"loop": (preset("keys_piano", volume=42), 0.0)}
+    CHORD_KITS = {"loop": (preset("keys_piano", volume=42), 0.0), "str": (preset("orch_violin", volume=30), 0.0)}
     CHANNELS = (
-        ChannelDef("drums", ("kick", "snare", "hat"), (("snare", 3), ("kick", 2))),
-        ChannelDef("bass", ("bass",)),
-        ChannelDef("loop", ("loop",)),
-        ChannelDef("horn", ("horn",)),
+        ChannelDef("kick/snare", ("kick", "snare"), (("snare", 3), ("kick", 2)), pan=128),
+        ChannelDef("hat", ("hat",), pan=164),
+        ChannelDef("bass", ("bass",), pan=128),
+        ChannelDef("loop", ("loop",), pan=84),
+        ChannelDef("horn", ("horn",), pan=172),
+        ChannelDef("strings", ("str",), pan=100),
     )
-    DRUM_CHANNEL = {"kick": CH_DRUMS, "snare": CH_DRUMS, "hat": CH_DRUMS}
+    DRUM_CHANNEL = {"kick": CH_DRUMS, "snare": CH_DRUMS, "hat": CH_HAT}
     KEYS = (9, 4, 2, 7)
     MODE = "aeolian"
     # 1〜2小節の短調ループを曲全体で固定する（サンプルを繰り返す作り方）
@@ -66,3 +70,9 @@ class HiphopProfile(BandProfile):
     COMP = CompSpec("loop", CH_LOOP, kind="charleston", vol=40)
     LEAD = LeadSpec("horn", CH_HORN, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
                     vol=46, gate=0.6)
+    LAYERS = (LayerSpec("str", CH_X_STR, follow="lead", vol=24, chordal=True),)   # フックだけ弦の和音を重ねる
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝ドラムを1チャンネルで共有、6ch＝2系統＋フックの弦
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 3), ("kick", 2))), *keep("bass", "loop", "horn")),
+        6: keep("kick/snare", "hat", "bass", "loop", "horn", "strings"),
+    }
+    CHANNEL_WEIGHTS = {4: 2, 6: 1}

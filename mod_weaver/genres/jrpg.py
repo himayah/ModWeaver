@@ -12,12 +12,14 @@ from ..core.midi import GmVoice
 from ..core.model import ChordSpec
 from ..core.pitch import MODES, Scale, fold_into_range
 from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, _scale_vol, hits, preset,
+    ArpSpec, BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, _scale_vol,
+    hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_PERC, CH_HARP, CH_BASS, CH_STR, CH_LEAD, CH_BRASS = range(6)
+# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
+CH_PERC, CH_HARP, CH_BASS, CH_STR, CH_LEAD, CH_BRASS, CH_X_MELODY_ECHO, CH_X_CHOIR = range(8)
 
 MARCH = hits("snare", (4, 12), 22) + hits("snare", (14, 15), 16, 0.5)
 FILL = hits("snare", (8, 10, 12, 13, 14, 15), 34)
@@ -48,7 +50,8 @@ class JrpgProfile(BandProfile):
         ("cello", preset("orch_cello")), ("flute", preset("wind_flute")), ("tpt", preset("orch_trumpet")),
         ("brass", preset("march_brass_section", volume=38)),
     )
-    CHORD_KITS = {"str": (preset("orch_violin", name="StringPad", volume=30), 0.0)}
+    CHORD_KITS = {"str": (preset("orch_violin", name="StringPad", volume=30), 0.0),
+                  "choir": (preset("vox_choir", volume=30), 0.0)}
     GM = {"str": GmVoice(program=48)}
     CHANNELS = (
         ChannelDef("timpani/snare", ("timp", "snare"), (("timp", 2),), pan=128),
@@ -57,6 +60,8 @@ class JrpgProfile(BandProfile):
         ChannelDef("strings", ("str",), pan=172),
         ChannelDef("melody", ("flute", "tpt"), pan=150),
         ChannelDef("brass", ("brass",), pan=100),
+        ChannelDef("melody echo", ("flute", "tpt",), pan=96),
+        ChannelDef("choir", ("choir",), pan=160),
     )
     DRUM_CHANNEL = {"snare": CH_PERC}
     KEYS = (0, 2, 5)
@@ -87,6 +92,13 @@ class JrpgProfile(BandProfile):
     LEAD = LeadSpec("flute", CH_LEAD, ScaleRules(leap_probability=0.25, leap_semitones=(3, 4, 5, 7)), LEAD_MOTIFS,
                     vol=48, gate=0.9, vibrato=0x23)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_MELODY_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("choir", CH_X_CHOIR, follow="pad", vol=26, chordal=True),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: keep("timpani/snare", "harp", "cello", "melody"),
+        6: keep("timpani/snare", "harp", "cello", "strings", "melody", "brass"),
+        8: keep("timpani/snare", "harp", "cello", "strings", "melody", "brass", "melody echo", "choir"),
+    }
     def lead_key(self, sec):
         return "tpt" if sec.kind == "b" else "flute"
 

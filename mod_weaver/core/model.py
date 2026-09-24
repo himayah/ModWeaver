@@ -414,6 +414,8 @@ class SongPlan:
     order: list[int]               # PatternPlan の index 列
     key_pc: Optional[int] = None
     summary: list[str] = field(default_factory=list)   # バナー表示用の行
+    channel_plan: Optional[ChannelPlan] = None   # 曲ごとの物理チャンネル構成（GenreProfile.arrange が決める）。None ならジャンルの宣言
+    channel_pans: Optional[tuple[int, ...]] = None   # channel_plan と組になるパン（None なら §7.1 の規則）
 
 
 @dataclass(frozen=True)

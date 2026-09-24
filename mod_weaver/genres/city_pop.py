@@ -4,12 +4,13 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, hits, keep,
+    preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_CUT = range(6)
+CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_CUT, CH_X_LEAD_ECHO, CH_X_STRINGS = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = (hits("kick", (0, 7, 10), 56) + hits("snare", (4, 12), 48)
         + hits("hat", range(0, 16, 2), 28) + hits("tamb", (4, 12), 24))
@@ -37,6 +38,7 @@ class CityPopProfile(BandProfile):
         ("kick", preset("drum_pop_kick")), ("snare", preset("drum_pop_snare")), ("hat", preset("nostalgic_hihat")),
         ("tamb", preset("perc_tambourine")), ("crash", preset("march_crash_cymbal")), ("bass", preset("bass_slap")),
         ("lead", preset("syn_brass")),
+        ("line", preset("orch_violin", volume=30)),
     )
     CHORD_KITS = {"ep": (preset("keys_ep"), 0.0), "cut": (preset("gtr_clean_cut"), 0.0)}
     CHANNELS = (
@@ -46,6 +48,8 @@ class CityPopProfile(BandProfile):
         ChannelDef("e.piano", ("ep",), pan=84),
         ChannelDef("lead", ("lead",), pan=172),
         ChannelDef("cutting gtr", ("cut",), pan=48),
+        ChannelDef("lead echo", ("lead",), pan=96),
+        ChannelDef("strings", ("line",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT, "tamb": CH_HAT, "crash": CH_HAT}
     KEYS = (4, 9, 1)
@@ -77,6 +81,14 @@ class CityPopProfile(BandProfile):
 
     PAD = PadSpec("ep", CH_EP, vol=42)
 
+    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("line", CH_X_STRINGS, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3), ("crash", 2))),
+            *keep("bass", "e.piano", "lead")),
+        6: keep("kick/snare", "hat", "bass", "e.piano", "lead", "cutting gtr"),
+        8: keep("kick/snare", "hat", "bass", "e.piano", "lead", "cutting gtr", "lead echo", "strings"),
+    }
     def pad(self, mctx, sec, rng, buf):
         """エレピは2拍ごとに和音（テンションコード）を置く。"""
         inst = mctx.instruments[self._chord_key("ep", mctx)]

@@ -8,7 +8,7 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..core.pitch import fold_into_range
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, _scale_vol, buildup, hits, preset,
+    BandProfile, BassSpec, ChannelDef, Fold, LeadSpec, PadSpec, Section, _scale_vol, buildup, hits, keep, preset,
 )
 from ..profiles.registry import register_profile
 
@@ -80,6 +80,12 @@ class TrailerProfile(BandProfile):
     LEAD = LeadSpec("vln", CH_HIGH, ScaleRules(leap_probability=0.35, leap_semitones=(3, 4, 5, 7, 12)), LEAD_MOTIFS,
                     vol=50, gate=1.0, vibrato=0x24)
 
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 6ch＝taiko とタム・スネアを1チャンネルに畳み、効果音を省く
+        6: (Fold("percussion", ("taiko", "toms/snare"), (("taiko", 3), ("snare", 2), ("tom", 2))),
+            *keep("braam", "spiccato", "low strings", "choir", "high strings")),
+        8: keep("taiko", "toms/snare", "braam", "spiccato", "low strings", "choir", "high strings", "fx"),
+    }
+    CHANNEL_WEIGHTS = {6: 1, 8: 2}
     def compose_measure(self, mctx, st, rng, buf):
         sec = self.SECTIONS[mctx.pattern.kind]
         if sec.kind == "final" and mctx.measure_idx > 0:

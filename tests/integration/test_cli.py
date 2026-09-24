@@ -365,3 +365,38 @@ def test_mp3_with_ffmpeg_lacking_libopenmpt_exits_5(tmp_path, capsys, monkeypatc
     monkeypatch.setenv("MODWEAVER_FFMPEG", str(fake))
     code, _, err = run_cli(["-f", "mp3", "-s", "1", "-o", str(tmp_path / "x.mp3")], capsys)
     assert code == 5 and "libopenmpt" in err and "libmp3lame" in err
+
+
+# --- --channels（DESIGN.md §6.14） ---
+
+def test_channels_option_sets_count_and_repro(tmp_path, capsys):
+    out = tmp_path / "p.mod"
+    code, stdout, err = run_cli(["-g", "pop", "-s", "5", "-c", "4", "-o", str(out)], capsys)
+    assert code == 0 and err == ""
+    assert "チャンネル  : 4 (指定)" in stdout and "--genre pop --channels 4 --seed 5" in stdout
+    assert out.read_bytes()[1080:1084] == b"M.K."            # 4ch は Amiga 互換の MOD
+
+
+def test_channels_shown_without_option(tmp_path, capsys):
+    code, stdout, _ = run_cli(["-s", "1", "-o", str(tmp_path / "n.mod")], capsys)
+    assert code == 0 and "チャンネル  : 4\n" in stdout and "--channels" not in stdout
+
+
+def test_channels_unsupported_by_genre_exit_2(tmp_path, capsys):
+    code, out, err = run_cli(["-g", "calm", "-c", "8", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "cannot use 8 channels (supports 4)" in err and out == ""
+    assert not (tmp_path / "x.mod").exists()
+
+
+def test_channels_rejects_odd_numbers(tmp_path, capsys):
+    code, _out, err = run_cli(["-g", "pop", "-c", "5", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and "invalid choice" in err
+
+
+def test_random_genre_with_channels_excludes_genres_that_cannot_use_it(tmp_path, capsys, monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or c[0])
+    code, stdout, err = run_cli(["-g", "r", "-c", "8", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 0 and err == "" and "チャンネル  : 8 (指定)" in stdout
+    picked = seen[-1]
+    assert "pop" in picked and "orchestral" in picked and "calm" not in picked and "nostalgic" not in picked

@@ -5,12 +5,13 @@ from ..core import groove
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec
 from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, LeadSpec, PadSpec, Section, hits, preset,
+    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, PadSpec, Section, hits, keep,
+    preset,
 )
 from ..profiles.registry import register_profile
 
 C = ChordSpec
-CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_STR = range(6)
+CH_KS, CH_HAT, CH_BASS, CH_EP, CH_LEAD, CH_STR, CH_X_VOCAL_ECHO, CH_X_FLUTE = range(8)   # 7・8 番目は 8ch の編成だけ
 
 MAIN = hits("kick", (0, 7, 10), 54) + hits("snare", (4, 12), 46) + hits("hat", range(0, 16, 2), 24) + hits("rim", (15,), 20, 0.4)
 FILL = hits("snare", (12, 14, 15), 40)
@@ -35,6 +36,7 @@ class RnbSoulProfile(BandProfile):
     KIT = (
         ("kick", preset("drum_pop_kick")), ("snare", preset("drum_pop_snare")), ("hat", preset("nostalgic_hihat")),
         ("rim", preset("drum_rim")), ("bass", preset("bass_finger")), ("lead", preset("vox_ooh")),
+        ("flute", preset("wind_flute", volume=30)),
     )
     CHORD_KITS = {"ep": (preset("keys_ep"), 0.0), "str": (preset("pad_warm"), 0.0)}
     CHANNELS = (
@@ -44,6 +46,8 @@ class RnbSoulProfile(BandProfile):
         ChannelDef("e.piano", ("ep",), pan=88),
         ChannelDef("vocal", ("lead",), pan=140),
         ChannelDef("strings", ("str",), pan=60),
+        ChannelDef("vocal echo", ("lead",), pan=96),
+        ChannelDef("flute", ("flute",), pan=160),
     )
     DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "hat": CH_HAT, "rim": CH_HAT}
     KEYS = (3, 8, 1)
@@ -72,3 +76,11 @@ class RnbSoulProfile(BandProfile):
     PAD = PadSpec("str", CH_STR, vol=26)
     LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.2, leap_semitones=(3, 4, 5), dissonance_weight=0.1),
                     LEAD_MOTIFS, vol=48, gate=0.95, vibrato=0x43)
+    ECHO = (EchoSpec(CH_LEAD, CH_X_VOCAL_ECHO, delay=3, ratio=0.45, offs=True),)
+    LAYERS = (LayerSpec("flute", CH_X_FLUTE, follow="lead", vol=26, register=(19, 31)),)
+    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
+        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 4), ("kick", 3), ("rim", 2))),
+            *keep("bass", "e.piano", "vocal")),
+        6: keep("kick/snare", "hat", "bass", "e.piano", "vocal", "strings"),
+        8: keep("kick/snare", "hat", "bass", "e.piano", "vocal", "strings", "vocal echo", "flute"),
+    }

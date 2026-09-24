@@ -68,4 +68,4 @@ def test_all_genres_serialize_cleanly(genre):
     p = profiles.get_profile(genre)
     song_, plan = engine.compose_song(p, 1)
     data = engine.serialize(p, song_, plan, "s3m")
-    assert not has_errors(s3m.verify_s3m(data, p.channel_plan))
+    assert not has_errors(s3m.verify_s3m(data, engine.effective_channel_plan(p, plan)))

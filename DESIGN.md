@@ -37,6 +37,7 @@ Python 標準ライブラリだけで、波形合成から作曲・シーケン�
 | FR-2 | 同じ genre・seed・format・tempo からは常に同じファイルを出力する |
 | FR-3 | 出力形式を `mod`（既定）/ `xm` / `s3m` / `it` / `midi` / `mp3` から選べる（§7） |
 | FR-4 | テンポを BPM または範囲（範囲内からランダム）で指定できる。未指定ならジャンルが決める（§5.5） |
+| FR-4b | チャンネル数を `--channels` で指定できる（編成を選べるジャンルだけ。4・6・8）。未指定なら編成を選べるジャンルは曲ごとに seed から選ぶ（§6.14） |
 | FR-5 | ジャンルは `mod_weaver/genres/` に1ファイル置くだけで追加でき、core・engine・cli の変更は不要（§5.6） |
 | FR-6 | 生成物を構造検査し、規格違反があればファイルを書かない（§9.1） |
 | FR-7 | 引数なしなら使い方を表示する。`--list-genres`（ジャンル一覧）と `--version`（版と GitHub URL）を持つ（§8） |
@@ -113,15 +114,16 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 
 ```text
 cli.main
- └─ engine.generate(profile, seed, out, tempo=, fmt=)
-     ├─ formats.check_channels（形式のチャンネル上限）
+ └─ engine.generate(profile, seed, out, tempo=, fmt=, channels=)
      ├─ compose_song
-     │   ├─ validate_profile → 乱数の用意 → build_samples（Instrument 化）
+     │   ├─ validate_profile → チャンネル数の確定（resolve_channels）→ 乱数の用意 → build_samples（Instrument 化）
      │   ├─ plan(rng) →（--tempo があれば BPM を上書き）→ validate_plan
      │   ├─ 各 PatternPlan（作成順）: begin_pattern → 各 measure で compose_measure → blit → finalize_pattern
      │   │                           →（可変小節なら最終 row に D00）
+     │   ├─ arrange（編成を選ぶジャンルだけ: 論理チャンネルを物理チャンネルに畳む）
      │   ├─ post_processors（スウィング・サイドチェイン等）
      │   └─ apply_tempo（tempo_policy="engine" のとき）
+     ├─ formats.check_channels（形式のチャンネル上限。曲の物理チャンネル数で）
      ├─ serialize（形式ごと）→ verify（形式ごと。ERROR なら VerificationError、ファイルは書かない）
      └─ write_file（一時ファイル → os.replace の原子的書込）
 ```
@@ -349,8 +351,10 @@ class Song:
 | `gm_voices` | `{}` | MIDI 用の GM 音色表（楽器名 → `GmVoice`）。**全楽器ぶんの宣言が必須** |
 | `post_processors` | `()` | 全 pattern 作成後・テンポ挿入前に順に呼ぶ後処理 |
 | `variable_meter` | False | True で可変小節（§4.7） |
+| `channel_choices` | `()` | 曲ごとに選べるチャンネル数（§6.14「編成」）。空なら `channel_plan` の数に固定 |
+| `channel_weights` | `{}` | seed から選ぶときの重み（チャンネル数 → 重み。未記載は 1） |
 
-フック（エンジンがこの順で呼ぶ）: `build_samples()`（dict の挿入順＝サンプル番号、キー＝楽器名。seed に依存しない）→ `plan(rng)` → pattern ごとに `begin_pattern(pctx, rng)` → measure ごとに `compose_measure(mctx, state, rng, buf)` → `finalize_pattern(pctx, pattern, state, rng)`。
+フック（エンジンがこの順で呼ぶ）: `build_samples()`（dict の挿入順＝サンプル番号、キー＝楽器名。seed に依存しない）→ `plan(rng)` → pattern ごとに `begin_pattern(pctx, rng)` → measure ごとに `compose_measure(mctx, state, rng, buf)` → `finalize_pattern(pctx, pattern, state, rng)` →（`channel_choices` を持つジャンルだけ）`arrange(song, plan, channels) -> SongPlan`（作曲した論理チャンネルを選んだ数の物理チャンネルに畳み、`SongPlan.channel_plan`・`channel_pans` を返す）。
 
 `finalize_pattern` の `pattern.rows` は常に物理長 64。可変小節のジャンルが「実際に鳴る最終 row」を知りたいときは、自分の `ChordSlot.rows` の合計から求める。
 
@@ -363,11 +367,13 @@ class Song:
 
 ### 5.3 エンジンの処理（`engine.py`）
 
-- `compose_song(profile, seed, *, tempo=None) -> (Song, SongPlan)`（§2.3 の流れ）。`build_song` は Song だけを返す版。
+- `compose_song(profile, seed, *, tempo=None, channels=None) -> (Song, SongPlan)`（§2.3 の流れ）。`build_song` は Song だけを返す版。
+- `resolve_channels(request, seed, profile)`: `--channels` の要求がジャンルの選べる数（`channel_choices(profile)`。固定なら宣言の数）に無ければ `ChannelCountError`（終了コード 2）。要求が無ければ専用ストリーム `random.Random(f"{seed}:{profile.id}:channels")` で重み付きに選ぶ（他の乱数消費を変えないので、`--tempo` を付けても編成は変わらない）。
+- `effective_channel_plan(profile, plan)`: 曲の物理チャンネル構成（`SongPlan.channel_plan`、無ければジャンルの宣言）。検査・書き出し・形式のチャンネル上限の検査はこれを使う。
 - `apply_tempo(song, bpm)`: `order[0]` の pattern の row 0 に `F bpm` を `insert_command`。
 - `write_options(profile, song, plan)`: 形式中立な付帯情報（チャンネルパン・初期 BPM・楽器名・GM 音色表・拍子）。
 - `serialize(profile, song, plan, fmt)`: 検査なしのバイト化。
-- `generate(profile, seed, out, *, verify=True, tempo=None, fmt="mod") -> Result`: 検査で ERROR があれば `VerificationError`（ファイルは書かない）。WARN は WARNING ログ。
+- `generate(profile, seed, out, *, verify=True, tempo=None, fmt="mod", channels=None) -> Result`: 検査で ERROR があれば `VerificationError`（ファイルは書かない）。WARN は WARNING ログ。
 - `Result(seed, path, song, plan, issues, tempo_request, fmt)`。
 
 ### 5.4 エンジンが検査する契約
@@ -558,7 +564,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 35ジャンルの多くは「ドラム・ベース・和音・旋律・パッド」という同じ骨格を持つ。`BandProfile`（`profiles/band_common.py`。core ではなくジャンル共通の補助で、`suspense_common` と同じ位置づけ）がその骨格を**宣言（クラス属性）から**作曲し、各ジャンルは宣言と、固有の文法だけをフック（`extra_measure`、各パートのメソッドの上書き）で足す。作曲の枠組み（`GenreProfile`・`compose_measure`・`ChannelPlan`・`MelodyGenerator`・`voice()`）、出力形式、検査は変えていない。
 - 音色は楽器名で命名した共有ライブラリ（§4.5）を複数のジャンルで使い回す。
-- **チャンネル数はジャンル単位で 4／6／8 から選ぶ**（努力目標「パターン構成に合わせて適切なチャンネル数を選ぶ」への対応。全形式でチャンネル数はファイル単位なので、1曲の中では変えられない）。4ch は既定の MOD で Amiga 互換の `M.K.`、6ch・8ch は `6CHN`・`8CHN`。6ch・8ch は `CHANNELS` の `pan` から `channel_pans` を作る（既定の L R R L だと kick やベースが片側に寄るため）。
+- **チャンネル数はジャンルごとに 4／6／8 から選び、27ジャンルは曲ごとにも選ぶ**（下の「編成」）。4ch は既定の MOD で Amiga 互換の `M.K.`、6ch・8ch は `6CHN`・`8CHN`。6ch・8ch は `CHANNELS` の `pan` から `channel_pans` を作る（既定の L R R L だと kick やベースが片側に寄るため）。
 - 表示名・説明・id に実在の人名を入れない（原文の「〜系」は音楽的特徴に置き換えた）。旋律はすべて手続き的に作り、既存の曲の旋律は使わない。
 - **区分**（`GenreProfile.category`）: `mood`（気分）・`genre`（ジャンル）・`style`（「〜風」）。`--list-genres` と `--help` は区分ごとにまとめる（§8.1）。第３段階より前の12ジャンルは genre＝swing-jazz・prog-rock・trap・future-bass・maqam・free-jazz・minimalism・orchestral・march、style＝nostalgic・suspense-slow・suspense-chase。
 - 気分ジャンルの原文にある「相性」（晴れ・夜・雨など）は §6.16 に記録するだけで、属性にはしていない（天気・時間帯から選ぶ機能を作るときに足す）。
@@ -575,7 +581,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | **T4**（4ch テクノ） | 4 | 1 kick／2 hat・clap／3 ベース／4 シーケンス | techno |
 | **O8**（8ch 管弦楽） | 8 | §6.16 の各項 | cinematic、trailer |
 
-各ジャンルの実際のチャンネルと楽器は §6.16 の「音色」。
+表のチャンネル数は各ジャンルの標準の編成。各ジャンルの実際のチャンネルと楽器は §6.16 の「音色」（論理チャンネル）と「編成」。
 
 **宣言（クラス属性）**
 
@@ -591,8 +597,9 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | `FIXED_PROGRESSIONS` | True なら選ばずに宣言順にすべて使う（区間ごとに和声の役割が決まっている classical・cinematic・jrpg） |
 | `MEASURES_PER_PATTERN` | 1 pattern の measure 数。None なら `64 // rows_per_measure`（classical の 3/4 は 4） |
 | `SECTIONS`・`FORM` | `Section(kind, prog, intensity, parts, groove, key_offset, fill, crash, lead_motifs)` と区間の並び。同じ区間名は同じ pattern を再利用する |
-| `GROOVES`・`DRUM_CHANNEL` | ドラムの型（`Hit(row, key, vol, prob)` の列。`hits()` で作る）と、ドラムの楽器 → チャンネル。`"fill"`・`"crash"` は区間の `fill`・`crash` で使う |
+| `GROOVES`・`DRUM_CHANNEL` | ドラムの型（`Hit(row, key, vol, prob, note)` の列。`hits()` で作る。`note` は音程のある楽器の音高）と、ドラムの楽器 → チャンネル。`"fill"`・`"crash"` は区間の `fill`・`crash` で使う |
 | `BASS`・`COMP`・`LEAD`・`PAD`・`ARP`・`FX` | 各パートの鳴らし方（`BassSpec`・`CompSpec`・`LeadSpec`・`PadSpec`・`ArpSpec`・`FxSpec`）。None ならそのパートは無い |
+| `LAYERS`・`ARRANGEMENTS`・`CHANNEL_WEIGHTS` | 任意パートの層（`LayerSpec`）、編成（チャンネル数 → `Fold` の列）、編成の重み（下の「編成」） |
 | `ECHO`・`SWING`・`SIDECHAIN`・`LATE`・`HUMANIZE` | エコー（`EchoSpec`）、スウィング、サイドチェイン（トリガの楽器・対象チャンネル・比・戻る row 数）、ドラムを `EDx` で遅らせる確率、ドラムの音量ゆらぎ（±4） |
 
 **作曲の流れ**
@@ -601,8 +608,9 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 2. `begin_pattern()`: 旋律がある区間では `MelodyGenerator` と、`LEAD.motifs[区間の lead_motifs]` から動機 A・B を選ぶ。
 3. `compose_measure()`: ドラム → ベース → 和音（comp）→ パッド → アルペジオ → FX → 旋律 → `extra_measure()`（ジャンル固有）。区間の `parts` に無いパートは鳴らさず、持続音色（ループ）のパートは pattern の先頭で止める（前の区間から鳴り続けないように）。音量は区間の `intensity` で下げる（ドラムは `0.6 + 0.4×intensity` 倍、他のパートは `0.55 + 0.45×intensity` 倍）。
 4. 旋律は4小節の楽節: A・A（反復）・B・終止（4小節目は後半を休み、音を切る）。`LeadSpec.vibrato` があれば 6 row 以上の音に `4xy`。区間ごとに旋律の楽器を持ち替えるジャンルは `lead_key(sec)` を上書きする（anime-ost・jrpg）。
-5. `finalize_pattern()`: `ECHO` を書き、スウィングするジャンルでは全 row に Speed を書ける場所を作り（`make_room_for_row_commands`: 空きの無い row では、番号の大きいチャンネルから音を持たないセル（ビブラート・消音）を消し、無ければ効果の無い音の音量を外して `insert_command` が書けるようにする）、曲の先頭 pattern の row 0 にテンポ（スウィングがあればさらに Speed）のための空きチャンネルを作る（`reserve_row0`: 番号の大きいチャンネルから row 0 の音を row 1 へ移す）。
-6. 後処理（`post_processors`）: サイドチェイン（`mixer.apply_sidechain`）→ スウィング（`groove.apply_swing`）。
+5. `finalize_pattern()`: `ECHO` を書く。
+6. `arrange()`（編成を選ぶジャンルだけ）: 論理チャンネルを物理チャンネルに畳む（下の「編成」）。
+7. 後処理（`post_processors`＝`_post`）: スウィングするジャンルでは全 row に Speed を書ける場所を作り（`make_room_for_row_commands`: 空きの無い row では、番号の大きいチャンネルから音を持たないセル（ビブラート・消音）を消し、無ければ効果の無い音の音量を外して `insert_command` が書けるようにする）、曲の先頭 pattern の row 0 にテンポ（スウィングがあればさらに Speed）のための空きチャンネルを作り（`reserve_row0`: 番号の大きいチャンネルから row 0 の音を row 1 へ移す）→ サイドチェイン（`mixer.apply_sidechain`）→ スウィング（`groove.apply_swing`）。
 
 **パートの型**（16 row＝4/4 を基準に書き、measure の行数に比例させる）
 
@@ -619,9 +627,23 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 **書くときの注意（実装で分かった制約）**
 
-- ドラムの型（`GROOVES`）は音程を持たない楽器だけに使う。音程のある楽器（タム・ティンパニ）を音高なしで置くと休符になるので、`extra_measure` で音高を付けて書く。
+- 音程のある楽器（タム・ティンパニ）を音高なしで置くと `Instrument.cell()` は休符（音量だけのセル）を返し、鳴らない。ドラムの型（`GROOVES`）に書くときは `hits(..., notes=...)` で打点ごとの音高（`Hit.note`）を与える（音高の無い音程楽器の打点はクラス定義時に `PlanError`）。和音に合わせて音高を変えるもの（trailer のタム、ティンパニ）は `extra_measure` で書く。
 - 同じ優先度の別のセルを同じ位置に `put` すると `ChannelConflictError`。「決め」のように他のパートを意図して上書きするときは `buf.replace` を使う（anime-ost）。
 - 可変小節（classical）は `D00` を書く最終 row に空きチャンネルが1つ要る。
+
+**編成（曲ごとのチャンネル数）**
+
+`次の検討事項.txt` の努力目標「パターン構成を作成する際に適切なチャンネル数を選ぶ」への対応。全形式でチャンネル数はファイル単位なので1曲の中では変えず、**曲ごとに編成を選ぶ**。編成を選ぶことは「その曲で使う任意パート（パッド・対旋律・エコー・打楽器の2系統化）を選ぶ」ことで、チャンネル数はそこから決まる。
+
+- 対象は27ジャンル: 6ch だった20（pop・rock・energetic・city-pop・jpop-80s・jrock-90s・indie-rock・rnb-soul・neo-soul・anime-ost・jrpg・lofi-hiphop・lofi-chill・uplifting・edm・house・synthwave・cool・dreamy・dark-tense）は 4／6／8、4ch だった5（warm・folk・hiphop・acoustic-ssw・bossa-nova）は 4／6、8ch だった2（cinematic・trailer）は 6／8。チャンネル数がジャンルの定義になっているもの（classical・jazz・techno）、変化しないことが目的のもの（focus・ambient-drone）、層を足しても聞き分けにくいもの（calm・ambient・melancholic）と既存の12ジャンルは固定。
+- 奇数（5ch・7ch）は使わない（MOD の互換性）。4ch の編成は Amiga 互換の `M.K.` になる。
+- 選び方: `--channels N` で指定するか、指定が無ければ seed から重み付きに選ぶ（既定の重みは3択で 4:1・6:2・8:1、2択のジャンルはそれまでの数を 2・他を 1 と宣言している）。
+- **論理チャンネルで作曲し、編成に畳む**: ジャンルは最も厚い編成の全パートを `CHANNELS`（論理チャンネル）に宣言し、作曲は常にそこで行う（`CH_*` 定数・各パートの宣言・フックはそのまま）。`ARRANGEMENTS`（チャンネル数 → `Fold(name, sources, priority, pan, gain)` の列）が各編成の物理チャンネルで、`arrange()` が作曲後に畳む: 1つの論理チャンネルはそのまま写し、複数の論理チャンネル（**OneShot の音色だけ**。ループは途中で切れるのでクラス定義時に `PlanError`）は row ごとに優先度の高いセルを1つ選ぶ（同じなら `sources` の先のもの）。どの `Fold` にも入らない論理チャンネル（任意パート）は捨てる。`Fold.pan` の既定は最初の論理チャンネルのパン、4ch の編成は Amiga の L R R L。
+- そのため**同じ seed ならどの編成でも同じ音符**になり、編成は厚みとチャンネル数だけを変える（例外は曲の先頭 row 0・1。テンポのコマンドの場所を作るため、チャンネル数によって音が row 1 へ移るか消える）。それまでの数と同じ編成を選んだ曲は、この仕組みを入れる前の出力と音符・音色・音量・効果まで一致する（実装時に全27ジャンル × 5 seed で確認）。
+- 畳んだ後に、スウィングの場所作り・先頭 row の空き作り（`reserve_row0`）・サイドチェイン（対象チャンネルを物理番号に読み替える。捨てたパートは対象外）・スウィングを行う（`BandProfile._post`）。論理→物理の対応は `PatternPlan.extra["channel_map"]`。
+- **任意パート**は乱数を使わずに書く（他のパートの乱数列を変えないため）: `LayerSpec(key, channel, follow, vol, chordal, register)`（`follow` のパートが鳴る区間で、和音の変わり目に和音サンプルか第3音の長音を置く対旋律・パッドの層）、`EchoSpec(..., offs=True)`（旋律のエコー。ループ音色の旋律は消音セルも遅らせて写し、エコーが鳴り続けないようにする）、既存の `ArpSpec` 等。
+- 4ch の打楽器の畳み方の優先度は「snare・clap＞kick・tom＞crash＞hat 類」を基本に、4つ打ちの電子音楽は kick を優先する。4ch だった5ジャンルは打楽器を2系統に分けた論理チャンネルを、それまでと同じ優先度で1チャンネルに畳む（4ch の編成はそれまでの出力と一致）。
+- 各ジャンルの編成は §6.16 の「編成」。
 
 **共通の文法**
 
@@ -635,45 +657,45 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 ### 6.15 第３段階のジャンルの宣言値
 
-コードから取得（`BandProfile` の宣言）。区分は §6.14、チャンネル構成の型は §6.14 の表。
+コードから取得（`BandProfile` の宣言）。区分は §6.14、チャンネル構成の型は §6.14 の表。ch が複数あるジャンルは曲ごとに編成を選ぶ（§6.14「編成」、各ジャンルの編成は §6.16）。
 
-| id | 区分 | 表示名 | BPM | 拍子（rpm） | ch | 調・旋法 | 構成（order） |
+| id | 区分 | 表示名 | BPM | 拍子（rpm） | ch（選べる数） | 調・旋法 | 構成（order） |
 |:---|:---|:---|:---|:---|:---|:---|:---|
-| `uplifting` | mood | Uplifting | 128–136 | 4/4（16） | 6 | D/E/F ionian | intro, build, drop, drop, break, build, drop, drop, outro |
+| `uplifting` | mood | Uplifting | 128–136 | 4/4（16） | 4/6/8 | D/E/F ionian | intro, build, drop, drop, break, build, drop, drop, outro |
 | `calm` | mood | Calm / Relaxed | 68–78 | 4/4（16） | 4 | C/F/G lydian | intro, a, b, a, outro |
 | `melancholic` | mood | Melancholic | 66–76 | 4/4（16） | 4 | A/D/E aeolian | intro, a, b, a, b, outro |
-| `energetic` | mood | Energetic | 160–176 | 4/4（16） | 6 | E/A/D ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus, outro |
-| `dreamy` | mood | Dreamy | 80–92 | 4/4（16） | 6 | Eb/Ab/Db lydian | intro, a, b, a, b, outro |
-| `dark-tense` | mood | Dark / Tense | 90–100 | 4/4（16） | 6 | C/D harmonic_minor | intro, build, pulse, build, climax, collapse |
-| `warm` | mood | Warm | 88–100 | 4/4（16） | 4 | G/D/C ionian | intro, a, b, a, b, outro |
-| `cool` | mood | Cool | 100–112 | 4/4（16） | 6 | F#/B/Db dorian | intro, a, b, break, a, b, outro |
+| `energetic` | mood | Energetic | 160–176 | 4/4（16） | 4/6/8 | E/A/D ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus, outro |
+| `dreamy` | mood | Dreamy | 80–92 | 4/4（16） | 4/6/8 | Eb/Ab/Db lydian | intro, a, b, a, b, outro |
+| `dark-tense` | mood | Dark / Tense | 90–100 | 4/4（16） | 4/6/8 | C/D harmonic_minor | intro, build, pulse, build, climax, collapse |
+| `warm` | mood | Warm | 88–100 | 4/4（16） | 4/6 | G/D/C ionian | intro, a, b, a, b, outro |
+| `cool` | mood | Cool | 100–112 | 4/4（16） | 4/6/8 | F#/B/Db dorian | intro, a, b, break, a, b, outro |
 | `focus` | mood | Focus | 78–86 | 4/4（16）、スウィング 7:5 | 4 | D/E dorian | intro, loop, loop, loop2, loop2, loop, loop_b, loop_b, loop2, loop2, loop, loop, outro |
-| `rock` | genre | Rock | 112–132 | 4/4（16） | 6 | E/A/D mixolydian | intro, verse, chorus, verse, chorus, solo, chorus, outro |
-| `pop` | genre | Pop | 100–120 | 4/4（16） | 6 | C/D/F/G ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus_up, outro |
+| `rock` | genre | Rock | 112–132 | 4/4（16） | 4/6/8 | E/A/D mixolydian | intro, verse, chorus, verse, chorus, solo, chorus, outro |
+| `pop` | genre | Pop | 100–120 | 4/4（16） | 4/6/8 | C/D/F/G ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, chorus_up, outro |
 | `jazz` | genre | Modal Jazz | 120–144 | 4/4（8、1 row＝8分）、スウィング 14:10 | 4 | D dorian | head_a, head_a, head_b, head_a, solo_a, solo_a, solo_b, solo_a, head_a, head_a, head_b, coda |
-| `bossa-nova` | genre | Bossa Nova | 120–140 | 2/4（8） | 4 | F/C/G/D ionian | intro, a, a, b, a, solo, a, outro |
-| `city-pop` | genre | City Pop | 104–120 | 4/4（16） | 6 | E/A/Db ionian | intro, verse, pre, chorus, interlude, verse, pre, chorus, chorus, outro |
+| `bossa-nova` | genre | Bossa Nova | 120–140 | 2/4（8） | 4/6 | F/C/G/D ionian | intro, a, a, b, a, solo, a, outro |
+| `city-pop` | genre | City Pop | 104–120 | 4/4（16） | 4/6/8 | E/A/Db ionian | intro, verse, pre, chorus, interlude, verse, pre, chorus, chorus, outro |
 | `ambient` | genre | Ambient | 60–72 | 4/4（16） | 4 | D/E lydian | layer1, layer2, bloom, layer2, drift, fade |
-| `lofi-hiphop` | genre | Lo-fi Hip Hop | 72–88 | 4/4（16）、スウィング 7:5 | 6 | D/F/A/C ionian | intro, a, a, b, a, outro |
-| `edm` | genre | EDM | 124–130 | 4/4（16） | 6 | F/G aeolian | intro, build, drop, drop, break, build, drop, drop, outro |
-| `house` | genre | House / Deep House | 118–124 | 4/4（16） | 6 | A/D/G dorian | intro, groove, main, main, break, main, main, outro |
-| `hiphop` | genre | Hip Hop (Boom Bap) | 86–96 | 4/4（16）、スウィング 7:5 | 4 | A/E/D/G aeolian | intro, verse, verse, verse, verse, hook, hook, verse, verse, verse, verse, hook, hook, outro |
+| `lofi-hiphop` | genre | Lo-fi Hip Hop | 72–88 | 4/4（16）、スウィング 7:5 | 4/6/8 | D/F/A/C ionian | intro, a, a, b, a, outro |
+| `edm` | genre | EDM | 124–130 | 4/4（16） | 4/6/8 | F/G aeolian | intro, build, drop, drop, break, build, drop, drop, outro |
+| `house` | genre | House / Deep House | 118–124 | 4/4（16） | 4/6/8 | A/D/G dorian | intro, groove, main, main, break, main, main, outro |
+| `hiphop` | genre | Hip Hop (Boom Bap) | 86–96 | 4/4（16）、スウィング 7:5 | 4/6 | A/E/D/G aeolian | intro, verse, verse, verse, verse, hook, hook, verse, verse, verse, verse, hook, hook, outro |
 | `classical` | genre | Classical (String Quartet) | 100–120 | 3/4（12、可変） | 4 | G/D/F/Bb ionian | ante, cons, ante, cons, dom, ret, ante, cons, trio_a, trio_b, trio_a, trio_b, ante, cons, coda |
-| `cinematic` | genre | Cinematic | 70–84 | 4/4（16） | 8 | C/D aeolian | intro, rise1, theme, theme, rise2, climax, climax, resolve |
-| `folk` | genre | Folk | 96–116 | 4/4（16） | 4 | G/D/C/A ionian | intro, verse, chorus, verse, instrumental, chorus, outro |
-| `rnb-soul` | genre | R&B / Soul | 68–84 | 4/4（16）、スウィング 7:5 | 6 | Eb/Ab/Db ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, outro |
-| `synthwave` | genre | Synthwave / Retrowave | 96–112 | 4/4（16） | 6 | A/E/F# aeolian | intro, verse, chorus, verse, chorus, solo, chorus, outro |
+| `cinematic` | genre | Cinematic | 70–84 | 4/4（16） | 6/8 | C/D aeolian | intro, rise1, theme, theme, rise2, climax, climax, resolve |
+| `folk` | genre | Folk | 96–116 | 4/4（16） | 4/6 | G/D/C/A ionian | intro, verse, chorus, verse, instrumental, chorus, outro |
+| `rnb-soul` | genre | R&B / Soul | 68–84 | 4/4（16）、スウィング 7:5 | 4/6/8 | Eb/Ab/Db ionian | intro, verse, pre, chorus, verse, pre, chorus, bridge, chorus, outro |
+| `synthwave` | genre | Synthwave / Retrowave | 96–112 | 4/4（16） | 4/6/8 | A/E/F# aeolian | intro, verse, chorus, verse, chorus, solo, chorus, outro |
 | `techno` | genre | Minimal Techno | 124–132 | 4/4（16） | 4 | A/D aeolian | k1, k2, h1, f1, f2, h1, b1, f3, f2, f3, o1, k1 |
-| `jpop-80s` | style | 80s J-Pop | 120–136 | 4/4（16） | 6 | C/D/E ionian | intro, a, b, sabi, interlude, a, b, sabi, sabi_up, outro |
-| `jrock-90s` | style | 90s J-Rock | 140–168 | 4/4（16） | 6 | E/A/D aeolian | intro, a, b, sabi, a, b, sabi, solo, sabi, sabi_up, outro |
-| `anime-ost` | style | Anime Soundtrack | 120–150 | 4/4（16） | 6 | D/G aeolian | intro, a, b, break, a, b, climax, outro |
-| `jrpg` | style | JRPG Game Music | 96–120 | 4/4（16） | 6 | C/D/F ionian | intro, a, a2, b, a, a2, ending |
-| `lofi-chill` | style | Lo-fi Chill | 72–88 | 4/4（16）、スウィング 7:5 | 6 | C/F/G/Bb ionian | intro, a, a, b, a, outro |
-| `indie-rock` | style | Indie Rock | 118–138 | 4/4（16） | 6 | G/D/A ionian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
-| `trailer` | style | Cinematic Trailer | 90–100 | 4/4（16） | 8 | D/C aeolian | act1, act1, act2, act2, riser, act3, act3, final |
+| `jpop-80s` | style | 80s J-Pop | 120–136 | 4/4（16） | 4/6/8 | C/D/E ionian | intro, a, b, sabi, interlude, a, b, sabi, sabi_up, outro |
+| `jrock-90s` | style | 90s J-Rock | 140–168 | 4/4（16） | 4/6/8 | E/A/D aeolian | intro, a, b, sabi, a, b, sabi, solo, sabi, sabi_up, outro |
+| `anime-ost` | style | Anime Soundtrack | 120–150 | 4/4（16） | 4/6/8 | D/G aeolian | intro, a, b, break, a, b, climax, outro |
+| `jrpg` | style | JRPG Game Music | 96–120 | 4/4（16） | 4/6/8 | C/D/F ionian | intro, a, a2, b, a, a2, ending |
+| `lofi-chill` | style | Lo-fi Chill | 72–88 | 4/4（16）、スウィング 7:5 | 4/6/8 | C/F/G/Bb ionian | intro, a, a, b, a, outro |
+| `indie-rock` | style | Indie Rock | 118–138 | 4/4（16） | 4/6/8 | G/D/A ionian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
+| `trailer` | style | Cinematic Trailer | 90–100 | 4/4（16） | 6/8 | D/C aeolian | act1, act1, act2, act2, riser, act3, act3, final |
 | `ambient-drone` | style | Ambient Drone | 60–66 | 4/4（16） | 4 | D/E/A dorian | d1, d2, d2, d3, d3, d4, d4, d5, d5, d6, d6, d7, d8 |
-| `acoustic-ssw` | style | Acoustic Singer-songwriter | 80–100 | 4/4（16） | 4 | G/C/D/E ionian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
-| `neo-soul` | style | Neo Soul | 80–96 | 4/4（16）、スウィング 8:4 | 6 | Eb/Ab/F dorian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
+| `acoustic-ssw` | style | Acoustic Singer-songwriter | 80–100 | 4/4（16） | 4/6 | G/C/D/E ionian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
+| `neo-soul` | style | Neo Soul | 80–96 | 4/4（16）、スウィング 8:4 | 4/6/8 | Eb/Ab/F dorian | intro, verse, chorus, verse, chorus, bridge, chorus, outro |
 
 ### 6.16 第３段階の各ジャンル
 
@@ -684,6 +706,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 - 説明: 「上げていく高揚感。4つ打ちとアルペジオ、明るいスーパーソウのコード」／"Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords"
 - 相性（原文）: 晴れ・昼間
 - 音色: 1 kick（Kick909）／2 clap/hat（FbClap・OpenHat909・PopSnare）／3 bass（SawBass）／4 supersaw（FbSupersaw の和音）／5 arp（SynthPluck）／6 lead（SawLead）
+- 編成: 4ch＝drums（kick＋clap/hat）・bass・supersaw・arp／6ch＝kick・clap/hat・bass・supersaw・arp・lead／8ch＝kick・clap/hat・bass・supersaw・arp・lead・lead echo・choir（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–V–vi–IV、vi–IV–I–V、IV–V–iii–vi（2 つを選んで区間に割り当てる）
 - 文法: kick の4つ打ち＋clap（2・4拍）＋裏拍の open hat。ベースは裏拍の8分（`offbeat`）、スーパーソウの和音を全音符で持続し kick でサイドチェイン（ベース 0.3・和音 0.4）。プラックのアルペジオは16分で上行。drop でリードが動機を反復（`4xy`）。build は `buildup`。
 - 区別: edm よりテンポが速めで長調・アルペジオ主体。future-bass より直線的な4つ打ち。
@@ -708,6 +731,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「元気・活動的。速いテンポと強いドラム、8分で刻むギターとベース」／"Energetic: fast, drum-driven rock with driving guitars and bass"
 - 音色: 1 kick/snare（ProgKick・ProgSnare）／2 cymbal（ClosedHH・CrashCymbal）／3 bass（PickBass）／4 gtr（CrunchGtr）／5 lead（SquareLead）／6 tom（Tom）
+- 編成: 4ch＝drums（kick/snare＋cymbal＋tom）・bass・gtr・lead／6ch＝kick/snare・cymbal・bass・gtr・lead・tom／8ch＝kick/snare・cymbal・bass・gtr・lead・tom・lead echo・synth brass（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–V–vi–IV、IV–I–V–vi、I–IV–vi–V（2 つを選んで区間に割り当てる）
 - 文法: 倍速感のあるビート（kick 0・6・8・14／snare 4・12／ハット8分）、bridge はハーフタイム。ベースは8分の根音、ギターはパワーコードの8分刻み。区間頭に crash、フィルはタム＋スネア。
 - 区別: rock より速く（160–176）明るい長調。jrock-90s は J-POP の曲構成と転調・ギターソロを持つ。
@@ -716,6 +740,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「夢見心地。深い残響感のアルペジオとパッド」／"Dreamy: echoing arpeggios over lush pads"
 - 音色: 1 kick/rim（PopKick・Rimshot）／2 sub（FbSub）／3 pad（GlassPad の和音）／4 arp（ArpBell）／5 arp echo（ArpBell）／6 flute（Flute）
+- 編成: 4ch＝kick/rim・sub・pad・arp／6ch＝kick/rim・sub・pad・arp・arp echo・flute／8ch＝kick/rim・sub・pad・arp・arp echo・flute・flute echo・voice（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: Imaj7–IVmaj7、Iadd9–iii7–IVmaj7–ivm6（2 つを選んで区間に割り当てる）
 - 文法: アルペジオは16分の往復、`echo`（3 row 遅れ・0.5倍・2回）を5ch に書く。ドラムはハーフタイム（kick 0・10、rim 8）。サブベースは全音符、フルートはまばらな長音。
 - 区別: ambient は拍が無い。calm はピアノ主体でエコーを使わない。
@@ -724,6 +749,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「緊張感。低音のオスティナートと刻むパルス、重い打撃」／"Dark and tense: low ostinato, ticking pulse and heavy hits"
 - 音色: 1 taiko（Taiko）／2 tick（Hat909）／3 bass（SawBass）／4 strings（TensionStrings）／5 braam（Braam）／6 fx（Riser・Impact）
+- 編成: 4ch＝percussion（taiko＋tick）・bass・strings・braam／6ch＝taiko・tick・bass・strings・braam・fx／8ch＝taiko・tick・bass・strings・braam・fx・choir・braam echo（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: i–bII–i–V、i–VI–iv–V（2 つを選んで区間に割り当てる）
 - 文法: ベースは16分で根音・短2度・5度を往復（`pulse16`）、ハットは16分で途切れない。taiko は1・3拍目、braam は2小節ごと。build で riser、climax の頭に impact。
 - 区別: suspense は無音と恐怖の効果音が主役。dark-tense は一定のパルスが途切れない。trailer は3幕構成で最後に壮大化する。
@@ -732,6 +758,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「温かい。アコースティックギターとピアノ、長調の穏やかな伴奏」／"Warm: acoustic guitar and piano in a gentle major key"
 - 音色: 1 cajon/shaker（CajonLow・CajonSlap・Shaker）／2 bass（FingerBass）／3 guitar（AcousticGtr の和音）／4 piano（Piano）
+- 編成: 4ch＝cajon/shaker（cajon＋shaker）・bass・guitar・piano／6ch＝cajon・shaker・bass・guitar・piano・flute（名前は「音色」の論理チャンネル。重み {4: 2, 6: 1}）
 - 和声: I–V–vi–IV、I–IV–ii–V、I–vi–IV–V（2 つを選んで区間に割り当てる）
 - 文法: カホン（low 0・8・10、slap 2・4拍）とシェイカー。ギターはストローク（`strum`: 0・4・6・10・12・14。弦ごとに 12 ms ずらした和音サンプル）、ベースは根音と5度、ピアノの旋律は順次進行主体。
 - 区別: folk はフィドルと舞曲的なリズム。acoustic-ssw は指弾きのアルペジオと歌の旋律。
@@ -740,6 +767,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「涼しげ。透明感のあるシンセと軽い2ステップのビート」／"Cool: glassy synths over a light two-step beat"
 - 音色: 1 kick/snare（PopKick・Rimshot）／2 hat（Hat909・Clave）／3 sub（FbSub）／4 glass pad（GlassPad の和音）／5 pluck（SynthPluck）／6 echo（SynthPluck）
+- 編成: 4ch＝drums（kick/snare＋hat）・sub・glass pad・pluck／6ch＝kick/snare・hat・sub・glass pad・pluck・echo／8ch＝kick/snare・hat・sub・glass pad・pluck・echo・voice・bell（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: i9–IV9、i7–bVIImaj7–bVImaj7–v7（2 つを選んで区間に割り当てる）
 - 文法: `TWO_STEP`（kick 0・10／rim の snare 4・12／裏拍のハット／クラーベ）。グラス・パッドの和音、サブベースは2分音符、プラックの短い動機に `echo`。
 - 区別: dreamy より拍がはっきりし速い。house より軽く4つ打ちではない。
@@ -756,14 +784,16 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ロック。ギターのリフと8ビート、4/4 の中〜速いテンポ」／"Rock: guitar riffs over a straight eight-beat"
 - 音色: 1 kick/snare（ProgKick・ProgSnare）／2 cymbal（ClosedHH・SwingRide・CrashCymbal）／3 bass（PickBass）／4 rhythm gtr（CrunchGtr）／5 lead gtr（ProgLeadGtr）／6 tom（Tom）
+- 編成: 4ch＝drums（kick/snare＋cymbal＋tom）・bass・rhythm gtr・lead gtr／6ch＝kick/snare・cymbal・bass・rhythm gtr・lead gtr・tom／8ch＝kick/snare・cymbal・bass・rhythm gtr・lead gtr・tom・lead echo・organ（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–bVII–IV–I、I–IV–V–IV、i–bVI–bVII–i（2 つを選んで区間に割り当てる）
-- 文法: `BACKBEAT`（kick 0・8・10／snare 4・12／ハット8分）、サビはライドに替える。リフは根音の8分刻みから2小節ごとに5度・短7度へ動く（ミクソリディアン）。ソロ区間はリードギターが跳躍多めの旋律を `4xy` 付きで弾く。区間頭に crash、フィルはタム＋スネア。
+- 文法: `BACKBEAT`（kick 0・8・10／snare 4・12／ハット8分）、サビはライドに替える。フィルはハイタム→ロータム→スネア。リフは根音の8分刻みから2小節ごとに5度・短7度へ動く（ミクソリディアン）。ソロ区間はリードギターが跳躍多めの旋律を `4xy` 付きで弾く。区間頭に crash、フィルはタム＋スネア。
 - 区別: prog-rock は変拍子。energetic は速い長調のパンク寄り。indie-rock は軽い歪みとアルペジオ。
 
 #### 6.16.11 `pop` — 明るいポップ（genre、B6）
 
 - 説明: 「ポップ。長調の明るいメロディとピアノ、覚えやすいサビ」／"Pop: bright major-key melodies, piano and a catchy chorus"
 - 音色: 1 kick/snare（PopKick・PopSnare）／2 hat（ClosedHH・Shaker・CrashCymbal）／3 bass（FingerBass）／4 piano（Piano の和音）／5 lead（VoxOoh）／6 pad（WarmPad の和音）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・piano・lead／6ch＝kick/snare・hat・bass・piano・lead・pad／8ch＝kick/snare・hat・bass・piano・lead・pad・lead echo・strings（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–V–vi–IV、vi–IV–I–V、I–vi–IV–V、IVmaj7–V–iii7–vi（3 つを選んで区間に割り当てる）
 - 文法: §6.14 の歌もの。ピアノの和音を8分で刻み、verse はシェイカー主体の軽いビート。旋律は VoxOoh。最後から2つ目のサビ（chorus_up）で半音上げる。
 - 区別: jpop-80s は80年代の音色（ゲートスネア・シンセブラス）と王道進行。city-pop はテンションコードとカッティング。
@@ -780,6 +810,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ボサノバ。2/4 の柔らかいガットギターと軽いパーカッション」／"Bossa nova: soft nylon guitar and light percussion in 2/4"
 - 音色: 1 rim/perc（Rimshot・Shaker・Surdo）／2 bass（FingerBass）／3 guitar（NylonGtr の和音）／4 flute（Flute）
+- 編成: 4ch＝rim/perc（rim/surdo＋shaker）・bass・guitar・flute／6ch＝rim/surdo・shaker・bass・guitar・flute・e.piano（名前は「音色」の論理チャンネル。重み {4: 2, 6: 1}）
 - 和声: Imaj7–II7–iim7–V7、iim7–V7–Imaj7–VI7、im7–IV7、iim7b5–V7–im7–im7（2 つを選んで区間に割り当てる）
 - 文法: 2/4（1 measure＝8 row）。リズムは2小節周期: リムのクラーベ（偶数小節 0・3・6、奇数小節 2・5）、ギターの和音（0・3・6／2・4・6）。ベースは付点4分＋8分（row 0 に根音、row 6 に5度）、スルドは2拍目。旋法は和音の種類ごと（m7→ドリアン、dom7→ミクソリディアン、m7b5→ロクリアン）。
 - 区別: jazz・swing-jazz はスウィングする。bossa-nova はストレートな16分と2小節周期のクラーベ。
@@ -788,6 +819,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「シティポップ。テンションコードのエレピ、跳ねるベースとギターのカッティング」／"City pop: jazzy electric piano, bouncy bass and funky guitar cutting"
 - 音色: 1 kick/snare（PopKick・PopSnare）／2 hat（ClosedHH・Tambourine・CrashCymbal）／3 bass（SlapBass）／4 e.piano（ElectricPiano の和音）／5 lead（SynthBrass）／6 cutting gtr（CuttingGtr の和音）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・e.piano・lead／6ch＝kick/snare・hat・bass・e.piano・lead・cutting gtr／8ch＝kick/snare・hat・bass・e.piano・lead・cutting gtr・lead echo・strings（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: IVmaj7–III7–vi7–v7、ii7–V7–Imaj7–VI7、IVmaj7–V9–iii7–vi9（3 つを選んで区間に割り当てる）
 - 文法: ベースは `synco16`（オクターブの跳躍を含む16分のシンコペーション）、ギターは `cutting16`（ミュートと本音の混在）、エレピは2拍ごとにテンションコード、ハット8分＋タンバリン。旋律はシンセブラス。
 - 区別: jpop-80s は王道進行とブラスの決めで明るく速い。neo-soul は拍のよれと複雑なテンション。
@@ -804,6 +836,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ローファイ・ヒップホップ。よれたビート、ジャジーなエレピ、レコードのノイズ」／"Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise"
 - 音色: 1 kick/snare（BoomBapKick・BoomBapSnare）／2 hat（ClosedHH）／3 bass（FingerBass）／4 e.piano（ElectricPiano の和音）／5 lead（SwingSaxLead）／6 vinyl（VinylNoise）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・e.piano・lead／6ch＝kick/snare・hat・bass・e.piano・lead・vinyl／8ch＝kick/snare・hat・bass・e.piano・lead・vinyl・lead echo・pad（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: ii9–V13–Imaj9–vi7、Imaj7–iii7–vi7–IVmaj7、IVmaj9–iii7–ii9–Imaj9（2 つを選んで区間に割り当てる）
 - 文法: `BOOMBAP`＋16分スウィング 7:5。エレピはチャールストンの和音＋`4xy` の揺れ、ベースはブーンバップの型、サックスの旋律は短い動機、レコードのノイズを2小節ごとに鳴らし直す。
 - 区別: nostalgic（既存）はストレートな16分とオルゴール。lofi-chill はギター・フルートとサイドチェインのうねり。focus は旋律なし。
@@ -812,6 +845,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「EDM。シンセ主体、ビルドアップで溜めてドロップで弾ける」／"EDM: synth-driven builds that explode into the drop"
 - 音色: 1 kick（Kick909）／2 clap/hat（FbClap・Hat909・PopSnare）／3 bass（SawBass）／4 chords（PolyPad の和音）／5 lead（FbSupersaw）／6 fx（Riser・Impact）
+- 編成: 4ch＝drums（kick＋clap/hat）・bass・chords・lead／6ch＝kick・clap/hat・bass・chords・lead・fx／8ch＝kick・clap/hat・bass・chords・lead・fx・lead echo・pluck arp（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: VI–iv–i–VII、i–VI–III–VII（2 つを選んで区間に割り当てる）
 - 文法: 4つ打ち＋clap＋裏拍のハット。build は `buildup`（スネアが4分→8分→16分→`E9x`、音量上昇、riser）、ドロップの頭に impact、ドロップはスーパーソウのリードが2小節のフックを反復。ベースは裏拍の8分、ベースと和音に kick のサイドチェイン。
 - 区別: uplifting はアルペジオ主体で長調の高揚。house はビルドアップが無く一定のグルーヴ。
@@ -820,6 +854,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ハウス。4つ打ちの安定したグルーヴと裏拍のオルガン・スタブ」／"House: steady four-on-the-floor groove with offbeat organ stabs"
 - 音色: 1 kick（Kick909）／2 clap/hat（FbClap・OpenHat909・Rimshot）／3 bass（DeepBass）／4 stab（HouseStab の和音）／5 pad（WarmPad の和音）／6 shaker（Shaker）
+- 編成: 4ch＝drums（kick＋clap/hat＋shaker）・bass・stab・pad／6ch＝kick・clap/hat・bass・stab・pad・shaker／8ch＝kick・clap/hat・bass・stab・pad・shaker・stab echo・vocal chop（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: im7–IV9、im9–bVIImaj7、im7–iv7–bVIImaj7–bIIImaj7（2 つを選んで区間に割り当てる）
 - 文法: `DEEP_HOUSE`（kick 4つ打ち、clap 2・4拍、裏拍の open hat、シェイカー、リム）。スタブは裏拍、ベースは16分のシンコペーション（`house`）。パッドに kick のサイドチェイン。intro・outro はドラムだけ。
 - 区別: edm はビルドアップとドロップの起伏。techno は和音をほとんど持たない。
@@ -828,6 +863,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ヒップホップ。ラップが乗る余白を残したブーンバップのビートとサンプル風ループ」／"Hip hop: boom-bap beats and sample-style loops that leave room for rap"
 - 音色: 1 drums（BoomBapKick・BoomBapSnare・ClosedHH）／2 bass（FingerBass）／3 loop（Piano の和音）／4 horn（BrassHorn）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・loop・horn／6ch＝kick/snare・hat・bass・loop・horn・strings（名前は「音色」の論理チャンネル。重み {4: 2, 6: 1}）
 - 和声: i–VI–i–VI、i–iv–i–iv、im7–im7–bVImaj7–bVImaj7（1つを選び曲全体で使う）
 - 文法: ブーンバップ＋16分スウィング 7:5。和音ループ（ピアノのチャールストン）を曲全体で固定。verse は中音域の旋律を置かずループとドラムだけ（ラップの余白）、hook でホーンの短い決めの動機が入る（hook は同じ pattern を再利用するので毎回同じ）。
 - 区別: trap（既存）は 808 のグライドと32分のハイハット。hiphop はブーンバップのループとラップの余白（原文の「HipHop / Trap」の trap 部分は既存の trap が受け持つ）。
@@ -844,6 +880,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「映画音楽。ピアノのオスティナートから弦とホルンが重なり、ドラマチックに高まる」／"Cinematic: piano ostinato building to soaring strings and horns"
 - 音色: 1 piano（Piano）／2 violin（OrchViolin）／3 viola（OrchViola の和音）／4 cello（OrchCello）／5 contrabass（OrchBassStr）／6 horn（BrassSection）／7 choir（Choir の和音）／8 timpani（OrchTimpani・FreeCymbalSwell）
+- 編成: 6ch＝piano・violin・cello・horn・choir・timpani／8ch＝piano・violin・viola・cello・contrabass・horn・choir・timpani（名前は「音色」の論理チャンネル。重み {6: 1, 8: 2}）
 - 和声: i–VI–III–VII、VI–VII–i–i、III–VII–i–VI（宣言順にすべて使う）
 - 文法: ピアノの8分の分散和音（往復）が全体を通し、区間ごとに層を足す: rise1＝チェロ・ヴィオラの和音、theme＝ヴァイオリンの旋律・コントラバス、rise2＝ホルン（和音の第3音）・合唱・ティンパニ（最後の小節はロール、2小節目にシンバルのスウェル）、climax＝全8ch（ティンパニは1・3拍目）。クライマックスは平行長調の響きを III–VII–i–VI（＝長調の I–V–vi–IV）で作る（`key_offset` を使わないので旋律の音階がそのまま合う）。進行は宣言順に固定。
 - 区別: orchestral は古典的な機能和声で木管を含む。trailer は打楽器と金管の衝撃で、3幕の構成。
@@ -852,6 +889,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「フォーク。アコースティックギターのストロークとフィドル、素朴な進行」／"Folk: strummed acoustic guitar and fiddle over simple progressions"
 - 音色: 1 stomp/clap（Stomp・FbClap・Tambourine）／2 upright bass（SwingWalkBass）／3 guitar（AcousticGtr の和音）／4 fiddle（Fiddle）
+- 編成: 4ch＝stomp/clap（stomp/clap＋tambourine）・upright bass・guitar・fiddle／6ch＝stomp/clap・tambourine・upright bass・guitar・fiddle・whistle（名前は「音色」の論理チャンネル。重み {4: 2, 6: 1}）
 - 和声: I–IV–I–V、I–V–vi–IV、I–bVII–IV–I（2 つを選んで区間に割り当てる）
 - 文法: 足踏み（1・3拍）と手拍子（2・4拍）＋タンバリン。アップライト・ベースは根音と5度、ギターは8分のストローク（弦ごとに 14 ms ずらした和音サンプル）。フィドルは8分の順次進行で、直前が空いている音に確率 0.3 で1つ上の音階音の前打音（16分）を付ける。instrumental はフィドルの細かい動機。
 - 区別: warm はピアノの旋律と穏やかな伴奏。acoustic-ssw は指弾き。
@@ -860,6 +898,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「R&B／ソウル。滑らかなテンションコードと歌うような旋律のスロー・ジャム」／"R&B / soul: smooth extended chords and a singing melody in a slow jam"
 - 音色: 1 kick/snare（PopKick・PopSnare）／2 hat（ClosedHH・Rimshot）／3 bass（FingerBass）／4 e.piano（ElectricPiano の和音）／5 vocal（VoxOoh）／6 strings（WarmPad の和音）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・e.piano・vocal／6ch＝kick/snare・hat・bass・e.piano・vocal・strings／8ch＝kick/snare・hat・bass・e.piano・vocal・strings・vocal echo・flute（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: IVmaj7–iii7–ii7–Imaj7、ii9–V13–Imaj9–Imaj9、vi9–ii9–V7sus4–Imaj9（3 つを選んで区間に割り当てる）
 - 文法: 軽い16分スウィング 7:5。エレピは2分音符の和音＋`4xy` の揺れ、弦のパッド、ベースはブーンバップの型、旋律（VoxOoh）は長音主体で `4xy`。
 - 区別: neo-soul は拍のよれと EP 中心・より複雑なテンション。city-pop は速くカッティングがある。
@@ -868,6 +907,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「シンセウェイブ。80年代のシンセとゲートスネア、8分で脈打つベース」／"Synthwave: 80s synths, gated snare and a pulsing eighth-note bass"
 - 音色: 1 kick/snare（PopKick・GatedSnare）／2 hat（ClosedHH）／3 bass（SawBass）／4 poly pad（PolyPad の和音）／5 lead（SawLead）／6 arp（ArpBell）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・poly pad・lead／6ch＝kick/snare・hat・bass・poly pad・lead・arp／8ch＝kick/snare・hat・bass・poly pad・lead・arp・lead echo・arp echo（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: i–VI–III–VII、VI–VII–i–i、i–iv–VI–V（2 つを選んで区間に割り当てる）
 - 文法: kick 1・3拍、ゲートスネア 2・4拍、16分のハット。ベースは8分のオクターブ、ポリシンセのパッド、アルペジオは8分の往復、ソーのリードは `4xy`。
 - 区別: jpop-80s は明るい長調の歌もの。synthwave は短調でリードとアルペジオが主役。
@@ -884,6 +924,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「80年代 J-POP 風。明るいコードと都会的なブラス、軽快なビートと最後のサビの転調」／"80s J-pop style: bright chords, city brass, a light beat and a final key change"
 - 音色: 1 kick/snare（PopKick・GatedSnare）／2 hat（ClosedHH・Tambourine・CrashCymbal）／3 bass（FingerBass）／4 e.piano（ElectricPiano の和音）／5 lead（SquareLead）／6 synth brass（BrassPad の和音）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・e.piano・lead／6ch＝kick/snare・hat・bass・e.piano・lead・synth brass／8ch＝kick/snare・hat・bass・e.piano・lead・synth brass・lead echo・strings（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: IVmaj7–V7–iii7–vi、I–V–vi–iii、ii7–V7–Imaj7–vi7（3 つを選んで区間に割り当てる）
 - 文法: kick 0・8・10、ゲートスネア、16分のハット、タンバリン。ベースは8分のオクターブ、エレピは2分音符。シンセブラスはイントロ・サビの頭で「決め」（0・3・6 の3連打）、それ以外は和音を伸ばす。最後のサビ（sabi_up）と outro で全音上げる。
 - 区別: city-pop はより遅く、丸サ進行とカッティング中心。pop は現代的な音色。
@@ -892,6 +933,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「90年代 J-ROCK 風。歪んだギターが前に出る速いビートとギターソロ、最後のサビで転調」／"90s J-rock style: loud guitars over a fast beat, a guitar solo and a final key change"
 - 音色: 1 kick/snare（ProgKick・ProgSnare）／2 cymbal（ClosedHH・CrashCymbal）／3 bass（PickBass）／4 dist gtr（CrunchGtr）／5 lead gtr（ProgLeadGtr）／6 clean gtr（CleanGtr）
+- 編成: 4ch＝drums（kick/snare＋cymbal）・bass・guitars（dist gtr＋clean gtr）・lead gtr／6ch＝kick/snare・cymbal・bass・dist gtr・lead gtr・clean gtr／8ch＝kick/snare・cymbal・bass・dist gtr・lead gtr・clean gtr・lead echo・strings（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: bVI–iv–v–i、i–VI–VII–i、VI–VII–v–i（3 つを選んで区間に割り当てる）
 - 文法: kick 0・3・8・10（サビは 0・2・8・10 で前のめり）、歪んだパワーコードの8分刻み、ベースは8分の根音。Aメロはクリーンギターの8分アルペジオ、ソロはリードギター（`4xy` 深め）。最後のサビ（sabi_up）で半音上げる。
 - 区別: rock は洋楽的なリフ中心の構成。energetic は長調のパンク寄りで転調しない。
@@ -900,6 +942,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「アニメ劇伴風。刻むストリングスとジャズの和声、ブラスの決め」／"Anime soundtrack style: driving strings with jazz harmony and brass hits"
 - 音色: 1 kick/snare（ProgKick・SwingBrushSnare）／2 ride/crash（SwingRide・CrashCymbal）／3 bass（SwingWalkBass）／4 piano（Piano の和音）／5 lead（SwingSaxLead・OrchViolin・BrassSection）／6 strings/brass（Spiccato・BrassSection）
+- 編成: 4ch＝drums（kick/snare＋ride/crash）・bass・piano・lead／6ch＝kick/snare・ride/crash・bass・piano・lead・strings/brass／8ch＝kick/snare・ride/crash・bass・piano・lead・strings/brass・lead echo・violin line（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: im7–ivm7–VII7–IIImaj7、iim7b5–V7–im7–im7、VImaj7–V7–im7–im7（3 つを選んで区間に割り当てる）
 - 文法: kick＋ブラシのスネア、ライド、ウォーキング・ベース、ピアノはチャールストンの7th。主題はサックス（a）とヴァイオリン（b）が持ち替え、climax はブラスが歌う（`lead_key`）。ストリングスは16分の刻み（3+3+2 のアクセント）。intro・break・outro はブラス・ピアノ・ベース・キック・クラッシュの「決め」（16分の 3+3）を2小節ごとに入れ、最後は決めで終わる（決めは他のパートより優先して置き換える）。
 - 区別: swing-jazz は小編成のジャズそのもの。anime-ost は弦と管の劇伴にジャズの和声を混ぜる。
@@ -908,6 +951,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ゲーム音楽風（JRPG）。旋律を重視した冒険のテーマ、ハープと弦とホルン」／"JRPG game music style: melodic adventure theme with harp, strings and horn"
 - 音色: 1 timpani/snare（OrchTimpani・MarchSnare）／2 harp（Harp）／3 cello（OrchCello）／4 strings（StringPad の和音）／5 melody（Flute・OrchTrumpet）／6 brass（BrassSection）
+- 編成: 4ch＝timpani/snare・harp・cello・melody／6ch＝timpani/snare・harp・cello・strings・melody・brass／8ch＝timpani/snare・harp・cello・strings・melody・brass・melody echo・choir（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–V–vi–iii、IV–I–IV–V、vi–IV–V–I、I–bVII–IV–I（宣言順にすべて使う）
 - 文法: ハープは16分の上行分散和音、弦のパッド、チェロは2分音符、ティンパニは和音の変わり目、スネアは軽い行進風。旋律はフルート（b はトランペット）で、4小節の楽節の2小節目は1小節目の動機を1音階上げて繰り返す（ゼクエンツ。音域の上端を超える音はそのまま）。intro は金管のファンファーレ、b と ending は金管の対旋律（和音の第3音の長音）。進行は宣言順に固定: 主題はカノン型の8小節（a＋a2）。
 - 区別: march は軍楽の行進曲。orchestral・cinematic は旋律より響き中心。jrpg は覚えやすい主旋律が主役。
@@ -916,6 +960,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ローファイ・チル。柔らかいギターとフルート、うねるサイドチェインと雨音」／"Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience"
 - 音色: 1 kick/rim（BoomBapKick・Rimshot）／2 shaker（Shaker）／3 bass（FingerBass）／4 guitar（NylonGtr の和音）／5 flute（Flute）／6 rain（Rain）
+- 編成: 4ch＝drums（kick/rim＋shaker）・bass・guitar・flute／6ch＝kick/rim・shaker・bass・guitar・flute・rain／8ch＝kick/rim・shaker・bass・guitar・flute・rain・flute echo・e.piano（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: Imaj7–iii7–vi7–IVmaj7、IVmaj7–ivm7–Imaj7–vi7、Imaj9–IVmaj9（2 つを選んで区間に割り当てる）
 - 文法: 16分スウィング 7:5。kick とリム（スネアの代わり）、シェイカー。ナイロンギターの和音（弦ごとに 18 ms ずらす）は2分音符、kick をトリガにギターと雨音にサイドチェイン（うねり）。フルートの旋律は `4xy`。
 - 区別: lofi-hiphop はジャジーなエレピとブーンバップ。focus は旋律なし。lofi-chill はギター・フルート・雨音とサイドチェインのうねりで区別する。
@@ -924,6 +969,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「インディー・ロック風。生音のドラムと鳴り響くギターのアルペジオ、軽い歪み」／"Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive"
 - 音色: 1 kick/snare（ProgKick・PopSnare）／2 hat（ClosedHH・Tambourine・CrashCymbal）／3 bass（PickBass）／4 clean gtr（CleanGtr）／5 lead（SquareLead）／6 crunch gtr（CrunchGtr）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・clean gtr・lead／6ch＝kick/snare・hat・bass・clean gtr・lead・crunch gtr／8ch＝kick/snare・hat・bass・clean gtr・lead・crunch gtr・lead echo・organ（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: I–IV–vi–V、I–iii–IV–iv、vi–IV–I–V（2 つを選んで区間に割り当てる）
 - 文法: 半数の seed でキックを4つ打ち（ダンス寄り、`plan()` で決める）、それ以外は kick 0・6・8＋タンバリン。クリーンギターは8分のアルペジオ（往復）、サビで軽い歪みのギターがストロークを足す。ベースは8分。
 - 区別: rock はパワーコードのリフ。jrock-90s は強い歪みと速さ。
@@ -932,6 +978,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「映画予告編風。大太鼓と金管の衝撃、刻む弦、合唱で盛り上がる3幕構成」／"Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts"
 - 音色: 1 taiko（Taiko）／2 toms/snare（Tom・MarchSnare）／3 braam（Braam）／4 spiccato（Spiccato）／5 low strings（OrchCello）／6 choir（Choir の和音）／7 high strings（OrchViolin）／8 fx（Riser・Impact）
+- 編成: 6ch＝percussion（taiko＋toms/snare）・braam・spiccato・low strings・choir・high strings／8ch＝taiko・toms/snare・braam・spiccato・low strings・choir・high strings・fx（名前は「音色」の論理チャンネル。重み {6: 1, 8: 2}）
 - 和声: i–VI–III–VII、i–bVI–bVII–i（2 つを選んで区間に割り当てる）
 - 文法: 第1幕: 2小節ごとに taiko・braam（最初は impact も）の一撃と無音の間。第2幕: taiko の型、スピッカートの16分の刻み（3+3+2 のアクセント）、低弦、braam は2小節ごと。riser: taiko の4分、`buildup`（スネア）と上昇音。第3幕（半音上、`key_offset=1`）: 全合奏＋合唱＋高弦の旋律、奇数小節の末にタム、頭に impact。final は最初の一撃の後は余韻だけ。
 - 区別: dark-tense は一定のパルスで起伏が少ない。cinematic は情感の旋律。trailer は衝撃・無音・加速で3段階に盛り上がる。
@@ -948,6 +995,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「弾き語り風。指弾きのギターと軽いパーカッション、歌のような旋律」／"Acoustic singer-songwriter style: fingerpicked guitar, light percussion and a vocal-like melody"
 - 音色: 1 cajon/shaker（CajonLow・CajonSlap・Shaker）／2 bass（FingerBass）／3 guitar（AcousticGtr）／4 voice（VoxOoh）
+- 編成: 4ch＝cajon/shaker（cajon＋shaker）・bass・guitar・voice／6ch＝cajon・shaker・bass・guitar・voice・voice echo（名前は「音色」の論理チャンネル。重み {4: 2, 6: 1}）
 - 和声: I–V–vi–IV、vi–IV–I–V、I–iii–vi–IV（2 つを選んで区間に割り当てる）
 - 文法: トラヴィス奏法: 親指が4分で根音と5度を交互に、他の指が8分裏で上声を弾く（1チャンネルの単音）。カホンとシェイカーは軽く、ベースは全音符で弱く。旋律（VoxOoh）は息継ぎを強めに（動機の多くが最後の拍を空け、4小節目は後半を休む）。intro・outro はギターのみ。
 - 区別: folk はストロークとフィドル。warm はピアノの旋律。
@@ -956,6 +1004,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - 説明: 「ネオソウル風。よれたビートとエレピ主体の豊かなテンションコード」／"Neo soul style: laid-back off-grid beats and lush electric piano chords"
 - 音色: 1 kick/snare（BoomBapKick・PopSnare）／2 hat（ClosedHH・Rimshot）／3 bass（FingerBass）／4 e.piano（ElectricPiano の和音）／5 vocal（VoxOoh）／6 e.piano 2（ElectricPiano の和音）
+- 編成: 4ch＝drums（kick/snare＋hat）・bass・e.piano・vocal／6ch＝kick/snare・hat・bass・e.piano・vocal・e.piano 2／8ch＝kick/snare・hat・bass・e.piano・vocal・e.piano 2・vocal echo・guitar（名前は「音色」の論理チャンネル。重み {4: 1, 6: 2, 8: 1}）
 - 和声: bIIImaj9–ii7–iv9–i11、ii9–V13–iii7–VI9、i11–IV9（2 つを選んで区間に割り当てる）
 - 文法: 強い16分スウィング 8:4。スネアとハットの一部を `EDx`（1〜2 tick）で遅らせる（スネア 0.35・ハット 0.25 の確率、§6.14）。エレピ2台（3ch は裏拍のスタブ＋`4xy`、6ch は持続）、ベースは16分のシンコペーション。
 - 区別: rnb-soul はきれいなグリッドのスロー・ジャムと弦。neo-soul は拍のよれと EP の複雑な和音。
@@ -1064,6 +1113,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | `--format` | `-f` | `mod` | `mod` / `xm` / `s3m` / `it` / `midi` / `mp3` |
 | `--output` | `-o` | `output/<genre>_<seed>.<拡張子>` | 明示すればそのパスへ書く（存在しない親フォルダはエラー） |
 | `--tempo` | `-t` | ジャンルが決める | `120` または `80-100`（§5.5） |
+| `--channels` | `-c` | ジャンルが曲ごとに決める | `4`・`6`・`8`（奇数は MOD の互換性のため受け付けない）。ジャンルが選べない数ならエラー（終了コード 2。§6.14） |
 | `--list-genres` | – | – | 全ジャンルの id・別名・1行説明を区分（気分・ジャンル・〜風）ごとに表示して終了 |
 | `--english` | `-e` | – | 表示を英語にする（§8.5） |
 | `--version` | `-v` | – | `ModWeaver <版>` と GitHub URL を表示して終了（他の引数より優先） |
@@ -1079,6 +1129,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 ### 8.3 `--genre random`
 
 - 候補は登録済みの**正規 id**（別名は数えない。suspense-slow が2倍選ばれないように）。`--tempo` があれば `tempo_range` が要求と重なるジャンルだけを候補にし、1つも無ければ `TempoRangeError`（終了コード 2）。
+- `--channels` があれば、その数を選べるジャンルだけを候補にする（1つも無ければ `ChannelCountError`、終了コード 2）。
 - 選択は seed と独立（`random` モジュール）。再現はバナーの再現コマンド（選ばれたジャンル名が入る）で行う。
 - 大文字小文字は区別する（`Random` は未登録ジャンル）。
 
@@ -1095,7 +1146,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 ### 8.6 バナーと再現コマンド
 
-区切り線・`ModWeaver: <display_name>`・ジャンル（random なら `(ランダム)`）・出力形式・シード・テンポ（範囲指定なら要求範囲も）・`plan.summary` の各行・出力ファイル・再現コマンド。再現コマンドは `<起動方法> --genre <id>`、指定されたときだけ `--format <形式>` と `--tempo <確定した BPM>`（範囲ではなく確定値）、最後に `--seed <seed>`。起動方法は `modweaver.py` なら `python modweaver.py`、それ以外は `python -m mod_weaver.cli`。
+区切り線・`ModWeaver: <display_name>`・ジャンル（random なら `(ランダム)`）・出力形式・シード・テンポ（範囲指定なら要求範囲も）・チャンネル数（`--channels` 指定なら `(指定)`）・`plan.summary` の各行・出力ファイル・再現コマンド。再現コマンドは `<起動方法> --genre <id>`、指定されたときだけ `--format <形式>`・`--tempo <確定した BPM>`（範囲ではなく確定値）・`--channels <数>`（指定しなければ seed で同じ編成になる）、最後に `--seed <seed>`。起動方法は `modweaver.py` なら `python modweaver.py`、それ以外は `python -m mod_weaver.cli`。
 
 ### 8.7 終了コード・例外・ログ
 
@@ -1144,7 +1195,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 - **XM（`verify.verify_xm`）**: 同じ番号体系。V01 は宣言された各サイズの積算との比較、V05 は note が本プロジェクトの音域内、V15 はパンで加重した左右合計（左 = vol×(255−pan)/255）。
 - **S3M / IT**: V01 構造・V02 マジック・V03 order・V04 サンプル・V05 音域・V06/V07 番号・V08 音量とテンポ値・V09 許可・V10 `Txx`（≥32）。
 - **MIDI**: V01 読めるか・V02 ヘッダ（format 1／PPQ）・V03 End of Track・V04 note on/off の対応・V05 テンポ設定。
-- **V15 は目安**: チャンネル音量の単純合計で、再生エンジンのミキシング（チャンネル数に応じたヘッドルーム、サンプル波形の振幅）を考えない。Amiga の 4ch 前提の目安で、多チャンネルでは割れなくても超えるため 6ch・8ch の曲は検査しない。音割れは全ジャンルを実測で検査する（§9.2）。
+- **V15 は目安**: チャンネル音量の単純合計で、再生エンジンのミキシング（チャンネル数に応じたヘッドルーム、サンプル波形の振幅）を考えない。Amiga の 4ch 前提の目安で、多チャンネルでは割れなくても超えるため 6ch・8ch の曲は検査しない（編成を選ぶジャンルの 4ch の編成は検査の対象で、全て通る）。音割れは全ジャンルを実測で検査する（§9.2）。
 
 ### 9.2 実プレイヤーによる検査（`tests/realplayer/`）
 
@@ -1154,7 +1205,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 |:---|:---|
 | 形式間の等価性 | 同じ Song を MOD と XM/S3M/IT で再生し、曲長（±1%＋0.1 秒）・平均周波数（ゼロ交差法 ±5%）・RMS 包絡の相関（>0.8）が一致。orchestral は XM を基準に MOD/S3M/IT を比較 |
 | テンポ | 全ジャンルが表示 BPM どおりの再生時間で鳴る（±2%＋0.3 秒）。`timeline` の曲長が実再生の長さと一致（0〜0.2 秒） |
-| 音割れ | 全ジャンル × MOD/XM/S3M/IT × 2 seed の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認 |
+| 音割れ | 全ジャンル × MOD/XM/S3M/IT × 2 seed、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認 |
 | MP3 | 作れること、デコードした長さ（±0.5 秒）・ステレオ・無音でないこと・音割れ率 < 0.1% |
 
 ### 9.3 目で・耳で確かめること（自動化の対象外）
@@ -1168,12 +1219,12 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | 層 | 場所 | 主な検査 |
 |:---|:---|:---|
 | 単体 | `tests/unit/` | pitch・dsp・synth・model（Cell の直列化、put の規則、Instrument の範囲検査）・writer（レイアウト・原子的書込）・verify（ミューテーションで各コードが出る）・harmony・composer・engine（`apply_tempo`・契約検査・V15 は 4ch だけ）・registry（自動検出・登録時の検査）・各形式・timeline・midi |
-| ジャンル | `tests/profiles/` | 文法・音域・ChannelPlan・決定性・構成（例: suspense の shock 前 8 row に発音が無い、march の Oom-Pah・ロール、全 arp が上限内）。第３段階の35ジャンルは `test_stage3_genres.py` が共通に検査（20 seed × 全形式で構造検査の ERROR・WARN なし、宣言の整合、決定性、`--tempo` で曲が変わらない、区間で鳴らさないパートに音が無い、最後のサビの転調） |
+| ジャンル | `tests/profiles/` | 文法・音域・ChannelPlan・決定性・構成（例: suspense の shock 前 8 row に発音が無い、march の Oom-Pah・ロール、全 arp が上限内）。第３段階の35ジャンルは `test_stage3_genres.py` が共通に検査（20 seed × 全形式で構造検査の ERROR・WARN なし（編成を選ぶジャンルは編成ごとに 10 seed）、宣言の整合、決定性、`--tempo` で曲も編成も変わらない、区間で鳴らさないパートに音が無い、最後のサビの転調、どの編成でも同じ音符、seed で全編成が選ばれる、ループの音色を畳む宣言を弾く） |
 | 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足） |
 | 回帰 | `tests/regression/` | nostalgic を凍結した旧実装 `tests/reference/twilight_pad_v1.py`（SHA-256 固定）と 20 seed で比較。作曲（`plan()` の結果と pattern のセル配置）はバイト一致、サンプル波形は長さ・ピークが近いこと、ファイル全体は検査が通ること |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
 
-- 実行: `python -m pytest -q`（3054 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2549 件）で実プレイヤー検査を省略し、マージ前に全部流す。
+- 実行: `python -m pytest -q`（3359 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2706 件）で実プレイヤー検査を省略し、マージ前に全部流す。
 - 新しいジャンルは、全形式・複数 seed で構造検査が通ること、実プレイヤーの音割れ検査に通ること、`gm_voices` が全楽器ぶんあること、1ファイル1ジャンルであることがテストで自動的に確かめられる。
 
 ---

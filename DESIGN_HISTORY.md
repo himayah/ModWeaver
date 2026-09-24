@@ -17,6 +17,7 @@
 | 2026-09-23 | 第１段階（次の検討事項） | 出力形式の選択（mod/xm/s3m/it/midi/mp3）とテンポ指定。実プレイヤー検査を導入。main にマージ（`a696667`） | `FORMAT_TEMPO_DESIGN.md` |
 | 2026-09-24 | 第２段階（次の検討事項） | ジャンルの自動検出、引数なしで usage、`--genre random`、`--version`、英語版 README、出力先 `output/`、日本語表示と `-e`。orchestral の V15 誤警告を修正。main にマージ（`63d2aeb`） | `CLI_STAGE2_DESIGN.md` |
 | 2026-09-24 | 文書の統合 | 設計書7本を `DESIGN.md`（現行仕様）と本書（経緯）に統合 | 本書 |
+| 2026-09-24 | 第３段階（次の検討事項） | 35ジャンルの追加（計47）。共通の骨格 `BandProfile` と楽器名の音色ライブラリ、ジャンルごとに 4／6／8ch（§12.5） | 設計中は `DESIGN.md` §12、実装後に §6.14〜6.16 へ移した |
 
 ---
 
@@ -326,6 +327,46 @@ MP3 の代替案（自前の再生エンジン＋`lameenc`、pure Python の MP3
 - libopenmpt で実際に再生して測ると音割れは無かった（最大振幅 MOD −5.1 dBFS、XM −1.9、IT −2.3。他ジャンルの MOD は −3.5〜−4.8）。V15 はチャンネル音量の単純合計による目安で、再生エンジンのミキシングを考えないため、多チャンネルの全合奏では割れなくても超える。
 - 対処の候補は3つ: A）ジャンルが宣言して V15 を外し、実測の音割れ検査で置き換える／B）orchestral の音量を下げる（片側4chで合計 120 以下にすると1ch 平均 30 まで下がり、もともと他ジャンルより静かな orchestral の迫力が失われる）／C）V15 を実際のミキシングに近い計算に作り直す（プレイヤーごとに違うので正確にできない）。**A を採用**（ユーザー判断）。
 - `GenreProfile.allow_volume_sum_over`（既定 False）を足し、orchestral だけが宣言。全ジャンル × MOD/XM/S3M/IT × 2 seed の実再生で最大振幅 <0 dBFS を検査するテストを追加し、振幅最大の矩形波に差し替えると失敗すること（検査が見逃さないこと）も確認した。生成される曲は変わらない。
+
+---
+
+## 12.5 第３段階: 35ジャンルの追加（2026-09-24）
+
+### 要求
+
+気分（Uplifting・Calm・Melancholic・Energetic・Dreamy・Dark/Tense・Warm・Cool・Focus）、ジャンル（Rock・Pop・Jazz・Bossa Nova・City Pop・Ambient・Lo-fi HipHop・EDM・House・HipHop/Trap・Classical・Cinematic・Folk・R&B/Soul・Synthwave・Minimal/Techno）、「〜風」（80s Japanese Pop・90s J-Rock・Anime OST・JRPG・Lo-fi Producer・Indie Rock・Cinematic Trailer・Ambient Drone・Acoustic Singer-songwriter・Neo Soul）の35ジャンルを追加する。努力目標: パターン構成に合わせて適切なチャンネル数を選ぶ。
+
+### 決定事項（2026-09-24 ユーザー確認済み。すべて推奨案）
+
+| # | 論点 | 決定 |
+|:---|:---|:---|
+| Q1 | 既存とほぼ重なるもの（Jazz≒swing-jazz、HipHop/Trap≒trap、Lo-fi Producer風≒Lo-fi HipHop） | 別ジャンルとして作り、違う方向に寄せる（jazz＝モーダル、hiphop＝ブーンバップ、lofi-chill＝ギターとサイドチェインのうねり）。35すべて作る |
+| Q2 | 実在の人名 | id・表示名・説明に入れず、音楽的特徴で書く |
+| Q3 | 47ジャンルの一覧とヘルプ | `GenreProfile.category`（mood/genre/style）を持たせて区分ごとに表示。`--help` の末尾は区分ごとの id だけ |
+| Q4 | 多チャンネル曲の V15 | V15 は 4ch の曲だけ検査する。`allow_volume_sum_over` は廃止。音割れは実プレイヤー検査で全ジャンル確認 |
+| Q5 | 気分ジャンルの「相性」 | 設計書に記録するだけ（属性は、天気・時間帯から選ぶ機能を作るときに足す） |
+| Q6 | ギターのストローク | `WeightedLayer.offset_ms` を追加する |
+| Q7 | テスト時間 | 実プレイヤー検査に `slow` の印を付け、普段は省略できるようにする（マージ前は全部流す） |
+| Q8 | 進め方 | 基盤を先に作り、近いジャンルどうし約5つずつに分けて実装・コミット |
+
+チャンネル数は、ファイル形式上1曲の中で変えられないため、ジャンル単位で 4／6／8 から選ぶことで努力目標に応える。
+
+### 実装の経過
+
+基盤（和音の種類14・旋法6の追加、`category`、`rows_per_beat`、V15 を 4ch だけに、`WeightedLayer.offset_ms`、`synth_presets` のパッケージ化、実プレイヤー検査の `slow` 印）→ 共有音色54と `BandProfile` → 近いジャンルどうし5〜12個ずつ、計5回に分けて実装・コミットした。各回で全ジャンル 30 seed × 5形式の構造検査（WARN も 0）と実プレイヤーの音割れを確かめた。既存12ジャンルの出力は変わらない（回帰テスト）。
+
+### 実装で分かったこと
+
+1. **和音サンプルに使えないループ素材がある**: `chord_patch` はループの各構成音のサイクル数を整数に丸めるので、基本サイクル数が小さい素材（`keys_organ`・`march_brass_section`・`syn_brass`）では sus4 以外の和音が 12 セントを超えてずれる。これらは単音で鳴らし（ホルンの対旋律・ブラスの決め）、和音のパッドには `orch_violin`・`vox_choir`・`pad_*` を使った。
+2. **進行を無作為に選ぶと区間の役割が壊れる**: `plan()` は進行を `sample()` で選んで順序も混ぜるので、「前楽節は半終止、後楽節は完全終止」のように区間ごとに和声の役割が決まった曲（classical・cinematic・jrpg）が書けない。`BandProfile.FIXED_PROGRESSIONS` を足した。
+3. **3/4 の pattern**: 12 row の measure を 64 row に詰めると 5小節（60 row）になり、4小節の楽節と合わない。`BandProfile.MEASURES_PER_PATTERN` を足して 4小節（48 row）＋`D00` にした。`D00` を書く最終 row に空きチャンネルが要る（4声が同時に鳴ると書けない）ので、classical は最終 row を1つ空ける。
+4. **音程のある打楽器はドラムの型に書けない**: `Instrument.cell()` は音程のある楽器を音高なしで呼ぶと休符を返す。タム・ティンパニは `extra_measure` で音高付きで書く。
+5. **平行長調へのクライマックス**: 設計では cinematic のクライマックスを `key_offset=+3` で平行長調に移すとしていたが、それだと主音だけが動き旋律の音階（エオリアン）が長調の主音から数えられてずれる。平行長調の I–V–vi–IV は短調の度数で III–VII–i–VI と同じ和音なので、`key_offset` を使わずにそう書いた。
+6. **和音・旋法の追加**: モーダル・ジャズの4度堆積は既存の和音の種類で作れないので `quartal`（0・5・10・15・19）を、bossa-nova の m7b5 の旋法に `locrian` を足した（辞書の項目の追加だけ）。
+7. **旋律の持ち替え**: anime-ost（サックス→ヴァイオリン→ブラス）・jrpg（フルート→トランペット）のため `BandProfile.lead_key(sec)` を足した。
+8. **決めの上書き**: 「決め」は他のパート（ベース・ピアノ・キック）と同じ row に置くので、同じ優先度の別セルとして `put` すると `ChannelConflictError` になる。意図した上書きなので `buf.replace` を使う。
+9. **スウィングのテンポずれ**: `apply_swing` は空きチャンネルの無い row を飛ばし、そこでは直前の row の Speed が続く（拍の表が短く、裏が長くなる）。4ch で全パートが同時に鳴る row が多い jazz は、1曲に 26〜34 row で飛び、実プレイヤーで表示 BPM より約3%速く鳴った（テンポの実プレイヤー検査で発見。16分スウィングのジャンルも数 row ずつ飛んでいたが許容差内だった）。`BandProfile` がスウィングするジャンルでは全 row に場所を作る（`make_room_for_row_commands`。§6.14）ようにして、全 row に Speed が入るようにした。
+10. **ベルの音高検査**: MIDI の音高の根拠（`sounding_hz`）を YIN で検算するテストが、`keys_bell`（部分音 1・2.76・5.4・8.93 倍）で 70 セントずれると判定した。基音は正しく、非調和な部分音で YIN が誤る（既存のトーンクラスター等と同じ）ので、検査の除外に加えた。
 
 ---
 

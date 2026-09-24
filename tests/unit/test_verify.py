@@ -272,15 +272,24 @@ def test_xm_v13_unused_instrument():
 
 
 def test_xm_v15_pan_weighted_volume_sum():
-    song = good_xm_song()
+    song = good_xm_song(4)
     p = song.patterns[0]
     p.replace(0, 0, Cell(24, 1, vol=64))   # instrument1: pan=40 (左寄り)
     p.replace(0, 1, Cell(24, 2, vol=64))   # instrument2: pan=220 (右寄り)
     assert "V15" not in codes(verify_xm(serialize_xm(song)))
-    for ch in range(6):                    # 全チャンネルが同じ row で鳴る → 片側に偏って上限超過
-        p.replace(2, ch, Cell(24, 1 if ch % 2 == 0 else 2, vol=64))
+    for ch in range(4):                    # 左寄りの楽器を全チャンネルで同時に鳴らす → 左が上限超過
+        p.replace(2, ch, Cell(24, 1, vol=64))
     issues = verify_xm(serialize_xm(song))
     assert any(i.code == "V15" for i in issues)
+
+
+def test_v15_is_only_checked_for_four_channel_songs():
+    """V15 の左右モデルは Amiga の 4ch 前提。5ch 以上は実プレイヤーの音割れ検査に任せる（DESIGN.md §9.1）。"""
+    song = good_xm_song(6)
+    for ch in range(6):
+        song.patterns[0].replace(2, ch, Cell(24, 1, vol=64))
+    assert "V15" not in codes(verify_xm(serialize_xm(song)))
+    assert "V15" not in codes(verify(serialize(song)))
 
 
 def test_xm_v16_arpeggio_range():

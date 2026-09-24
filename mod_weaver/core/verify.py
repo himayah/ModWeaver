@@ -21,6 +21,7 @@ PATTERN_BYTES = ROWS * CHANNELS * 4   # M.K. の 1 pattern のバイト数
 LEFT_CHANNELS = (0, 3)     # Amiga: 1,4 = 左（5ch 以上は 4ch 周期で繰り返す）
 RIGHT_CHANNELS = (1, 2)    # Amiga: 2,3 = 右
 VOLUME_SUM_LIMIT = 120     # V15
+VOLUME_SUM_CHANNELS = 4    # V15 は 4ch の曲だけ検査する
 _MAX_LOCATIONS = 3         # 1 コードあたり報告する位置の数
 
 _PERIOD_TO_INDEX = {p: i for i, p in enumerate(PERIODS)}
@@ -275,9 +276,14 @@ def _check_tempo(pm: ParsedMod, rep: _Report) -> None:
 
 
 def _check_volume_sum(pm: ParsedMod, rep: _Report) -> None:
-    """再生順に各チャンネルの音量を追跡し、左（Ch1+Ch4…）・右（Ch2+Ch3…）の合計を検査する。
-    5ch 以上（xCHN）は Amiga の L R R L を 4ch 周期で繰り返す（FastTracker/OpenMPT の慣習）。"""
+    """再生順に各チャンネルの音量を追跡し、左（Ch1+Ch4）・右（Ch2+Ch3）の合計を検査する。
+
+    **4ch の曲だけ**が対象（DESIGN.md §9.1）。この左右モデルは Amiga の 4ch 前提の目安で、5ch 以上では
+    再生エンジンがチャンネル数に応じて余裕を持たせるため、音割れしなくても超える。多チャンネルの音割れは
+    実プレイヤーの検査（tests/realplayer/test_clipping.py）で確かめる。"""
     n = pm.channels
+    if n != VOLUME_SUM_CHANNELS:
+        return
     left_ch = [c for c in range(n) if c % 4 in LEFT_CHANNELS]
     right_ch = [c for c in range(n) if c % 4 in RIGHT_CHANNELS]
     vol = [0] * n
@@ -574,8 +580,10 @@ def _check_xm_tempo(pm: ParsedXM, rep: _Report) -> None:
 
 def _check_xm_volume_sum(pm: ParsedXM, rep: _Report) -> None:
     """再生順に各チャンネルの音量を追跡し、instrument.pan で加重した左右合計を検査する
-    （MOD の固定 L/R チャンネル割当の一般化。DESIGN.md §9.1）。"""
+    （MOD の固定 L/R チャンネル割当の一般化。DESIGN.md §9.1）。MOD と同じく 4ch の曲だけが対象。"""
     n = pm.n_channels
+    if n != VOLUME_SUM_CHANNELS:
+        return
     vol = [0] * n
     pan = [128] * n
     seen: set[tuple[int, int]] = set()

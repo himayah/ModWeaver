@@ -182,3 +182,14 @@ def test_empty_id_rejected(clean_registry):
         @profiles.register_profile
         class Bad(DummyProfile):
             id = ""
+
+
+@pytest.mark.parametrize("category", [None, "", "misc", "Mood"])
+def test_unknown_category_rejected(clean_registry, category):
+    bad = type("Bad", (DummyProfile,), {"id": "bad-cat", "category": category})
+    with pytest.raises(ValueError, match="category"):
+        profiles.register_profile(bad)
+
+
+def test_every_genre_has_a_known_category():
+    assert {p.category for p in profiles.list_profiles()} <= set(registry.CATEGORIES)

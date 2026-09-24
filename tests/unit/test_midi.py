@@ -98,12 +98,20 @@ def test_gm_voice_validation():
 
 def test_sounding_hz_matches_sample_data():
     """SampleSpec.sounding_hz（MIDI 音高の根拠）をサンプルデータの自己相関（YIN）で検算する。
-    非調和な音色（トーンクラスター、スクリーチ）とパワーコード（仮想基音が1オクターブ下に出る）は除く。"""
+    非調和な音色（トーンクラスター、スクリーチ、ベル）と和音を焼き込んだ音色（パワーコード・第３段階の和音サンプル。
+    仮想基音が根音より下に出る）は除く。"""
     np = pytest.importorskip("numpy")
     from mod_weaver.core import dsp
     from mod_weaver.core.pitch import PERIODS
 
-    skip = {("free-jazz", "piano_cluster"), ("free-jazz", "sax_screech"), ("prog-rock", "gtr")}
+    from mod_weaver.profiles.band_common import BandProfile
+
+    skip_patches = {"FreePianoCluster", "FreeSaxScreech", "ProgGtrPower", "CrunchGtr", "Bell"}
+
+    def chordal(cls, key, spec):
+        if spec.name in skip_patches:
+            return True
+        return issubclass(cls, BandProfile) and key not in dict(cls.KIT)   # CHORD_KITS から作った和音サンプル
 
     def yin(x, fs, fmin=40, fmax=2000):
         x = x - x.mean()
@@ -121,7 +129,7 @@ def test_sounding_hz_matches_sample_data():
 
     for cls in profiles.list_profiles():
         for key, spec in cls().build_samples().items():
-            if spec.sounding_hz is None or (cls.id, key) in skip:
+            if spec.sounding_hz is None or chordal(cls, key, spec):
                 continue
             raw = np.array([b - 256 if b > 127 else b for b in spec.data], dtype=float)
             if spec.loop:

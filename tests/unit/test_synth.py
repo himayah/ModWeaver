@@ -335,3 +335,29 @@ def test_tail_fade_ms_ramps_last_samples_to_zero():
     assert xs[-1] == 0
     assert abs(xs[-2]) < abs(xs[-9])                      # 末尾へ向けて単調に絞られる
 
+
+
+# --- WeightedLayer.offset_ms（ギターのストローク用。DESIGN.md §4.5） ---
+
+def _tone_patch(*layers):
+    return synth.Patch("t", tuple(layers), synth.OneShot(0.2), pitched=True, peak=None)
+
+
+def test_offset_ms_delays_layer_onset():
+    base = synth.WeightedLayer(synth.ToneLayer(((1.0, 1.0, None),)))
+    late = synth.WeightedLayer(synth.ToneLayer(((1.0, 1.0, None),)), offset_ms=20.0)
+    rate = dsp.sample_rate(24)
+    silent = round(0.020 * rate)
+    data = synth.render(_tone_patch(late)).data
+    signed = [b - 256 if b > 127 else b for b in data]
+    assert all(v == 0 for v in signed[:silent]) and any(v != 0 for v in signed[silent:silent + 50])
+    both = synth.render(_tone_patch(base, late)).data
+    assert both != synth.render(_tone_patch(base)).data
+
+
+def test_offset_ms_rejected_for_loop_and_negative():
+    with pytest.raises(SampleConstraintError, match="OneShot-only"):
+        synth.Patch("l", (synth.WeightedLayer(synth.ToneLayer(((6, 1.0, None),)), offset_ms=5.0),),
+                    synth.Loop(190), pitched=True)
+    with pytest.raises(SampleConstraintError):
+        synth.WeightedLayer(synth.ToneLayer(((1.0, 1.0, None),)), offset_ms=-1.0)

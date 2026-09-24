@@ -26,6 +26,7 @@ class SuspenseSlowProfile(SuspenseBase):
     display_name = "Suspense Slow"
     description = "低速・重苦しい緊張。心拍と無音、突発の金属音"
     description_en = "Slow, heavy tension: heartbeat and silence, sudden metallic hits"
+    category = "style"
     title = "Suspense Slow"
     default_filename = "SuspenseSlow.mod"
     tempo_choices = (64, 66, 68, 70, 72)

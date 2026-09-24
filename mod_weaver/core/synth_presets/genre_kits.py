@@ -1,38 +1,15 @@
-"""動作・音質を確認済みの ``synth.Patch`` 値を集めた参照ライブラリ（全12ジャンル・60プリセット）。
+"""既存12ジャンルの音色（ジャンル名で命名。第３段階以前に作ったもの）。
 
-ここに集めるのは「型としての分類」ではなく「検索・流用のための参照データ」であり、
-``core/synth.py`` の型システムには一切影響しない。新しい音色が欲しいときは、
-``find()`` で近い説明のプリセットを探し ``dataclasses.replace(既存Patch, ...)`` で
-差分だけ変えて ``synth.render()`` → 試聴し、良ければ ``register()`` で本モジュールへ
-追加する（ゼロから ``Patch`` を組み立てない）。
-
-セクションはジャンルごと（下の見出しコメント参照）。各ジャンルの設計意図・実証対象の
-core 機能は DESIGN.md §6 の各ジャンルの節にまとめてある。
+新しい音色は楽器の種類ごとのモジュール（``drums``・``bass`` など）に置く。登録と検索は
+``synth_presets``（パッケージ）が公開する ``PRESETS``／``find()`` を使う。
 """
 from __future__ import annotations
 
 import dataclasses
 
-from . import dsp
-from .synth import FilterSpec, Loop, NoiseLayer, OneShot, Patch, PitchSweepLayer, ToneLayer, WeightedLayer
-
-PRESETS: dict[str, Patch] = {}
-DESCRIPTIONS: dict[str, str] = {}
-
-
-def register(key: str, patch: Patch, description: str) -> Patch:
-    """プリセットを登録してそのまま返す。``X = register("x", Patch(...), "...")`` の形で使う。"""
-    if key in PRESETS:
-        raise ValueError(f"duplicate preset key: {key!r}")
-    PRESETS[key] = patch
-    DESCRIPTIONS[key] = description
-    return patch
-
-
-def find(keyword: str) -> list[str]:
-    """説明文に ``keyword``（大小無視）を含むプリセットの key 一覧。"""
-    kw = keyword.lower()
-    return [k for k, d in DESCRIPTIONS.items() if kw in d.lower()]
+from .. import dsp
+from ..synth import FilterSpec, Loop, NoiseLayer, OneShot, Patch, PitchSweepLayer, ToneLayer, WeightedLayer
+from ._registry import register
 
 
 # ============================================================

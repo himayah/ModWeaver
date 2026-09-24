@@ -27,8 +27,8 @@ class SwingConfig:
     long_speed: int = 16    # 偶数 row（拍の表）の Speed
     short_speed: int = 8    # 奇数 row（拍の裏）の Speed。long:short のティック比がスウィング比になる
     # 例: 16:8 = 2:1（純粋3連スウィング）。14:10 = 1.4:1（軽いスウィング）。
-    # long+short は 24 にする（1拍=24 tick。これ以外だと実際のテンポが BPM 表示の 24/(long+short) 倍になる。
-    # 以前の既定 8:4 や swing-jazz の 7:5 は合計12で、表示の2倍の速さで鳴っていた）
+    # long+short は 48 / rows_per_beat にする（1拍=24 tick）: 8分格子（1拍=2 row）は 24、16分格子（1拍=4 row）は 12。
+    # これ以外だと実際のテンポが表示 BPM からずれる（以前、8分格子の swing-jazz が 7:5＝合計12 で表示の2倍の速さで鳴っていた）
 
     def __post_init__(self) -> None:
         for v in (self.long_speed, self.short_speed):

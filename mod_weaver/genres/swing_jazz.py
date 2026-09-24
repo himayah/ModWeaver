@@ -179,6 +179,7 @@ class SwingJazzProfile(GenreProfile):
     default_filename = "SwingJazz.mod"
     tempo_choices = (152, 156, 160, 164, 168)
     rows_per_measure = 8                  # 1 row = 8分音符（swing timebase。EXT-1）
+    rows_per_beat = 2                     # スウィングは Speed 14/10 の和 24 で1拍
     channel_plan = CHANNEL_PLAN
     gm_voices = GM_VOICES
     tempo_policy = "engine"

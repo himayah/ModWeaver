@@ -15,9 +15,6 @@ from tests.realplayer import decode, requires_openmpt
 
 pytestmark = requires_openmpt
 
-ROWS_PER_BEAT = {"swing-jazz": 2}          # 既定 4（16分音符格子）
-
-
 def _played_rows(profile, plan) -> int:
     per_pattern = [sum((s.rows or profile.rows_per_measure) * s.measures for s in pp.slots) for pp in plan.patterns]
     return sum(per_pattern[i] for i in plan.order)
@@ -27,7 +24,7 @@ def _played_rows(profile, plan) -> int:
 def test_genre_plays_at_its_displayed_bpm(genre):
     profile = profiles.get_profile(genre)
     song, plan = compose_song(profile, 123456)
-    beats = _played_rows(profile, plan) / ROWS_PER_BEAT.get(genre, 4)
+    beats = _played_rows(profile, plan) / profile.rows_per_beat   # 1拍の row 数はジャンルが宣言する
     expected = beats * 60.0 / plan.bpm
     actual = decode(writer.serialize_xm(song), ".xm").seconds
     assert abs(actual - expected) <= 0.02 * expected + 0.3, (plan.bpm, expected, actual)

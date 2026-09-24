@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 47 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (25, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `trap`, `orchestral`) and **styles** (13, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 47 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (25, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `trap`, `orchestral`) and **styles** (13, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -26,7 +26,7 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
   - **Warm Mellow Bass**: a round, deep acoustic / lo-fi sub bass.
   - **Vintage Lo-Fi Drums**: a pitch-dropping kick, a warm retro snare and a delicate closed hi-hat.
 - **Six output formats (`--format`)**:
-  The default is Amiga ProTracker 4-channel MOD (`M.K.`). 6- and 8-channel genres (e.g. 6-channel `pop`; 8-channel `orchestral`, `cinematic`, `trailer`) become FastTracker-style multichannel MOD (`6CHN` / `8CHN`). You can also choose `.xm` / `.s3m` / `.it` (tracker formats), General MIDI `.mid` (playable in DAWs and GM synths) and `.mp3` (rendered with ffmpeg). Automated tests play every tracker format with OpenMPT's playback engine (libopenmpt) and check that it sounds at the same pitch and length as the MOD.
+  The default is Amiga ProTracker 4-channel MOD (`M.K.`). 6- and 8-channel songs (e.g. `pop` in its standard 6 channels, 8-channel `orchestral`) become FastTracker-style multichannel MOD (`6CHN` / `8CHN`). You can also choose `.xm` / `.s3m` / `.it` (tracker formats), General MIDI `.mid` (playable in DAWs and GM synths) and `.mp3` (rendered with ffmpeg). Automated tests play every tracker format with OpenMPT's playback engine (libopenmpt) and check that it sounds at the same pitch and length as the MOD.
 - **Tempo control (`--tempo`)**:
   Fix the BPM with `--tempo 120`, or give a range such as `--tempo 80-100` to pick one at random within it. With the same seed you get "the same song" at a different tempo.
 
@@ -129,6 +129,13 @@ python modweaver.py -e --tempo 80-100       # pick a random BPM from 80 to 100
 ```
 With a range, the BPM actually chosen is shown on the banner's `Tempo` line, and the reproduce command contains the resolved value (e.g. `--tempo 92`).
 
+#### Set the number of channels (`--channels` / `-c`; chosen by the genre for each song if omitted):
+```bash
+python modweaver.py -e --genre pop --channels 4   # small 4-channel combo, Amiga-compatible (M.K.)
+python modweaver.py -e --genre pop --channels 8   # 8 channels with a counter-melody and echo added
+```
+For genres with several numbers in the ch column (e.g. `4/6/8`), the same seed gives the same melody and chords in every arrangement; only the thickness and the number of channels change.
+
 #### List the available genres:
 ```bash
 python modweaver.py -e --list-genres
@@ -162,6 +169,7 @@ https://github.com/himayah/ModWeaver
 | `--format` | `-f` | `mod` | Output format: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3` (see the table below) |
 | `--tempo` | `-t` | chosen per genre | A BPM (`120`) or a range (`80-100`, random within it), 32–255. A range the genre cannot play is an error (exit code 2); a range only partly outside is clipped to the supported range with a warning |
 | `--output` | `-o` | `output/<genre>_<seed>.<ext>` (e.g. `output/nostalgic_732501.mod`); the folder is created if needed | Output path. When given, the file is written to exactly that path (a missing parent folder is an error) |
+| `--channels` | `-c` | chosen by the genre for each song | Number of channels: `4` / `6` / `8`. Which numbers are available depends on the genre (the ch column of the genre list); an unavailable number is an error (exit code 2). With `--genre random`, only genres that can use that number are picked |
 | `--list-genres` | – | – | Print the id, aliases and description of every available genre, grouped into moods, genres and styles, then exit (code 0). Nothing is generated |
 | `--english` | `-e` | – | Show the usage, genre descriptions and results in English (Japanese by default) |
 | `--version` | `-v` | – | Print the version and the GitHub repository URL, then exit (code 0) |
@@ -189,42 +197,42 @@ https://github.com/himayah/ModWeaver
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
 | `calm` | – | 4 | Calm and relaxed: soft pads and slow piano arpeggios |
-| `cool` | – | 6 | Cool: glassy synths over a light two-step beat |
-| `dark-tense` | – | 6 | Dark and tense: low ostinato, ticking pulse and heavy hits |
-| `dreamy` | – | 6 | Dreamy: echoing arpeggios over lush pads |
-| `energetic` | – | 6 | Energetic: fast, drum-driven rock with driving guitars and bass |
+| `cool` | – | 4/6/8 | Cool: glassy synths over a light two-step beat |
+| `dark-tense` | – | 4/6/8 | Dark and tense: low ostinato, ticking pulse and heavy hits |
+| `dreamy` | – | 4/6/8 | Dreamy: echoing arpeggios over lush pads |
+| `energetic` | – | 4/6/8 | Energetic: fast, drum-driven rock with driving guitars and bass |
 | `focus` | – | 4 | Focus: minimal lo-fi loop with a steady, unchanging groove |
 | `melancholic` | – | 4 | Melancholic piano ballad in a minor key over soft strings |
-| `uplifting` | – | 6 | Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords |
-| `warm` | – | 4 | Warm: acoustic guitar and piano in a gentle major key |
+| `uplifting` | – | 4/6/8 | Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords |
+| `warm` | – | 4/6 | Warm: acoustic guitar and piano in a gentle major key |
 
 **Genres (genre)** — 25
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
 | `ambient` | – | 4 | Ambient: layered pads and sparse bells with little or no beat |
-| `bossa-nova` | – | 4 | Bossa nova: soft nylon guitar and light percussion in 2/4 |
-| `cinematic` | – | 8 | Cinematic: piano ostinato building to soaring strings and horns |
-| `city-pop` | – | 6 | City pop: jazzy electric piano, bouncy bass and funky guitar cutting |
+| `bossa-nova` | – | 4/6 | Bossa nova: soft nylon guitar and light percussion in 2/4 |
+| `cinematic` | – | 6/8 | Cinematic: piano ostinato building to soaring strings and horns |
+| `city-pop` | – | 4/6/8 | City pop: jazzy electric piano, bouncy bass and funky guitar cutting |
 | `classical` | – | 4 | Classical: a Classical-era minuet for string quartet with clear cadences |
-| `edm` | – | 6 | EDM: synth-driven builds that explode into the drop |
-| `folk` | – | 4 | Folk: strummed acoustic guitar and fiddle over simple progressions |
+| `edm` | – | 4/6/8 | EDM: synth-driven builds that explode into the drop |
+| `folk` | – | 4/6 | Folk: strummed acoustic guitar and fiddle over simple progressions |
 | `free-jazz` | – | 4 | Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes) |
 | `future-bass` | – | 4 | Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV |
-| `hiphop` | – | 4 | Hip hop: boom-bap beats and sample-style loops that leave room for rap |
-| `house` | – | 6 | House: steady four-on-the-floor groove with offbeat organ stabs |
+| `hiphop` | – | 4/6 | Hip hop: boom-bap beats and sample-style loops that leave room for rap |
+| `house` | – | 4/6/8 | House: steady four-on-the-floor groove with offbeat organ stabs |
 | `jazz` | – | 4 | Modal jazz: dorian vamps, quartal piano voicings and muted trumpet |
-| `lofi-hiphop` | – | 6 | Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise |
+| `lofi-hiphop` | – | 4/6/8 | Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise |
 | `maqam` | – | 4 | Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals |
 | `march` | – | 4 | Military march: oom-pah and snare rolls, fanfares, modulation into the trio |
 | `minimalism` | – | 4 | Minimal / phase music: four parts with 16/12/8/6-row cycles drift apart and realign |
 | `orchestral` | – | 8 | Full orchestra / film score: 8 channels, six-voice strings + woodwinds + brass + timpani |
-| `pop` | – | 6 | Pop: bright major-key melodies, piano and a catchy chorus |
+| `pop` | – | 4/6/8 | Pop: bright major-key melodies, piano and a catchy chorus |
 | `prog-rock` | – | 4 | Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus |
-| `rnb-soul` | – | 6 | R&B / soul: smooth extended chords and a singing melody in a slow jam |
-| `rock` | – | 6 | Rock: guitar riffs over a straight eight-beat |
+| `rnb-soul` | – | 4/6/8 | R&B / soul: smooth extended chords and a singing melody in a slow jam |
+| `rock` | – | 4/6/8 | Rock: guitar riffs over a straight eight-beat |
 | `swing-jazz` | – | 4 | Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA) |
-| `synthwave` | – | 6 | Synthwave: 80s synths, gated snare and a pulsing eighth-note bass |
+| `synthwave` | – | 4/6/8 | Synthwave: 80s synths, gated snare and a pulsing eighth-note bass |
 | `techno` | – | 4 | Minimal techno: a hypnotic four-on-the-floor with slowly mutating sequences |
 | `trap` | – | 4 | Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop |
 
@@ -232,19 +240,19 @@ https://github.com/himayah/ModWeaver
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
-| `acoustic-ssw` | – | 4 | Acoustic singer-songwriter style: fingerpicked guitar, light percussion and a vocal-like melody |
+| `acoustic-ssw` | – | 4/6 | Acoustic singer-songwriter style: fingerpicked guitar, light percussion and a vocal-like melody |
 | `ambient-drone` | – | 4 | Ambient drone: long sustained tones that shift very slowly |
-| `anime-ost` | – | 6 | Anime soundtrack style: driving strings with jazz harmony and brass hits |
-| `indie-rock` | – | 6 | Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive |
-| `jpop-80s` | – | 6 | 80s J-pop style: bright chords, city brass, a light beat and a final key change |
-| `jrock-90s` | – | 6 | 90s J-rock style: loud guitars over a fast beat, a guitar solo and a final key change |
-| `jrpg` | – | 6 | JRPG game music style: melodic adventure theme with harp, strings and horn |
-| `lofi-chill` | – | 6 | Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience |
-| `neo-soul` | – | 6 | Neo soul style: laid-back off-grid beats and lush electric piano chords |
+| `anime-ost` | – | 4/6/8 | Anime soundtrack style: driving strings with jazz harmony and brass hits |
+| `indie-rock` | – | 4/6/8 | Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive |
+| `jpop-80s` | – | 4/6/8 | 80s J-pop style: bright chords, city brass, a light beat and a final key change |
+| `jrock-90s` | – | 4/6/8 | 90s J-rock style: loud guitars over a fast beat, a guitar solo and a final key change |
+| `jrpg` | – | 4/6/8 | JRPG game music style: melodic adventure theme with harp, strings and horn |
+| `lofi-chill` | – | 4/6/8 | Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience |
+| `neo-soul` | – | 4/6/8 | Neo soul style: laid-back off-grid beats and lush electric piano chords |
 | `nostalgic` | – | 4 | Lo-fi beat and music box evoking nostalgia at dusk (the original TwilightPad) |
 | `suspense-chase` | – | 4 | Emergency escape / pursuit: heartbeat on every beat, driving eighth notes, impacts out of silence |
 | `suspense-slow` | `suspense` | 4 | Slow, heavy tension: heartbeat and silence, sudden metallic hits |
-| `trailer` | – | 8 | Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts |
+| `trailer` | – | 6/8 | Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts |
 
 You can also check the current list with `python modweaver.py -e --list-genres` or `python modweaver.py -e --help` (if genres are added, that output is always authoritative). Without `-e` the descriptions are printed in Japanese.
 

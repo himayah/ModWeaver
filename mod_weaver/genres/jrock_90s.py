@@ -1,4 +1,4 @@
-"""jrock-90s: 90年代 J-ROCK 風（DESIGN.md §12.7.27）。B6（6ch）: 歪んだギター、速いビート、ギターソロ、最後のサビで転調。"""
+"""jrock-90s: 90年代 J-ROCK 風（DESIGN.md §6.16.27）。B6（6ch）: 歪んだギター、速いビート、ギターソロ、最後のサビで転調。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

@@ -1,4 +1,4 @@
-"""鍵盤（第３段階の共有音色。DESIGN.md §12.4）。和音サンプルは profiles/band_common.chord_patch で作る。"""
+"""鍵盤（第３段階の共有音色。DESIGN.md §4.5）。和音サンプルは profiles/band_common.chord_patch で作る。"""
 from __future__ import annotations
 
 from ..synth import Loop, OneShot, Patch

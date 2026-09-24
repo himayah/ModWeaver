@@ -1,4 +1,4 @@
-"""bossa-nova: ボサノバ（DESIGN.md §12.7.13）。B4（4ch、Amiga 互換）: リムのクラーベ・シェイカー・スルド、ベース、
+"""bossa-nova: ボサノバ（DESIGN.md §6.16.13）。B4（4ch、Amiga 互換）: リムのクラーベ・シェイカー・スルド、ベース、
 ガットギターの和音、フルート。2/4 拍子（1 measure＝8 row）で、リズムは2小節周期。"""
 from __future__ import annotations
 

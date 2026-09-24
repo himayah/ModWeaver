@@ -1,4 +1,4 @@
-"""acoustic-ssw: アコースティック弾き語り風（DESIGN.md §12.7.34）。B4（4ch、Amiga 互換）: カホンとシェイカー、
+"""acoustic-ssw: アコースティック弾き語り風（DESIGN.md §6.16.34）。B4（4ch、Amiga 互換）: カホンとシェイカー、
 控えめなベース、指弾き（トラヴィス奏法）のギター、歌のような旋律。"""
 from __future__ import annotations
 

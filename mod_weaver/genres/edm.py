@@ -1,4 +1,4 @@
-"""edm: ビルドアップとドロップ（DESIGN.md §12.7.17）。E6（6ch）: シンセ主体、ビルドアップで溜めてドロップで弾ける。"""
+"""edm: ビルドアップとドロップ（DESIGN.md §6.16.17）。E6（6ch）: シンセ主体、ビルドアップで溜めてドロップで弾ける。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

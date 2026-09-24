@@ -1,4 +1,4 @@
-"""パーカッション（第３段階の共有音色。DESIGN.md §12.4）。"""
+"""パーカッション（第３段階の共有音色。DESIGN.md §4.5）。"""
 from __future__ import annotations
 
 from ..synth import OneShot, Patch

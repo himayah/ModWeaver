@@ -1,4 +1,4 @@
-"""ギター（第３段階の共有音色。DESIGN.md §12.4）。ストロークは profiles/band_common.chord_patch(strum=True)。"""
+"""ギター（第３段階の共有音色。DESIGN.md §4.5）。ストロークは profiles/band_common.chord_patch(strum=True)。"""
 from __future__ import annotations
 
 from ..synth import OneShot, Patch

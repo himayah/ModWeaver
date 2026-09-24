@@ -1,4 +1,4 @@
-"""効果音（第３段階の共有音色。DESIGN.md §12.4）。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す。"""
+"""効果音（第３段階の共有音色。DESIGN.md §4.5）。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す。"""
 from __future__ import annotations
 
 from ..synth import OneShot, Patch

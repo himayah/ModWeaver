@@ -77,7 +77,7 @@ def test_registers_and_quality_validation():
         voice(ChordSpec(0, "sus"), 0, PHRYGIAN, REGS)
 
 
-# --- 第３段階で追加した和音・スケール（DESIGN.md §12.8 C1・C2） ---
+# --- 第３段階で追加した和音・スケール（DESIGN_HISTORY.md §12.5） ---
 
 @pytest.mark.parametrize("quality", sorted(CHORD_QUALITIES))
 def test_every_quality_voices_with_its_pitch_classes(quality):

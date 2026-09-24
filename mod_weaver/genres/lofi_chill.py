@@ -1,4 +1,4 @@
-"""lofi-chill: ローファイ・プロデューサー風のチル（DESIGN.md §12.7.30）。B6（6ch）: ギターとフルート、サイドチェインのうねり、雨音。"""
+"""lofi-chill: ローファイ・プロデューサー風のチル（DESIGN.md §6.16.30）。B6（6ch）: ギターとフルート、サイドチェインのうねり、雨音。"""
 from __future__ import annotations
 
 from ..core import groove

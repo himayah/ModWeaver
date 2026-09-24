@@ -1,4 +1,4 @@
-"""folk: フォーク（DESIGN.md §12.7.22）。B4（4ch、Amiga 互換）: 足踏みと手拍子、アップライト・ベース、
+"""folk: フォーク（DESIGN.md §6.16.22）。B4（4ch、Amiga 互換）: 足踏みと手拍子、アップライト・ベース、
 アコースティックギターのストローク、フィドル（前打音の装飾つき）。"""
 from __future__ import annotations
 

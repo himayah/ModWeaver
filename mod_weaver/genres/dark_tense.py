@@ -1,4 +1,4 @@
-"""dark-tense: 緊張感のある暗いパルス（DESIGN.md §12.7.6）。E6（6ch）: 低音のオスティナート、刻む音、重い打撃と金管。"""
+"""dark-tense: 緊張感のある暗いパルス（DESIGN.md §6.16.6）。E6（6ch）: 低音のオスティナート、刻む音、重い打撃と金管。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec

@@ -1,4 +1,4 @@
-"""hiphop: ブーンバップ・ヒップホップ（DESIGN.md §12.7.19）。B4（4ch、Amiga 互換）: ブーンバップのビート、ベース、
+"""hiphop: ブーンバップ・ヒップホップ（DESIGN.md §6.16.19）。B4（4ch、Amiga 互換）: ブーンバップのビート、ベース、
 ピアノの和音ループ、フックのホーン。ラップ向けの構成（verse は旋律を置かず余白を残す）。"""
 from __future__ import annotations
 

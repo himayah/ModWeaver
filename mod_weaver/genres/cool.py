@@ -1,4 +1,4 @@
-"""cool: 涼しげな透明感（DESIGN.md §12.7.8）。E6（6ch）: 透明感のあるシンセと軽い2ステップのビート。"""
+"""cool: 涼しげな透明感（DESIGN.md §6.16.8）。E6（6ch）: 透明感のあるシンセと軽い2ステップのビート。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

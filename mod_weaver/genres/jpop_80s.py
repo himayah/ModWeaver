@@ -1,4 +1,4 @@
-"""jpop-80s: 80年代 J-POP 風（DESIGN.md §12.7.26）。B6（6ch）: 王道進行、ゲートスネア、シンセブラスの決め、最後のサビで転調。"""
+"""jpop-80s: 80年代 J-POP 風（DESIGN.md §6.16.26）。B6（6ch）: 王道進行、ゲートスネア、シンセブラスの決め、最後のサビで転調。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

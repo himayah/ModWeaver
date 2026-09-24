@@ -1,4 +1,4 @@
-"""rnb-soul: R&B／ソウル（DESIGN.md §12.7.23）。B6（6ch）: 軽い16分スウィングのスロー・ジャム、テンションコード、歌う旋律。"""
+"""rnb-soul: R&B／ソウル（DESIGN.md §6.16.23）。B6（6ch）: 軽い16分スウィングのスロー・ジャム、テンションコード、歌う旋律。"""
 from __future__ import annotations
 
 from ..core import groove

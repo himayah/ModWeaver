@@ -1,4 +1,4 @@
-"""classical: 古典派の弦楽四重奏（DESIGN.md §12.7.20）。Q4（4ch、Amiga 互換）: vln1・vln2・vla・vc。
+"""classical: 古典派の弦楽四重奏（DESIGN.md §6.16.20）。Q4（4ch、Amiga 互換）: vln1・vln2・vla・vc。
 
 3/4 拍子（1 measure＝12 row、``variable_meter``）で 1 pattern＝4小節（48 row）＋``D00``。メヌエットとトリオ:
 前楽節（半終止）・後楽節（完全終止）、属調の中間部（V/V を含む）、下属調のトリオ、コーダ。各区間の和声は

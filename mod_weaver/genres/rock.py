@@ -1,4 +1,4 @@
-"""rock: ギター主体のロック（DESIGN.md §12.7.10）。B6（6ch）: kick/snare・hat/cymbal・bass・rhythm gtr・lead gtr・tom。"""
+"""rock: ギター主体のロック（DESIGN.md §6.16.10）。B6（6ch）: kick/snare・hat/cymbal・bass・rhythm gtr・lead gtr・tom。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

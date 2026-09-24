@@ -1,4 +1,4 @@
-"""calm: 穏やかなピアノとパッド（DESIGN.md §12.7.2）。A4（4ch、Amiga 互換）: ピアノの8分の分散和音、パッド、低音、まばらなベル。"""
+"""calm: 穏やかなピアノとパッド（DESIGN.md §6.16.2）。A4（4ch、Amiga 互換）: ピアノの8分の分散和音、パッド、低音、まばらなベル。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec

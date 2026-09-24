@@ -1,4 +1,4 @@
-"""indie-rock: インディー・ロック風（DESIGN.md §12.7.31）。B6（6ch）: 生音のドラム・鳴り響くギターのアルペジオ・軽い歪み。"""
+"""indie-rock: インディー・ロック風（DESIGN.md §6.16.31）。B6（6ch）: 生音のドラム・鳴り響くギターのアルペジオ・軽い歪み。"""
 from __future__ import annotations
 
 import dataclasses

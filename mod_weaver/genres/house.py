@@ -1,4 +1,4 @@
-"""house: ハウス／ディープハウス（DESIGN.md §12.7.18）。E6（6ch）: 4つ打ちの安定したグルーヴと裏拍のオルガン・スタブ。"""
+"""house: ハウス／ディープハウス（DESIGN.md §6.16.18）。E6（6ch）: 4つ打ちの安定したグルーヴと裏拍のオルガン・スタブ。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec

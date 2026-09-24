@@ -1,4 +1,4 @@
-"""lofi-hiphop: ローファイ・ヒップホップ（DESIGN.md §12.7.16）。B6（6ch）: よれたビート、ジャジーなエレピ、レコードのノイズ。"""
+"""lofi-hiphop: ローファイ・ヒップホップ（DESIGN.md §6.16.16）。B6（6ch）: よれたビート、ジャジーなエレピ、レコードのノイズ。"""
 from __future__ import annotations
 
 from ..core import groove

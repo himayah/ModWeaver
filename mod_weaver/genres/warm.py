@@ -1,4 +1,4 @@
-"""warm: 温かいアコースティック（DESIGN.md §12.7.7）。B4（4ch、Amiga 互換）: カホンとシェイカー、ベース、
+"""warm: 温かいアコースティック（DESIGN.md §6.16.7）。B4（4ch、Amiga 互換）: カホンとシェイカー、ベース、
 アコースティックギターのストローク、ピアノの旋律。"""
 from __future__ import annotations
 

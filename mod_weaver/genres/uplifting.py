@@ -1,4 +1,4 @@
-"""uplifting: 高揚するシンセ・アンセム（DESIGN.md §12.7.1）。E6（6ch）: 4つ打ち、裏拍のベース、スーパーソウ、16分アルペジオ。"""
+"""uplifting: 高揚するシンセ・アンセム（DESIGN.md §6.16.1）。E6（6ch）: 4つ打ち、裏拍のベース、スーパーソウ、16分アルペジオ。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

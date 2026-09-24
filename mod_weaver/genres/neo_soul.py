@@ -1,4 +1,4 @@
-"""neo-soul: ネオ・ソウル風（DESIGN.md §12.7.35）。B6（6ch）: 強い16分スウィングとよれたビート、エレピの豊かなテンション。"""
+"""neo-soul: ネオ・ソウル風（DESIGN.md §6.16.35）。B6（6ch）: 強い16分スウィングとよれたビート、エレピの豊かなテンション。"""
 from __future__ import annotations
 
 from ..core import groove

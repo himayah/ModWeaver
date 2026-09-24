@@ -1,4 +1,4 @@
-"""dreamy: 夢見心地のアルペジオ（DESIGN.md §12.7.5）。E6（6ch）: エコーのかかったアルペジオと厚いパッド、ハーフタイムのビート。"""
+"""dreamy: 夢見心地のアルペジオ（DESIGN.md §6.16.5）。E6（6ch）: エコーのかかったアルペジオと厚いパッド、ハーフタイムのビート。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

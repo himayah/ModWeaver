@@ -1,4 +1,4 @@
-"""管・弦（第３段階の共有音色。DESIGN.md §12.4）。既存の orch_*・march_brass_* と組み合わせて使う。"""
+"""管・弦（第３段階の共有音色。DESIGN.md §4.5）。既存の orch_*・march_brass_* と組み合わせて使う。"""
 from __future__ import annotations
 
 from ..synth import Loop, OneShot, Patch

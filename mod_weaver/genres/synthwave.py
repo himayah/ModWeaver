@@ -1,4 +1,4 @@
-"""synthwave: シンセウェイブ（DESIGN.md §12.7.24）。E6（6ch）: 80年代のシンセ、ゲートスネア、8分で脈打つベース。"""
+"""synthwave: シンセウェイブ（DESIGN.md §6.16.24）。E6（6ch）: 80年代のシンセ、ゲートスネア、8分で脈打つベース。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

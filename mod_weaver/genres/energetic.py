@@ -1,4 +1,4 @@
-"""energetic: 元気なドラム主体のロック（DESIGN.md §12.7.4）。B6（6ch）。速い長調、倍速のビート。"""
+"""energetic: 元気なドラム主体のロック（DESIGN.md §6.16.4）。B6（6ch）。速い長調、倍速のビート。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

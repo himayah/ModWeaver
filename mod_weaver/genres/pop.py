@@ -1,4 +1,4 @@
-"""pop: 明るいポップ（DESIGN.md §12.7.11）。B6（6ch）: kick/snare・hat・bass・piano・lead・pad。"""
+"""pop: 明るいポップ（DESIGN.md §6.16.11）。B6（6ch）: kick/snare・hat・bass・piano・lead・pad。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

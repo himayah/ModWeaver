@@ -1,4 +1,4 @@
-"""melancholic: 物悲しいピアノ・バラード（DESIGN.md §12.7.3）。A4 の読み替え（4ch、Amiga 互換）:
+"""melancholic: 物悲しいピアノ・バラード（DESIGN.md §6.16.3）。A4 の読み替え（4ch、Amiga 互換）:
 旋律ピアノ・伴奏ピアノ・弦のパッド・チェロの低音。"""
 from __future__ import annotations
 

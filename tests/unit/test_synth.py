@@ -337,7 +337,7 @@ def test_tail_fade_ms_ramps_last_samples_to_zero():
 
 
 
-# --- WeightedLayer.offset_ms（ギターのストローク用。DESIGN.md §12.8 C7） ---
+# --- WeightedLayer.offset_ms（ギターのストローク用。DESIGN.md §4.5） ---
 
 def _tone_patch(*layers):
     return synth.Patch("t", tuple(layers), synth.OneShot(0.2), pitched=True, peak=None)

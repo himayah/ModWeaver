@@ -1,4 +1,4 @@
-"""techno: ミニマル・テクノ（DESIGN.md §12.7.25）。T4（4ch、Amiga 互換）: 4つ打ちと少しずつ変わるシーケンス。"""
+"""techno: ミニマル・テクノ（DESIGN.md §6.16.25）。T4（4ch、Amiga 互換）: 4つ打ちと少しずつ変わるシーケンス。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec

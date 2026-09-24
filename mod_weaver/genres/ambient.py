@@ -1,4 +1,4 @@
-"""ambient: アンビエント（DESIGN.md §12.7.15）。A4（4ch、Amiga 互換）: 2つのパッドが和音の異なる構成音を持続し、
+"""ambient: アンビエント（DESIGN.md §6.16.15）。A4（4ch、Amiga 互換）: 2つのパッドが和音の異なる構成音を持続し、
 まばらなベルとそのエコーが漂う。打楽器なし。和音は4小節（1 pattern）ごと。"""
 from __future__ import annotations
 

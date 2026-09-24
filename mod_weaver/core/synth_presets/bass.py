@@ -1,4 +1,4 @@
-"""ベース（第３段階の共有音色。DESIGN.md §12.4）。shift=-12（logical 0..11 を t=12..23 で）。"""
+"""ベース（第３段階の共有音色。DESIGN.md §4.5）。shift=-12（logical 0..11 を t=12..23 で）。"""
 from __future__ import annotations
 
 from ..synth import Loop, OneShot, Patch

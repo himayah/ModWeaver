@@ -1,4 +1,4 @@
-"""city-pop: 80年代シティポップ（DESIGN.md §12.7.14）。B6（6ch）: テンションコードのエレピ、跳ねるベース、ギターのカッティング。"""
+"""city-pop: 80年代シティポップ（DESIGN.md §6.16.14）。B6（6ch）: テンションコードのエレピ、跳ねるベース、ギターのカッティング。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

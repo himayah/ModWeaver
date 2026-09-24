@@ -151,6 +151,15 @@ class CompSpec:
     kind: str = "whole"                        # §12.5 comp の型
     vol: int = 44
     chordal: bool = True                       # True: 和音サンプルを鳴らす／False: 単音で和音を分散させる
+    wobble: int = 0                            # 和音の直後に付ける 4xy（テープの揺れ・トレモロ風）。0 なら付けない
+
+
+@dataclass(frozen=True)
+class FxSpec:
+    key: str                                   # 長い OneShot（fx_vinyl・fx_rain 等）
+    channel: int
+    every: int = 2                             # 何 measure ごとに鳴らし直すか
+    vol: int = 20
 
 
 @dataclass(frozen=True)
@@ -224,6 +233,7 @@ class BandProfile(GenreProfile):
     LEAD: Optional[LeadSpec] = None
     PAD: Optional[PadSpec] = None
     ARP: Optional[ArpSpec] = None
+    FX: Optional[FxSpec] = None
     ECHO: tuple[EchoSpec, ...] = ()
     SWING: Optional[groove_mod.SwingConfig] = None
     SIDECHAIN: tuple[tuple[str, int, float, int], ...] = ()   # (トリガの KIT 名, 対象チャンネル, 比, 戻る row 数)
@@ -341,6 +351,8 @@ class BandProfile(GenreProfile):
                 self._silence(buf, self.PAD.channel, self.PAD.key, ins, mctx)
         if self.ARP is not None and "arp" in parts:
             self.arp(mctx, sec, rng, buf)
+        if self.FX is not None and "fx" in parts and mctx.measure_idx % self.FX.every == 0:
+            buf.put(0, self.FX.channel, mctx.instruments[self.FX.key].cell(vol=_scale_vol(self.FX.vol, sec)))
         if self.LEAD is not None:
             if "lead" in parts and st.lead_gen is not None:
                 self.lead(mctx, sec, st, rng, buf)
@@ -385,8 +397,7 @@ class BandProfile(GenreProfile):
                 continue
             inst = mctx.instruments[h.key]
             if h.key in late and rng.drums.random() < late[h.key]:
-                effect, param = groove_mod.delay_param(rng.drums.randint(1, 2))   # EDx: 1〜2 tick 遅らせる
-                cell = inst.cell(effect=effect, param=param)
+                cell = inst.cell(effect=0x0E, param=groove_mod.delay_param(rng.drums.randint(1, 2)))   # EDx: 1〜2 tick 遅らせる
             else:
                 j = rng.drums.randint(-self.HUMANIZE, self.HUMANIZE) if self.HUMANIZE else 0
                 vol = max(1, min(64, round((h.vol + j) * (0.6 + 0.4 * sec.intensity))))
@@ -407,6 +418,8 @@ class BandProfile(GenreProfile):
             for row, accent in rows:
                 vol = _scale_vol(c.vol if accent else max(1, c.vol - 10), sec)
                 buf.put(row, c.channel, inst.cell(mctx.chord.harmony, vol=vol))
+                if c.wobble and row + 1 < mctx.measure_rows and buf.get(row + 1, c.channel).is_empty:
+                    buf.put(row + 1, c.channel, inst.cell(effect=0x4, param=c.wobble))
         else:
             inst = mctx.instruments[c.key]
             tones = _arp_tones(mctx.chord, self.REGISTERS.harmony)
@@ -454,7 +467,7 @@ class BandProfile(GenreProfile):
             for e in events:
                 if e.dur >= 6 and e.row + 2 < mctx.measure_rows and buf.get(e.row + 2, spec.channel).is_empty:
                     buf.put(e.row + 2, spec.channel,
-                            mctx.instruments[spec.key].cell(effect=0x4, param=spec.vibrato, keep_sample=True))
+                            mctx.instruments[spec.key].cell(effect=0x4, param=spec.vibrato))
 
     # --- 後処理（スウィング・サイドチェイン） ---
     @classmethod

@@ -1,4 +1,4 @@
-"""第３段階のジャンルが共有する骨格（DESIGN.md §12.5）。core ではなくジャンル共通の補助（suspense_common と同じ位置づけ）。
+"""第３段階のジャンルが共有する骨格（DESIGN.md §6.14）。core ではなくジャンル共通の補助（suspense_common と同じ位置づけ）。
 
 多くのジャンルは「ドラム・ベース・和音・旋律・パッド」という同じ骨格を持つ。``BandProfile`` はそれを
 宣言（クラス属性）から組み立てる基底クラスで、各ジャンルは楽器・チャンネル・進行・構成・ドラムの型・
@@ -140,7 +140,7 @@ class Section:
 class BassSpec:
     key: str
     channel: int
-    kind: str = "root8"                        # §12.5 bass_line の型
+    kind: str = "root8"                        # DESIGN.md §6.14 bass_line の型
     vol: int = 54
 
 
@@ -148,7 +148,7 @@ class BassSpec:
 class CompSpec:
     key: str                                   # 和音サンプルの接頭辞（CHORD_KITS）か単音の KIT 名
     channel: int
-    kind: str = "whole"                        # §12.5 comp の型
+    kind: str = "whole"                        # DESIGN.md §6.14 comp の型
     vol: int = 44
     chordal: bool = True                       # True: 和音サンプルを鳴らす／False: 単音で和音を分散させる
     wobble: int = 0                            # 和音の直後に付ける 4xy（テープの揺れ・トレモロ風）。0 なら付けない
@@ -372,6 +372,8 @@ class BandProfile(GenreProfile):
     def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, st: BandState, rng: RngStreams) -> None:
         for e in self.ECHO:
             echo(pattern, e.src, e.dst, e.delay, e.ratio, e.repeats)
+        if self.SWING is not None:
+            make_room_for_row_commands(pattern)
         if pctx.is_first_in_order:
             need = 2 if self.SWING is not None else 1
             reserve_row0(pattern, need)
@@ -595,7 +597,7 @@ def comp_rows(kind: str, rows: int, rng) -> list[tuple[int, bool]]:
 
 def buildup(mctx: MeasureCtx, buf: MeasureBuffer, ch: int, snare: Instrument, *, n_measures: int = 4,
             riser: Optional[Instrument] = None, fx_ch: Optional[int] = None) -> None:
-    """EDM 系のビルドアップ（DESIGN.md §12.5）: スネアの連打が 4分→8分→16分→E9x リトリガと加速し、
+    """EDM 系のビルドアップ（DESIGN.md §6.14）: スネアの連打が 4分→8分→16分→E9x リトリガと加速し、
     音量が上がる。最後から2つ目の measure の頭に上昇音（``riser``、約2秒）を置く。"""
     rows = mctx.measure_rows
     m = mctx.measure_idx % n_measures
@@ -626,6 +628,33 @@ def echo(pattern: Pattern, src: int, dst: int, delay: int, ratio: float, repeats
                 pattern.replace(r, dst, Cell(cell.note, cell.sample, vol=v))
 
 
+def make_room_for_row_commands(pattern: Pattern) -> None:
+    """全 row に、row コマンド（スウィングの Speed）を書ける場所を1つ作る。
+
+    ``apply_swing`` は空きの無い row を飛ばすので、そこでは直前の row の Speed が続き、表示 BPM より速く／遅く
+    鳴る（jazz で約3%）。場所が無い row では、番号の大きいチャンネルから ①音を持たないセル（ビブラート・
+    消音）を消し、それも無ければ ②効果の無い音の音量を外す（``insert_command`` がそのセルに書けるようになる。
+    その音はサンプルの既定音量で鳴る）。"""
+    def has_room(row: int) -> bool:
+        for c in range(pattern.channels):
+            cell = pattern.get(row, c)
+            if cell.is_empty or (cell.note is not None and cell.vol is None and not cell.has_effect):
+                return True
+        return False
+
+    for row in range(pattern.rows):
+        if has_room(row):
+            continue
+        cells = [(c, pattern.get(row, c)) for c in reversed(range(pattern.channels))]
+        target = next(((c, cell) for c, cell in cells if cell.note is None), None)
+        if target is not None:
+            pattern.replace(row, target[0], Cell())
+            continue
+        target = next(((c, cell) for c, cell in cells if not cell.has_effect), None)
+        if target is not None:
+            pattern.replace(row, target[0], Cell(target[1].note, target[1].sample))
+
+
 def reserve_row0(pattern: Pattern, need: int) -> None:
     """曲の先頭 row 0 に、テンポ（とスウィング）のコマンドを書く空きチャンネルを ``need`` 個作る。
 
@@ -646,7 +675,7 @@ def reserve_row0(pattern: Pattern, need: int) -> None:
 
 
 # ============================================================
-# GM 音色の既定値（DESIGN.md §12.4）
+# GM 音色の既定値（DESIGN.md §6.14）
 # ============================================================
 
 def _gm(**kw) -> GmVoice:

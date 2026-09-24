@@ -1,4 +1,4 @@
-"""第３段階のジャンル（profiles/band_common.BandProfile を使うもの）に共通の検査（DESIGN.md §12）。
+"""第３段階のジャンル（profiles/band_common.BandProfile を使うもの）に共通の検査（DESIGN.md §6.14〜6.16）。
 
 各ジャンル固有の性質は、ジャンルごとの検査関数を ``SPECIFIC`` に足して確かめる。
 """
@@ -94,3 +94,24 @@ def test_last_chorus_modulates_where_declared():
     for genre in ("pop", "jrock-90s"):
         cls = profiles.get_profile(genre).__class__
         assert any(s.key_offset for s in cls.SECTIONS.values()), genre
+
+
+@pytest.mark.parametrize("genre", [g for g in STAGE3 if profiles.get_profile(g).SWING is not None])
+def test_swing_sets_speed_on_every_row(genre):
+    """スウィングの Speed が全 row に入る（空きの無い row を飛ばすと表示 BPM からずれる）。"""
+    p = profiles.get_profile(genre)
+    for seed in (1, 2, 3):
+        song, _ = engine.compose_song(p, seed)
+        for i, pattern in enumerate(song.patterns):
+            missing = [r for r in range(pattern.rows)
+                       if not any(pattern.get(r, c).effect == 0xF for c in range(pattern.channels))]
+            assert not missing, (seed, i, missing[:5])
+
+
+def test_classical_is_four_measures_of_three_four():
+    """classical は 3/4（12 row）× 4小節＝48 row で、最終 row に D00。"""
+    p = profiles.get_profile("classical")
+    song, plan = engine.compose_song(p, 1)
+    for pp, pattern in zip(plan.patterns, song.patterns):
+        assert sum(s.measures for s in pp.slots) == 4
+        assert any(pattern.get(47, c).effect == 0xD for c in range(pattern.channels)), pp.kind

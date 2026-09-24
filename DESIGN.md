@@ -33,7 +33,7 @@ Python 標準ライブラリだけで、波形合成から作曲・シーケン�
 
 | ID | 要件 |
 |:---|:---|
-| FR-1 | `--genre` で47ジャンルから選んで生成する（区分: 気分・ジャンル・〜風。§6）。`random` / `r` なら指定できるジャンルからランダムに選ぶ（§8.3） |
+| FR-1 | `--genre` で50ジャンルから選んで生成する（区分: 気分・ジャンル・〜風。§6）。`random` / `r` なら指定できるジャンルからランダムに選ぶ（§8.3） |
 | FR-2 | 同じ genre・seed・format・tempo からは常に同じファイルを出力する |
 | FR-3 | 出力形式を `mod`（既定）/ `xm` / `s3m` / `it` / `midi` / `mp3` から選べる（§7） |
 | FR-4 | テンポを BPM または範囲（範囲内からランダム）で指定できる。未指定ならジャンルが決める（§5.5） |
@@ -90,7 +90,7 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 | `profiles/base.py` | `GenreProfile` 基底（§5.1） |
 | `profiles/registry.py` | 登録簿・`genres/` の自動検出（§5.6） |
 | `profiles/nostalgic_samples.py`・`suspense_common.py`・`band_common.py` | ジャンル共通の補助（ジャンルではない）。`band_common` は第３段階の35ジャンルの骨格 `BandProfile`（§6.14） |
-| `genres/*.py` | 47ジャンル（§6） |
+| `genres/*.py` | 50ジャンル（§6） |
 | `core/pitch.py` | Period 表・音名・スケール・和音の型・微分音（§4.1） |
 | `core/model.py` | Cell・CellGrid・SampleSpec・Song・計画系データ（§3） |
 | `core/harmony.py` | 和音の具体化 `voice()`（§4.2） |
@@ -290,7 +290,7 @@ class Song:
 - `pitched` は自動判定しない。`pitched=False` のとき `ToneLayer` の `mult` は絶対 Hz、True のとき `f0 = hz(rate_note + shift)` への比率（OneShot のみ）。
 - **知覚寄りのファクトリ（1つのノブで複数パラメータを連動させる関数）は core に置かない**。連動が欲しければそのジャンルのファイル内にローカルな関数を書く。
 - パンは音色ではなく配置の判断なので `Patch` には持たせず、`render()` の結果に `dataclasses.replace(spec, pan=...)` で付ける。
-- `synth_presets/`（パッケージ）: 動作・音質を確認済みの `Patch` 114 個（`PRESETS`・`DESCRIPTIONS`、`find(keyword)`。どのモジュールの定数も `synth_presets.<定数名>` で参照できる）。`genre_kits.py` は第３段階より前の12ジャンルの音色（60個。`NOSTALGIC_*`・`SUSPENSE_*`・`MARCH_*`・`SWING_*`・`PROG_*`・`TRAP_*`・`MAQAM_*`・`MIN_*`・`FB_*`・`FREE_*`・`ORCH_*`）。第３段階の共有音色（54個）は**楽器の種類**で命名して系統ごとのモジュールに置き、複数のジャンルで使い回す: `drums.py`（`drum_*`）・`perc.py`（`perc_*`）・`bass.py`（`bass_*`）・`keys.py`（`keys_*`）・`guitar.py`（`gtr_*`）・`synths.py`（`syn_*`）・`pads.py`（`pad_*`・`vox_*`）・`orch.py`（`wind_*`・`str_*`・`brass_*`）・`fx.py`（`fx_*`。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す）。
+- `synth_presets/`（パッケージ）: 動作・音質を確認済みの `Patch` 136 個（`PRESETS`・`DESCRIPTIONS`、`find(keyword)`。どのモジュールの定数も `synth_presets.<定数名>` で参照できる）。`genre_kits.py` は第３段階より前の12ジャンルの音色（60個。`NOSTALGIC_*`・`SUSPENSE_*`・`MARCH_*`・`SWING_*`・`PROG_*`・`TRAP_*`・`MAQAM_*`・`MIN_*`・`FB_*`・`FREE_*`・`ORCH_*`）。第３段階の共有音色（54個）は**楽器の種類**で命名して系統ごとのモジュールに置き、複数のジャンルで使い回す: `drums.py`（`drum_*`）・`perc.py`（`perc_*`）・`bass.py`（`bass_*`）・`keys.py`（`keys_*`）・`guitar.py`（`gtr_*`）・`synths.py`（`syn_*`）・`pads.py`（`pad_*`・`vox_*`）・`orch.py`（`wind_*`・`str_*`・`brass_*`）・`fx.py`（`fx_*`。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す）・`metal.py`（`gamelan_*`・`ind_metal_*`。非調和の部分音と長い減衰の金属打楽器）。チップチューン（`chip_*`）・インダストリアル（`ind_*`）の音色は §6.17 のジャンルのために足したもの（計22個）。
 - **新しい音色の作り方**: ① `find()` で近いプリセットを探す → ② `dataclasses.replace()` で差分を調整して `render()`・試聴 → ③ 良ければプリセットに登録。無ければ既存の3 Layer・2 Finish の組合せで `Patch` を組む（core に新しい Layer 種別を足さない）。
 
 ### 4.6 グルーヴ（`core/groove.py`）
@@ -408,7 +408,7 @@ class Song:
 
 ## 6. ジャンル
 
-47ジャンル。§6.1〜6.13 は第３段階より前の12ジャンル（それぞれ固有の実装）、§6.14〜6.16 は第３段階で追加した35ジャンル（共通の骨格 `BandProfile` の上に宣言で書く）。
+50ジャンル。§6.1〜6.13 は第３段階より前の12ジャンル（それぞれ固有の実装）、§6.14〜6.16 は第３段階で追加した35ジャンル（共通の骨格 `BandProfile` の上に宣言で書く）、§6.17 は音色空間の疎な領域を埋めるために追加した3ジャンル（同じく `BandProfile`）。
 
 第３段階より前の12ジャンルの宣言値（コードから取得。第３段階の35ジャンルは §6.15）:
 
@@ -1009,6 +1009,47 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 - 文法: 強い16分スウィング 8:4。スネアとハットの一部を `EDx`（1〜2 tick）で遅らせる（スネア 0.35・ハット 0.25 の確率、§6.14）。エレピ2台（3ch は裏拍のスタブ＋`4xy`、6ch は持続）、ベースは16分のシンコペーション。
 - 区別: rnb-soul はきれいなグリッドのスロー・ジャムと弦。neo-soul は拍のよれと EP の複雑な和音。
 
+
+### 6.17 音色空間の疎な領域を埋める3ジャンル（gamelan・chiptune・industrial）
+
+2026-09-24 の検討（DESIGN_HISTORY.md §12.7）で、47ジャンルが使う音色 115 種を core の `Patch` のパラメータから導いた軸（信号源の構成・減衰・非調和度・音域・倍音の重心・音程の動き・立ち上がり・飽和）に置いたところ、「整数倍音・中音域・即時の立ち上がり・音程が動かない」に偏り、次の領域が疎だった。core には手を入れず（トーンの上昇包絡の追加は見送り）、疎の領域の音色が主役になる3ジャンルを足した。
+
+| 疎の領域 | 実数（115種中） | 埋めるジャンル |
+|:---|:---|:---|
+| A. 非調和 × 長い減衰・低音域（ゴング・鐘） | 0（非調和の7種はシンバル類で高音・短い） | `gamelan` |
+| B. 上昇する音程 | 1（fx_riser） | `chiptune` |
+| D. 強い飽和 × 持続・非調和 | 強い飽和 8、持続 1、非調和 0 | `industrial` |
+| E. 明るい × 低音域・高音域 | 明るい 6（低音 2・高音 0） | `chiptune`・`industrial` |
+
+#### 6.17.1 `gamelan` — ジャワのガムラン風（genre、6ch）
+
+- 音律: スレンドロ（0・240・480・720・960 セント）とペロッグの5音（0・120・270・670・780）を seed で選ぶ。maqam と同じく `MicroScale`＋`resolve_micronote` で度数ごとに（logical note, finetune）を求め、旋律楽器は finetune の値ごとの派生サンプルを持つ（両音律で使う finetune は 0・±3・−4・±5 の6種）。
+- 音色（新規、`synth_presets/metal.py`）: saron（鍵盤。部分音 1・2.71・5.2、中程度の減衰）、bonang（壺型ゴング。1・1.52・2.34・3.4）、kenong（大きな壺。近い部分音のうなり、長い減衰）、kempul（吊りゴング）、gong ageng（1・1.006 のうなりと 1.53・2.34・2.83・3.67 の非調和部分音、5秒の減衰。主音の1オクターブ下＝約 65〜123 Hz で鳴らす）、ketuk（短く止めた壺）、kendang（太鼓の低音 dhe・高音 tak）。saron・bonang は finetune 6種の派生、kenong・kempul は構造音（主音とその上の4番目の度数）だけを打つので3種の派生を持つ（計22サンプル）。
+- チャンネル: 1 kendang／2 gong ageng・kempul／3 kenong・ketuk／4 saron（balungan）／5 peking（saron の1オクターブ上、2倍の密度）／6 bonang（4倍の密度の装飾）。
+- 構造: 1拍＝4 row、1 measure＝1 gatra（4拍）、1 pattern＝1 gongan（16拍）。lancaran の打ち分け: gong は16拍目、kenong は4拍ごと、kempul は6・10・14拍目、ketuk は奇数拍。irama II（balungan が半分の密度、装飾は16分）の区間を挟む。balungan は gatra の最後の音（seleh）を構造音にした順次進行主体の旋律で、gongan の最後は主音。
+- 装飾: 拍の組（a, b）ごとに、peking は a a b b（balungan の2倍の密度）、bonang は a b a b …（4倍の密度）で刻む。kenong は4拍ごとに構造音（16拍目は主音）、kempul は balungan の音が主音なら主音・それ以外なら構造音。
+- 構成: buka（bonang の独奏で最後の gatra を示し、kendang が入って gong）→ gongan A・B（irama I）×2 → gongan A（irama II。2 pattern で1 gongan）×2 → gongan A → suwuk。balungan は `plan()` が作り、要約行に数字譜風（1 2 3 5 6）で出す。
+
+#### 6.17.2 `chiptune` — 8bit ゲーム音楽風（style、4ch）
+
+- 音色（新規、`synth_presets/synths.py`・`fx.py`）: パルス波 25%（旋律）・12.5%（アルペジオ。細く明るい）、三角波（ベース）、ノイズのキック・スネア・ハット、上昇ピッチの「ジャンプ音」（2本の上昇スイープ）。
+- チャンネル（ファミコンの音源の割り当て）: 1 パルス（旋律）／2 パルス（和音を `0xy` のアルペジオで）／3 三角波（ベース）／4 ノイズ（ドラム・効果音）。
+- 文法: 速いテンポ（140–170）、和音は `0xy` アルペジオを毎 row 書く（和音の変わり目と 8 row 目に鳴らし直す。音量と効果は同じセルに書けないので、鳴らし直す音はサンプルの既定音量）、旋律は `4xy` ビブラート、ベースは8分のオクターブ、区間の終わりにスネアのフィルとジャンプ音。長調（I–bVII–IV–I の進行も使う）。
+- 区別: jrpg は管弦楽の音色、chiptune は矩形波・三角波・ノイズだけ。
+
+#### 6.17.3 `industrial` — インダストリアル（genre、6ch）
+
+- 音色（新規）: 強く歪んだキック・スネア、金属の打撃（非調和部分音＋強い飽和）、音程のある金属音（リフ用）、工場の騒音（一定のノイズ＋低いうなり）、強く歪んだ持続ベース（明るい低音）、歪んだ矩形波リード。
+- チャンネル: 1 kick/snare／2 金属の打楽器／3 歪んだベース（16分の反復）／4 金属のリフ／5 リード／6 騒音。
+- 文法: フリジアン、110–130 BPM、機械的な16分の反復（ベースは根音・短2度・5度の `pulse16`）、金属の打楽器は裏拍の型、金属パイプのリフは pattern ごとに選んだ1小節の型を和音の構成音で繰り返す、工場の騒音は2小節ごとに鳴らし直す。
+- 区別: dark-tense はシネマティックな弦と braam、industrial は歪みと金属音の反復。techno はクリーンな電子音。
+
+#### 6.17.4 共通
+
+- 3ジャンルとも `BandProfile` の上に書く。編成（§6.14）は固定（gamelan・industrial は 6ch、chiptune は 4ch）。
+- 新しい音色は全て今の core の組合せで作る（非調和の部分音、開始 < 終了の `PitchSweepLayer`、`saturate`）。
+- 検査は既存の共通検査（第３段階のジャンル）がそのまま掛かる。非調和の音程楽器（saron・bonang・kenong・kempul・gong ageng・金属パイプ）は MIDI 音高の YIN 検算の対象外（ベルと同じ）。
+
 ---
 
 ## 7. 出力形式
@@ -1224,7 +1265,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | 回帰 | `tests/regression/` | nostalgic を凍結した旧実装 `tests/reference/twilight_pad_v1.py`（SHA-256 固定）と 20 seed で比較。作曲（`plan()` の結果と pattern のセル配置）はバイト一致、サンプル波形は長さ・ピークが近いこと、ファイル全体は検査が通ること |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
 
-- 実行: `python -m pytest -q`（3359 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2706 件）で実プレイヤー検査を省略し、マージ前に全部流す。
+- 実行: `python -m pytest -q`（3422 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2739 件）で実プレイヤー検査を省略し、マージ前に全部流す。
 - 新しいジャンルは、全形式・複数 seed で構造検査が通ること、実プレイヤーの音割れ検査に通ること、`gm_voices` が全楽器ぶんあること、1ファイル1ジャンルであることがテストで自動的に確かめられる。
 
 ---

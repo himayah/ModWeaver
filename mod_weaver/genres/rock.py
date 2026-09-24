@@ -11,7 +11,7 @@ CH_KS, CH_CYM, CH_BASS, CH_GTR, CH_LEAD, CH_TOM = range(6)
 
 MAIN = hits("kick", (0, 8, 10), 60) + hits("snare", (4, 12), 54) + hits("hat", range(0, 16, 2), 32)
 RIDE = hits("kick", (0, 8, 10), 60) + hits("snare", (4, 12), 56) + hits("ride", range(0, 16, 2), 34)
-FILL = hits("tom", (8, 10), 50) + hits("snare", (12, 13, 14, 15), 50)
+FILL = hits("tom", (8, 10), 50, notes=(27, 21)) + hits("snare", (12, 13, 14, 15), 50)   # ハイタム→ロータム
 CRASH = hits("crash", (0,), 58)
 
 LEAD_MOTIFS = {

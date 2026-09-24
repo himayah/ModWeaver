@@ -114,13 +114,18 @@ class Hit:
     key: str
     vol: int
     prob: float = 1.0
+    note: Optional[int] = None                 # 音程のある楽器（タム等）の logical note。音程の無い楽器は None
 
 
 Groove = tuple[Hit, ...]
 
 
-def hits(key: str, rows: Sequence[int], vol: int, prob: float = 1.0) -> tuple[Hit, ...]:
-    return tuple(Hit(r, key, vol, prob) for r in rows)
+def hits(key: str, rows: Sequence[int], vol: int, prob: float = 1.0,
+         notes: Optional[Sequence[int]] = None) -> tuple[Hit, ...]:
+    """同じ楽器の打点の列。音程のある楽器は ``notes``（``rows`` と同じ長さ）で各打点の音高を与える。"""
+    if notes is not None and len(notes) != len(rows):
+        raise PlanError(f"hits({key!r}): {len(rows)} rows but {len(notes)} notes")
+    return tuple(Hit(r, key, vol, prob, None if notes is None else notes[i]) for i, r in enumerate(rows))
 
 
 @dataclass(frozen=True)
@@ -268,6 +273,12 @@ class BandProfile(GenreProfile):
         cls.gm_voices = {k: cls.GM.get(k) or cls.GM.get(k.rsplit("_", 1)[0]) or gm_default(base_patch[_base_key(cls, k)])
                          for k in cls._sample_keys}
         cls._slot = slot
+        kit = dict(cls.KIT)
+        for gname, groove in cls.GROOVES.items():
+            for h in groove:
+                # 音程のある楽器を音高なしで置くと Instrument.cell() は休符（音量だけのセル）になり鳴らない
+                if kit[h.key].pitched and h.note is None:
+                    raise PlanError(f"{cls.__name__}: GROOVES[{gname!r}] plays pitched {h.key!r} without a note")
         if cls.SWING is not None or cls.SIDECHAIN:
             cls.post_processors = (cls._post,)
 
@@ -404,11 +415,11 @@ class BandProfile(GenreProfile):
                 continue
             inst = mctx.instruments[h.key]
             if h.key in late and rng.drums.random() < late[h.key]:
-                cell = inst.cell(effect=0x0E, param=groove_mod.delay_param(rng.drums.randint(1, 2)))   # EDx: 1〜2 tick 遅らせる
+                cell = inst.cell(h.note, effect=0x0E, param=groove_mod.delay_param(rng.drums.randint(1, 2)))   # EDx: 1〜2 tick 遅らせる
             else:
                 j = rng.drums.randint(-self.HUMANIZE, self.HUMANIZE) if self.HUMANIZE else 0
                 vol = max(1, min(64, round((h.vol + j) * (0.6 + 0.4 * sec.intensity))))
-                cell = inst.cell(vol=vol)
+                cell = inst.cell(h.note, vol=vol)
             buf.put(h.row, self.DRUM_CHANNEL[h.key], cell)
 
     def bass(self, mctx: MeasureCtx, sec: Section, rng: RngStreams, buf: MeasureBuffer) -> None:

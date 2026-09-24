@@ -591,7 +591,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | `FIXED_PROGRESSIONS` | True なら選ばずに宣言順にすべて使う（区間ごとに和声の役割が決まっている classical・cinematic・jrpg） |
 | `MEASURES_PER_PATTERN` | 1 pattern の measure 数。None なら `64 // rows_per_measure`（classical の 3/4 は 4） |
 | `SECTIONS`・`FORM` | `Section(kind, prog, intensity, parts, groove, key_offset, fill, crash, lead_motifs)` と区間の並び。同じ区間名は同じ pattern を再利用する |
-| `GROOVES`・`DRUM_CHANNEL` | ドラムの型（`Hit(row, key, vol, prob)` の列。`hits()` で作る）と、ドラムの楽器 → チャンネル。`"fill"`・`"crash"` は区間の `fill`・`crash` で使う |
+| `GROOVES`・`DRUM_CHANNEL` | ドラムの型（`Hit(row, key, vol, prob, note)` の列。`hits()` で作る。`note` は音程のある楽器の音高）と、ドラムの楽器 → チャンネル。`"fill"`・`"crash"` は区間の `fill`・`crash` で使う |
 | `BASS`・`COMP`・`LEAD`・`PAD`・`ARP`・`FX` | 各パートの鳴らし方（`BassSpec`・`CompSpec`・`LeadSpec`・`PadSpec`・`ArpSpec`・`FxSpec`）。None ならそのパートは無い |
 | `ECHO`・`SWING`・`SIDECHAIN`・`LATE`・`HUMANIZE` | エコー（`EchoSpec`）、スウィング、サイドチェイン（トリガの楽器・対象チャンネル・比・戻る row 数）、ドラムを `EDx` で遅らせる確率、ドラムの音量ゆらぎ（±4） |
 
@@ -619,7 +619,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 **書くときの注意（実装で分かった制約）**
 
-- ドラムの型（`GROOVES`）は音程を持たない楽器だけに使う。音程のある楽器（タム・ティンパニ）を音高なしで置くと休符になるので、`extra_measure` で音高を付けて書く。
+- 音程のある楽器（タム・ティンパニ）を音高なしで置くと `Instrument.cell()` は休符（音量だけのセル）を返し、鳴らない。ドラムの型（`GROOVES`）に書くときは `hits(..., notes=...)` で打点ごとの音高（`Hit.note`）を与える（音高の無い音程楽器の打点はクラス定義時に `PlanError`）。和音に合わせて音高を変えるもの（trailer のタム、ティンパニ）は `extra_measure` で書く。
 - 同じ優先度の別のセルを同じ位置に `put` すると `ChannelConflictError`。「決め」のように他のパートを意図して上書きするときは `buf.replace` を使う（anime-ost）。
 - 可変小節（classical）は `D00` を書く最終 row に空きチャンネルが1つ要る。
 
@@ -757,7 +757,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 - 説明: 「ロック。ギターのリフと8ビート、4/4 の中〜速いテンポ」／"Rock: guitar riffs over a straight eight-beat"
 - 音色: 1 kick/snare（ProgKick・ProgSnare）／2 cymbal（ClosedHH・SwingRide・CrashCymbal）／3 bass（PickBass）／4 rhythm gtr（CrunchGtr）／5 lead gtr（ProgLeadGtr）／6 tom（Tom）
 - 和声: I–bVII–IV–I、I–IV–V–IV、i–bVI–bVII–i（2 つを選んで区間に割り当てる）
-- 文法: `BACKBEAT`（kick 0・8・10／snare 4・12／ハット8分）、サビはライドに替える。リフは根音の8分刻みから2小節ごとに5度・短7度へ動く（ミクソリディアン）。ソロ区間はリードギターが跳躍多めの旋律を `4xy` 付きで弾く。区間頭に crash、フィルはタム＋スネア。
+- 文法: `BACKBEAT`（kick 0・8・10／snare 4・12／ハット8分）、サビはライドに替える。フィルはハイタム→ロータム→スネア。リフは根音の8分刻みから2小節ごとに5度・短7度へ動く（ミクソリディアン）。ソロ区間はリードギターが跳躍多めの旋律を `4xy` 付きで弾く。区間頭に crash、フィルはタム＋スネア。
 - 区別: prog-rock は変拍子。energetic は速い長調のパンク寄り。indie-rock は軽い歪みとアルペジオ。
 
 #### 6.16.11 `pop` — 明るいポップ（genre、B6）

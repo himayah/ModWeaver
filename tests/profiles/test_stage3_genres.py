@@ -115,3 +115,24 @@ def test_classical_is_four_measures_of_three_four():
     for pp, pattern in zip(plan.patterns, song.patterns):
         assert sum(s.measures for s in pp.slots) == 4
         assert any(pattern.get(47, c).effect == 0xD for c in range(pattern.channels)), pp.kind
+
+
+def test_pitched_drum_in_groove_needs_a_note():
+    """音程のある楽器（タム）を音高なしでドラムの型に書くと、鳴らない音量だけのセルになるのでクラス定義で弾く。"""
+    from mod_weaver.errors import PlanError
+    from mod_weaver.profiles.band_common import ChannelDef, hits, preset
+
+    with pytest.raises(PlanError, match="pitched 'tom'"):
+        class Bad(BandProfile):
+            KIT = (("tom", preset("drum_tom")),)
+            CHANNELS = (ChannelDef("tom", ("tom",)),)
+            GROOVES = {"main": hits("tom", (0,), 50)}
+
+
+def test_tom_fills_sound():
+    """rock・energetic のフィルのタムが音高付きで鳴る（以前は音量だけのセルで無音だった）。"""
+    for genre in ("rock", "energetic"):
+        p = profiles.get_profile(genre)
+        song, _ = engine.compose_song(p, 1)
+        ch = p.__class__.DRUM_CHANNEL["tom"]
+        assert any(pt.get(r, ch).note is not None for pt in song.patterns for r in range(pt.rows)), genre

@@ -33,10 +33,11 @@ def test_genre_plays_at_its_displayed_bpm(genre):
 @pytest.mark.parametrize("genre", [p.id for p in profiles.list_profiles()])
 def test_timeline_length_matches_real_player(genre):
     """core/timeline.py（MIDI の時間軸の根拠）の曲長が libopenmpt の再生時間と一致する
-    （libopenmpt は最後の row の後に僅かな余韻を含むので +0.2 秒まで許容）。"""
+    （libopenmpt は最後の row の後に僅かな余韻を含むので +0.2 秒まで許容。tick の長さの丸めで数 ms 短くなる
+    BPM があるので −0.01 秒まで許容。例: racing-breaks の BPM 172 で −0.0025 秒）。"""
     from mod_weaver.core import timeline
 
     profile = profiles.get_profile(genre)
     song, plan = compose_song(profile, 123456)
     actual = decode(writer.serialize_xm(song, initial_bpm=plan.bpm), ".xm").seconds
-    assert 0 <= actual - timeline.build(song, plan.bpm).seconds <= 0.2
+    assert -0.01 <= actual - timeline.build(song, plan.bpm).seconds <= 0.2

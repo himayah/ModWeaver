@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral` など27種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、サスペンス `suspense-slow` など14種）の計50ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。チャンネル数はジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります（`--channels` で指定も可能）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral` など27種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、90年代のレースゲーム風 `racing-breaks`、サスペンス `suspense-slow` など15種）の計51ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。チャンネル数はジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります（`--channels` で指定も可能）。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -104,6 +104,7 @@ python modweaver.py --genre jrpg         # 〜風: JRPG のフィールド曲
 python modweaver.py --genre gamelan      # ジャンル: ガムラン（スレンドロ／ペロッグ音律）
 python modweaver.py --genre chiptune     # 〜風: 8bit ゲーム音楽（パルス波・三角波・ノイズ）
 python modweaver.py --genre industrial   # ジャンル: インダストリアル（歪みと金属音）
+python modweaver.py --genre racing-breaks  # 〜風: 90年代のレースゲーム（ドラムンベース／ブレイクビーツ）
 ```
 
 #### ジャンルをランダムに選ぶ（`--genre random` / `-g r`）:
@@ -239,7 +240,7 @@ https://github.com/himayah/ModWeaver
 | `techno` | – | 4 | テクノ。繰り返しの中で少しずつ変わるシーケンスと4つ打ち |
 | `trap` | – | 4 | トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ |
 
-**〜風（style）** — 14 種類
+**〜風（style）** — 15 種類
 
 | ジャンル id | 別名 | ch | 説明 |
 |:---|:---|:---|:---|
@@ -254,6 +255,7 @@ https://github.com/himayah/ModWeaver
 | `lofi-chill` | – | 4/6/8 | ローファイ・チル。柔らかいギターとフルート、うねるサイドチェインと雨音 |
 | `neo-soul` | – | 4/6/8 | ネオソウル風。よれたビートとエレピ主体の豊かなテンションコード |
 | `nostalgic` | – | 4 | 夕暮れの郷愁を誘う Lo-Fi ビートとオルゴール（従来の TwilightPad） |
+| `racing-breaks` | – | 4/6/8 | 90年代後半のレースゲーム風。ドラムンベース／ブレイクビーツに 9th のエレピと太いサブベース |
 | `suspense-chase` | – | 4 | 緊急脱出・追走。毎拍の心拍と 8 分連打、無音からの衝撃 |
 | `suspense-slow` | `suspense` | 4 | 低速・重苦しい緊張。心拍と無音、突発の金属音 |
 | `trailer` | – | 6/8 | 映画予告編風。大太鼓と金管の衝撃、刻む弦、合唱で盛り上がる3幕構成 |
@@ -317,7 +319,7 @@ https://github.com/himayah/ModWeaver
 │   │                   #        timeline / render(mp3)）
 │   ├── profiles/      # ジャンルの仕組み: GenreProfile 基底・登録簿（genres/ の自動検出）・ジャンル共通の補助
 │   │                   #        （band_common: 第３段階の35ジャンルが共有する骨格 BandProfile）
-│   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。50ジャンル）
+│   └── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。51ジャンル）
 ├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md          # 設計書（現在の仕様）
 ├── DESIGN_HISTORY.md  # 設計の経緯（決定の理由・訂正・見送ったもの）

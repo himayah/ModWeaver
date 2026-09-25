@@ -55,6 +55,18 @@ def test_gui_loads_catalog_generates_and_exports(app, tmp_path):
     _pump(app, lambda: app.job is None and len(app.songs) == 2)
     assert app.songs[0][1].path.suffix == ".it" and app.songs[0][1].seed == song.seed
 
+    # ジャンルを選ぶとテンポの初期値がそのジャンルに合う（固定＝代表、範囲＝ふだんの範囲）。入力欄の上下限も
+    app.genre_tree.selection_set("calm")
+    app._on_tree_select()
+    assert (app.tempo_fixed.get(), app.tempo_lo.get(), app.tempo_hi.get()) == ("72", "68", "78")
+    app.genre_tree.selection_set("free-jazz")
+    app._on_tree_select()
+    assert (app.tempo_fixed.get(), app.tempo_lo.get(), app.tempo_hi.get()) == ("96", "96", "96")
+    assert float(app.tempo_spins[0].cget("from")) == 44 and float(app.tempo_spins[0].cget("to")) == 163
+    app.tempo_fixed.set("100")
+    app._build()                                  # 作り直しでは入力を消さない
+    assert app.tempo_fixed.get() == "100"
+
     # ジャンルが選べないチャンネル数は「任せる」に戻る
     app.genre_id.set("calm")
     app._on_genre_changed()

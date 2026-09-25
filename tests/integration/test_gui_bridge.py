@@ -34,6 +34,10 @@ def test_load_catalog_matches_the_cli(catalog):
     calm = loaded.genre("calm")
     assert calm.channel_choices == (4,) and loaded.category_label("mood", "en") == "Mood"
     assert loaded.is_full_tempo_range(calm)
+    assert calm.tempo_choices == (68, 70, 72, 74, 76, 78)
+    assert calm.usual_tempo == (68, 78) and calm.typical_tempo == 72     # 候補の中央（偶数個なら下側）
+    racing = loaded.genre("racing-breaks")
+    assert racing.typical_tempo in racing.tempo_choices
 
 
 @pytest.mark.parametrize("req, expected", [
@@ -49,10 +53,14 @@ def test_build_args(catalog, req, expected):
 
 
 def test_parse_tempo_and_int(catalog):
-    assert bridge.parse_tempo("80", "100", catalog) == (80, 100)
-    assert bridge.parse_tempo(" 120 ", "120", catalog) == (120, 120)
+    full = catalog.tempo_bounds(None)
+    assert full == (32, 255)
+    assert bridge.parse_tempo("80", "100", full) == (80, 100)
+    assert bridge.parse_tempo(" 120 ", "120", full) == (120, 120)
     for lo, hi in [("100", "80"), ("31", "80"), ("80", "256"), ("", "80"), ("8x", "90")]:
-        assert bridge.parse_tempo(lo, hi, catalog) is None
+        assert bridge.parse_tempo(lo, hi, full) is None
+    free = catalog.tempo_bounds(catalog.genre("free-jazz"))   # ジャンルが受け付ける範囲で検査する
+    assert free == (44, 163) and bridge.parse_tempo("40", "90", free) is None
     assert bridge.parse_int("-7") == -7 and bridge.parse_int("") is None and bridge.parse_int("1.5") is None
 
 

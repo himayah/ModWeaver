@@ -335,7 +335,8 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 ├── modweaver.py       # Top-level launcher (prints the usage when run with no arguments)
 ├── modweaver_gui.pyw  # GUI launcher (same as `python -m mod_weaver.gui`)
 ├── modweaver_gui.bat  # Windows: double-click to start the GUI (works without a .pyw file association)
-├── listen_samples.bat # Windows batch that renders listening samples (3 per item of DESIGN.md §11) into output\listen\
+├── listen_samples.py  # Renders listening samples (3 per item of DESIGN.md §11) into output/listen/
+├── listen_samples.bat # Windows: double-click to run the script above
 ├── mod_weaver/        # The package. Also runnable as `python -m mod_weaver`
 │   ├── core/          # Stable layer: data model, DSP, sample synthesis (Patch system), harmony, groove (EXT-1),
 │   │                   #   variable measures (EXT-2), writer/verify, output formats (formats / s3m / it / midi /

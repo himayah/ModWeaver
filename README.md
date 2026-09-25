@@ -332,7 +332,8 @@ Windows では **`modweaver_gui.bat` をダブルクリック**すると起動�
 ├── modweaver.py       # トップレベル起動スクリプト（引数なしなら使い方を表示）
 ├── modweaver_gui.pyw  # GUI の起動スクリプト（`python -m mod_weaver.gui` と同じ）
 ├── modweaver_gui.bat  # Windows で GUI をダブルクリックで起動するバッチ（.pyw の関連付けが無くても可）
-├── listen_samples.bat # 試聴用の曲をまとめて作るバッチ（Windows。DESIGN.md §11 の試聴項目ごとに3例、output\listen\ へ）
+├── listen_samples.py  # 試聴用の曲をまとめて作るスクリプト（DESIGN.md §11 の試聴項目ごとに3例、output/listen/ へ）
+├── listen_samples.bat # 上を Windows でダブルクリックで動かすバッチ
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
 │   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /

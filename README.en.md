@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 50 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 51 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -106,6 +106,7 @@ python modweaver.py -e --genre jrpg         # style: JRPG field theme
 python modweaver.py -e --genre gamelan      # genre: gamelan (slendro / pelog tuning)
 python modweaver.py -e --genre chiptune     # style: 8-bit game music (pulse, triangle, noise)
 python modweaver.py -e --genre industrial   # genre: industrial (distortion and metal)
+python modweaver.py -e --genre racing-breaks  # style: late-90s racing game (drum'n'bass / breakbeat)
 ```
 
 #### Pick a genre at random (`--genre random` / `-g r`):
@@ -241,7 +242,7 @@ https://github.com/himayah/ModWeaver
 | `techno` | – | 4 | Minimal techno: a hypnotic four-on-the-floor with slowly mutating sequences |
 | `trap` | – | 4 | Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop |
 
-**Styles (style)** — 14
+**Styles (style)** — 15
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
@@ -256,6 +257,7 @@ https://github.com/himayah/ModWeaver
 | `lofi-chill` | – | 4/6/8 | Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience |
 | `neo-soul` | – | 4/6/8 | Neo soul style: laid-back off-grid beats and lush electric piano chords |
 | `nostalgic` | – | 4 | Lo-fi beat and music box evoking nostalgia at dusk (the original TwilightPad) |
+| `racing-breaks` | – | 4/6/8 | Late-90s racing game style: drum'n'bass / breakbeat with 9th-chord e.piano and deep sub bass |
 | `suspense-chase` | – | 4 | Emergency escape / pursuit: heartbeat on every beat, driving eighth notes, impacts out of silence |
 | `suspense-slow` | `suspense` | 4 | Slow, heavy tension: heartbeat and silence, sudden metallic hits |
 | `trailer` | – | 6/8 | Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts |
@@ -320,7 +322,7 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 │   │                   #   timeline / render (mp3))
 │   ├── profiles/      # Genre machinery: GenreProfile base, registry (auto-discovers genres/), shared helpers
 │   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres)
-│   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 50 genres)
+│   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 51 genres)
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md          # Design document (the current specification; Japanese)
 ├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)

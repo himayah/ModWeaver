@@ -9,7 +9,7 @@ rem 使い方: リポジトリ直下でこのファイルを実行する（ダ�
 rem   PY  : Python の起動コマンド（例: py -3）
 rem   FMT : 出力形式（mod / xm / s3m / it / midi / mp3。mp3 は ffmpeg が必要）
 rem   EXT : FMT に対応する拡張子（midi のときは mid）
-rem シードは 101, 202, 303（同じシードなら何度作っても同じ曲）。
+rem シードは 101, 202, 303（同じシードなら何度作っても同じ曲）。16_racing-breaks だけは系統を揃えるため 101, 102, 113。
 rem ------------------------------------------------------------------
 cd /d "%~dp0"
 if "%PY%"=="" set "PY=python"
@@ -421,8 +421,13 @@ call :gen 15_new-genres industrial 101
 call :gen 15_new-genres industrial 202
 call :gen 15_new-genres industrial 303
 
+echo [16_racing-breaks] racing-breaks の3系統のドラム・ベース、低音の量、エレピの揺れ（系統ごとに1例。系統は seed で決まるので、101＝ドラムンベース・102＝ブレイクビーツ・113＝2ステップ）
+call :gen 16_racing-breaks racing-breaks 101
+call :gen 16_racing-breaks racing-breaks 102
+call :gen 16_racing-breaks racing-breaks 113
+
 echo.
-echo 完了: 成功 !OK! 件、失敗 !NG! 件（全 372 件）。出力先: output\listen\
+echo 完了: 成功 !OK! 件、失敗 !NG! 件（全 375 件）。出力先: output\listen\
 pause
 exit /b 0
 

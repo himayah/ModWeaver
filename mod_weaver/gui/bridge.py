@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 import subprocess
 import sys
 import threading
@@ -35,11 +36,22 @@ class Genre:
     aliases: tuple[str, ...]
     description: str
     description_en: str
-    tempo_range: tuple[int, int]
+    tempo_range: tuple[int, int]       # --tempo で指定できる範囲
     channel_choices: tuple[int, ...]
+    tempo_choices: tuple[int, ...]     # ジャンルが自分で選ぶテンポの候補（昇順）
 
     def describe(self, lang: str) -> str:
         return self.description_en if lang == "en" else self.description
+
+    @property
+    def typical_tempo(self) -> int:
+        """代表的なテンポ: 候補の中央の値（候補そのものから選ぶ）。"""
+        return statistics.median_low(self.tempo_choices)
+
+    @property
+    def usual_tempo(self) -> tuple[int, int]:
+        """ジャンルがふだん使うテンポの範囲: 候補の最小〜最大。"""
+        return self.tempo_choices[0], self.tempo_choices[-1]
 
 
 @dataclass(frozen=True)
@@ -74,7 +86,8 @@ class Catalog:
             categories=tuple((c["id"], c["ja"], c["en"]) for c in data["categories"]),
             genres=tuple(
                 Genre(g["id"], g["display_name"], g["category"], tuple(g["aliases"]), g["description"],
-                      g["description_en"], tuple(g["tempo_range"]), tuple(g["channel_choices"]))
+                      g["description_en"], tuple(g["tempo_range"]), tuple(g["channel_choices"]),
+                      tuple(g["tempo_choices"]))
                 for g in data["genres"]
             ),
             mp3_available=data["mp3"]["available"],
@@ -96,6 +109,10 @@ class Catalog:
     def is_full_tempo_range(self, genre: Genre) -> bool:
         """ジャンルのテンポ範囲が CLI の全域（＝ジャンルによる制限なし）か。"""
         return genre.tempo_range == (self.tempo_min, self.tempo_max)
+
+    def tempo_bounds(self, genre: Optional[Genre]) -> tuple[int, int]:
+        """テンポの入力で受け付ける範囲。ジャンルが決まっていればその ``tempo_range``、ランダムなら CLI の全域。"""
+        return genre.tempo_range if genre is not None else (self.tempo_min, self.tempo_max)
 
 
 @dataclass(frozen=True)
@@ -170,12 +187,12 @@ def parse_int(text: str) -> Optional[int]:
         return None
 
 
-def parse_tempo(lo_text: str, hi_text: str, catalog: Catalog) -> Optional[tuple[int, int]]:
-    """テンポ入力の検査。範囲外・逆順・不正は None。"""
+def parse_tempo(lo_text: str, hi_text: str, bounds: tuple[int, int]) -> Optional[tuple[int, int]]:
+    """テンポ入力の検査（``bounds`` は ``Catalog.tempo_bounds``）。範囲外・逆順・不正は None。"""
     lo, hi = parse_int(lo_text), parse_int(hi_text)
     if lo is None or hi is None:
         return None
-    if not catalog.tempo_min <= lo <= hi <= catalog.tempo_max:
+    if not bounds[0] <= lo <= hi <= bounds[1]:
         return None
     return lo, hi
 

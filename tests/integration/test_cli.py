@@ -427,6 +427,7 @@ def test_list_genres_json_describes_everything_the_cli_accepts(capsys):
     p = profiles.get_profile("calm")
     assert calm["description"] == p.description and calm["description_en"] == p.description_en
     assert calm["channel_choices"] == list(channel_choices(p)) and calm["tempo_range"] == list(p.tempo_range)
+    assert calm["tempo_choices"] == sorted(p.tempo_choices)
     assert set(data["mp3"]) == {"available", "ffmpeg", "error"}
 
 

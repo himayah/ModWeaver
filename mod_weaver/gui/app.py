@@ -121,6 +121,7 @@ class App(tk.Tk):
         if catalog is not None:
             if not self.genre_id.get():
                 self.genre_id.set(catalog.default_genre)
+                self._apply_genre_tempo()
             if not self.fmt.get():
                 self.fmt.set(catalog.default_format)
             self.status.set(self.t("ready"))
@@ -244,6 +245,7 @@ class App(tk.Tk):
         if sel and not sel[0].startswith("cat:") and sel[0] != self.genre_id.get():
             self.genre_id.set(sel[0])
             self.random_genre.set(False)
+            self._apply_genre_tempo()
             self._on_genre_changed()
 
     # --- ジャンルの説明（右上） ---
@@ -280,6 +282,7 @@ class App(tk.Tk):
             meta = [f"{g.id}", f"{self.t('category')}: {self.catalog.category_label(g.category, lang)}"]
             if g.aliases:
                 meta.append(f"{self.t('aliases')}: {', '.join(g.aliases)}")
+            meta.append(self.t("usual_tempo", lo=g.usual_tempo[0], hi=g.usual_tempo[1], typ=g.typical_tempo))
             if not self.catalog.is_full_tempo_range(g):
                 meta.append(self.t("tempo_limit", lo=g.tempo_range[0], hi=g.tempo_range[1]))
             meta.append(self.t("channel_choices", choices="/".join(map(str, g.channel_choices))))
@@ -287,6 +290,24 @@ class App(tk.Tk):
             self.detail_meta.configure(text="   ·   ".join(meta))
             self.detail_desc.configure(text=g.describe(lang))
         self._update_channel_buttons()
+        self._update_tempo_bounds()
+
+    def _apply_genre_tempo(self) -> None:
+        """ユーザーがジャンルを選んだとき、テンポの入力の初期値をそのジャンルに合わせる
+        （固定＝代表的なテンポ、範囲＝ふだん使う範囲）。画面の作り直しでは呼ばない（入力を消さないため）。"""
+        g = self._current_genre()
+        if g is not None:
+            self.tempo_fixed.set(str(g.typical_tempo))
+            self.tempo_lo.set(str(g.usual_tempo[0]))
+            self.tempo_hi.set(str(g.usual_tempo[1]))
+
+    def _update_tempo_bounds(self) -> None:
+        """テンポの入力欄の上下限を、ジャンルが受け付ける範囲にする。"""
+        if self.catalog is None:
+            return
+        lo, hi = self.catalog.tempo_bounds(self._current_genre())
+        for s in getattr(self, "tempo_spins", ()):
+            s.configure(from_=lo, to=hi)
 
     # --- 設定 ---
 
@@ -305,12 +326,15 @@ class App(tk.Tk):
         ttk.Radiobutton(row, text=self.t("auto_genre"), value="auto", variable=self.tempo_mode).pack(side=tk.LEFT)
         ttk.Radiobutton(row, text=self.t("fixed"), value="fixed", variable=self.tempo_mode).pack(side=tk.LEFT,
                                                                                                padx=(12, 2))
-        spin(row, self.tempo_fixed).pack(side=tk.LEFT)
+        self.tempo_spins = [spin(row, self.tempo_fixed)]
+        self.tempo_spins[-1].pack(side=tk.LEFT)
         ttk.Radiobutton(row, text=self.t("range"), value="range", variable=self.tempo_mode).pack(side=tk.LEFT,
                                                                                                padx=(12, 2))
-        spin(row, self.tempo_lo).pack(side=tk.LEFT)
+        self.tempo_spins.append(spin(row, self.tempo_lo))
+        self.tempo_spins[-1].pack(side=tk.LEFT)
         ttk.Label(row, text="–").pack(side=tk.LEFT, padx=2)
-        spin(row, self.tempo_hi).pack(side=tk.LEFT)
+        self.tempo_spins.append(spin(row, self.tempo_hi))
+        self.tempo_spins[-1].pack(side=tk.LEFT)
 
         ttk.Label(box, text=self.t("channels")).grid(row=1, column=0, sticky="w", pady=2)
         row = ttk.Frame(box)
@@ -412,12 +436,13 @@ class App(tk.Tk):
             if seed is None:
                 return self._invalid("invalid_seed")
         tempo = None
+        bounds = cat.tempo_bounds(cat.genre(genre) if genre is not None else None)
         if self.tempo_mode.get() == "fixed":
-            tempo = bridge.parse_tempo(self.tempo_fixed.get(), self.tempo_fixed.get(), cat)
+            tempo = bridge.parse_tempo(self.tempo_fixed.get(), self.tempo_fixed.get(), bounds)
         elif self.tempo_mode.get() == "range":
-            tempo = bridge.parse_tempo(self.tempo_lo.get(), self.tempo_hi.get(), cat)
+            tempo = bridge.parse_tempo(self.tempo_lo.get(), self.tempo_hi.get(), bounds)
         if self.tempo_mode.get() != "auto" and tempo is None:
-            return self._invalid("invalid_tempo", lo=cat.tempo_min, hi=cat.tempo_max)
+            return self._invalid("invalid_tempo", lo=bounds[0], hi=bounds[1])
         channels = None if self.channels.get() == "auto" else int(self.channels.get())
         out = self.output_dir.get().strip()
         return Request(genre, seed, self.fmt.get(), tempo, channels, Path(out) if out else None)

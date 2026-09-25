@@ -186,6 +186,7 @@ def catalog() -> dict:
                 "description": p.description,
                 "description_en": p.description_en,
                 "tempo_range": list(p.tempo_range),
+                "tempo_choices": sorted(p.tempo_choices),
                 "channel_choices": list(channel_choices(p)),
             }
             for _, ps in _by_category() for p in ps

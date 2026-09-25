@@ -1253,7 +1253,7 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 
 - stdout に JSON を1つだけ出す。非 ASCII は `\uXXXX` にする（Windows でパイプの文字コードが cp932 でも化けない）。
 - エラーは今までどおり stderr と終了コード（§8.7）。そのとき stdout には何も出さない。`-e` は JSON の中身を変えない。
-- `--list-genres --json`（カタログ）: `version`・`url`・`default_genre`・`random_genre`（`["random", "r"]`）・`default_format`・`formats`（`name`・`extension`・`description`）・`tempo`（`min`・`max`）・`channels`（`[4, 6, 8]`）・`seed_range`・`categories`（`id`・`ja`・`en`。区分の表示名）・`genres`（`id`・`display_name`・`category`・`aliases`・`description`・`description_en`・`tempo_range`・`channel_choices`）・`mp3`（`available`・`ffmpeg`（パス）・`error`。`render.check_ffmpeg` と同じ検査）。ジャンルの並びは `--list-genres` と同じ（区分順・id 順）。
+- `--list-genres --json`（カタログ）: `version`・`url`・`default_genre`・`random_genre`（`["random", "r"]`）・`default_format`・`formats`（`name`・`extension`・`description`）・`tempo`（`min`・`max`）・`channels`（`[4, 6, 8]`）・`seed_range`・`categories`（`id`・`ja`・`en`。区分の表示名）・`genres`（`id`・`display_name`・`category`・`aliases`・`description`・`description_en`・`tempo_range`（`--tempo` で指定できる範囲）・`tempo_choices`（ジャンルが自分で選ぶテンポの候補。昇順）・`channel_choices`）・`mp3`（`available`・`ffmpeg`（パス）・`error`。`render.check_ffmpeg` と同じ検査）。ジャンルの並びは `--list-genres` と同じ（区分順・id 順）。
 - 生成時の `--json`（結果）: `genre`・`display_name`・`random_genre`・`format`・`seed`・`bpm`・`tempo_request`（`"80-100"` など。指定なしは null）・`channels`・`channels_request`（指定なしは null）・`summary`（バナーの要約行）・`path`（絶対パス）・`repro`（`--seed` まで含む再現コマンド）。
 
 ---
@@ -1303,7 +1303,7 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 
 ### 9.3 目で・耳で確かめること（自動化の対象外）
 
-OpenMPT 等で開けること、ループ境界のクリック、スウィングやサイドチェインの聴感、orchestral の定位。試聴で詰める数値は §11。§11 の試聴項目を確かめる曲は、リポジトリ直下の `listen_samples.bat`（Windows）でまとめて作れる（§11）。
+OpenMPT 等で開けること、ループ境界のクリック、スウィングやサイドチェインの聴感、orchestral の定位。試聴で詰める数値は §11。§11 の試聴項目を確かめる曲は、リポジトリ直下の `listen_samples.py`（Windows は `listen_samples.bat` でも可）でまとめて作れる（§11）。
 
 ---
 
@@ -1313,23 +1313,23 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 |:---|:---|:---|
 | 単体 | `tests/unit/` | pitch・dsp・synth・model（Cell の直列化、put の規則、Instrument の範囲検査）・writer（レイアウト・原子的書込）・verify（ミューテーションで各コードが出る）・harmony・composer・engine（`apply_tempo`・契約検査・V15 は 4ch だけ）・registry（自動検出・登録時の検査）・各形式・timeline・midi |
 | ジャンル | `tests/profiles/` | 文法・音域・ChannelPlan・決定性・構成（例: suspense の shock 前 8 row に発音が無い、march の Oom-Pah・ロール、全 arp が上限内）。第３段階の35ジャンルは `test_stage3_genres.py` が共通に検査（20 seed × 全形式で構造検査の ERROR・WARN なし（編成を選ぶジャンルは編成ごとに 10 seed）、宣言の整合、決定性、`--tempo` で曲も編成も変わらない、区間で鳴らさないパートに音が無い、最後のサビの転調、どの編成でも同じ音符、seed で全編成が選ばれる、ループの音色を畳む宣言を弾く） |
-| 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足、`--json`・`--output-dir`）。GUI の `bridge`（本物の CLI を子プロセスで動かす。別形式の書き出しが同じ曲になる、中止、pythonw の置き換え）と画面の通し確認（画面が出せない環境では skip） |
+| 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足、`--json`・`--output-dir`）。試聴用の曲の一覧（`listen_samples.py` がジャンルの編成の宣言とずれていない）。GUI の `bridge`（本物の CLI を子プロセスで動かす。別形式の書き出しが同じ曲になる、中止、pythonw の置き換え）と画面の通し確認（画面が出せない環境では skip） |
 | 回帰 | `tests/regression/` | nostalgic を凍結した旧実装 `tests/reference/twilight_pad_v1.py`（SHA-256 固定）と 20 seed で比較。作曲（`plan()` の結果と pattern のセル配置）はバイト一致、サンプル波形は長さ・ピークが近いこと、ファイル全体は検査が通ること |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
 
-- 実行: `python -m pytest -q`（3481 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2782 件）で実プレイヤー検査を省略し、マージ前に全部流す。
+- 実行: `python -m pytest -q`（3483 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2784 件）で実プレイヤー検査を省略し、マージ前に全部流す。
 - 新しいジャンルは、全形式・複数 seed で構造検査が通ること、実プレイヤーの音割れ検査に通ること、`gm_voices` が全楽器ぶんあること、1ファイル1ジャンルであることがテストで自動的に確かめられる。
 
 ---
 
 ## 11. 未確定・試聴で調整する項目と将来課題
 
-「試聴で調整」の項目（下表の状態が「試聴で再調整可」「同上」「試聴で調整」のもの）は、リポジトリ直下の **`listen_samples.bat`**（Windows のバッチ。ダブルクリックか、リポジトリ直下で実行）で確かめる曲をまとめて作れる。
+「試聴で調整」の項目（下表の状態が「試聴で再調整可」「同上」「試聴で調整」のもの）は、リポジトリ直下の **`listen_samples.py`**（`python listen_samples.py`。Windows は **`listen_samples.bat`** のダブルクリックでも可）で確かめる曲をまとめて作れる。項目・見出し・曲の一覧は `listen_samples.py` の `ITEMS` にあり、バッチは Python を起動するだけ（cmd は複数バイトの行を読み違えるので、バッチは ASCII だけで書く）。
 
 - 出力先は `output\listen\<番号_項目>\<ジャンル>_<シード>.<拡張子>`（`output\` は git の管理外）。シードは 101・202・303 に固定しているので、何度作っても同じ曲になる（調整の前後で同じ曲を聴き比べられる）。
 - 項目ごとに3例（racing-breaks はリズムの系統ごとに1例になるよう、シードを 101・102・113 にしている）。複数のジャンルにまたがる項目（第３段階の35ジャンルの釣り合い、新しい3ジャンル）はジャンルごとに3例、編成はジャンルごとに3例 × 選べる編成（同じシードの曲をチャンネル数だけ変えて `<ジャンル>_<シード>_<数>ch` で出す）。全 375 曲。
-- 環境変数 `FMT`（`mod`〜`mp3`。既定 `mod`）・`PY`（Python の起動コマンド。既定 `python`）で形式と Python を変えられる。最後に成功・失敗の件数を出す。
-- 下表に試聴の項目を足したら、バッチにも足す。
+- 環境変数 `FMT`（`mod`〜`mp3`。既定 `mod`）で形式を、`PY`（バッチだけ。既定 `python`）で Python を変えられる。曲は同じプロセスで `cli.main` を呼んで作る。最後に成功・失敗の件数を出す（失敗があれば終了コード 1）。
+- 下表に試聴の項目を足したら、`listen_samples.py` の `ITEMS` にも足す。
 
 | 項目 | 現在の値 | 状態 |
 |:---|:---|:---|
@@ -1378,8 +1378,8 @@ CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw
 ### 12.3 画面
 
 - 左: ジャンル一覧（区分ごとの木。検索欄は id・表示名・別名・説明の日英を対象にし、区分でも絞れる）と「ジャンルもランダムに選ぶ」（`--genre random`。候補はテンポ・チャンネル数の指定に合うジャンルだけになる。§8.3）。
-- 右上: 選んだジャンルの表示名・区分・別名・テンポの制限（全域でないジャンルだけ）・選べるチャンネル数・説明。
-- 設定: テンポ（ジャンルに任せる／固定／範囲）、チャンネル数（ジャンルが選べない数は押せない。選んでいた数が使えないジャンルに替えたら「任せる」に戻す）、シード（毎回ランダム／固定）、形式（mp3 が使えなければ注意を出す）、保存フォルダ（`--output-dir`。既定はリポジトリの `output`）。ファイル名は CLI の既定（`<genre>_<seed>.<拡張子>`）に任せる。
+- 右上: 選んだジャンルの表示名・区分・別名・ふだんのテンポ（`tempo_choices` の最小〜最大と代表値）・指定できるテンポ（全域でないジャンルだけ）・選べるチャンネル数・説明。
+- 設定: テンポ（ジャンルに任せる／固定／範囲。ユーザーがジャンルを選ぶと、固定の初期値を代表値＝`tempo_choices` の中央（偶数個なら下側）に、範囲の初期値を `tempo_choices` の最小〜最大にする。画面の作り直しや「設定に読み込む」では入力を変えない。入力欄の上下限と入力の検査はジャンルの `tempo_range`（ランダムジャンルなら CLI の全域）。`tempo_range` はほぼ全ジャンルが 32〜255 なので、範囲の初期値には使わない）、チャンネル数（ジャンルが選べない数は押せない。選んでいた数が使えないジャンルに替えたら「任せる」に戻す）、シード（毎回ランダム／固定）、形式（mp3 が使えなければ注意を出す）、保存フォルダ（`--output-dir`。既定はリポジトリの `output`）。ファイル名は CLI の既定（`<genre>_<seed>.<拡張子>`）に任せる。
 - 生成（Ctrl+Enter・F5）・中止・状態表示。入力がおかしければ CLI を呼ばずに知らせる。CLI が失敗したら終了コードごとの説明と stderr の最終行を出す。
 - 「作った曲」: その回に作った曲の一覧（新しい順）。再生（OS の関連付け。関連付けが無ければ OpenMPT などの案内）、フォルダで表示、再現コマンドのコピー、**別の形式でも書き出す**（同じ seed で、指定があったテンポ・チャンネル数だけ渡す＝同じ曲）、**設定に読み込む**（seed を固定してテンポや形式だけ変える等）。選んだ曲の要約行・パス・再現コマンドを下に出す。
 - 「ログ」: 実行した引数、stderr（警告）、終了コードと所要時間。

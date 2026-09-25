@@ -174,7 +174,9 @@ https://github.com/himayah/ModWeaver
 | `--tempo` | `-t` | chosen per genre | A BPM (`120`) or a range (`80-100`, random within it), 32–255. A range the genre cannot play is an error (exit code 2); a range only partly outside is clipped to the supported range with a warning |
 | `--output` | `-o` | `output/<genre>_<seed>.<ext>` (e.g. `output/nostalgic_732501.mod`); the folder is created if needed | Output path. When given, the file is written to exactly that path (a missing parent folder is an error) |
 | `--channels` | `-c` | chosen by the genre for each song | Number of channels: `4` / `6` / `8`. Which numbers are available depends on the genre (the ch column of the genre list); an unavailable number is an error (exit code 2). With `--genre random`, only genres that can use that number are picked |
+| `--output-dir` | – | `output` | Output folder when `--output` is omitted (created if missing). Cannot be combined with `--output` |
 | `--list-genres` | – | – | Print the id, aliases and description of every available genre, grouped into moods, genres and styles, then exit (code 0). Nothing is generated |
+| `--json` | – | – | Print the genre list (`--list-genres`) or the generation result as machine-readable JSON (for the GUI and other programs; see [DESIGN.md](DESIGN.md) §8.8) |
 | `--english` | `-e` | – | Show the usage, genre descriptions and results in English (Japanese by default) |
 | `--version` | `-v` | – | Print the version and the GitHub repository URL, then exit (code 0) |
 | `--help` | `-h` | – | Print the usage and the option list (ending with the genre ids per group), then exit (code 0) |
@@ -291,6 +293,20 @@ The generated `.mod` / `.xm` / `.s3m` / `.it` files play right away in the track
 > **Tip (playing in OpenMPT)**:
 > Opened in OpenMPT, you can watch and edit each pattern's note data, the samples used (headers and loop points), the tempo (BPM) setting and what each channel is playing, in real time.
 
+### 4. Using the GUI
+
+You can also use ModWeaver from a window instead of the command line (nothing extra to install; it uses Python's built-in tkinter).
+
+```bash
+python modweaver_gui.pyw             # on Windows you can also double-click the file
+python -m mod_weaver.gui             # the same
+python modweaver_gui.pyw --lang=ja   # Japanese (the default follows the OS language; also switchable from the View menu)
+```
+
+- Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5).
+- From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
+- The genre list and available formats are read from the CLI (`--list-genres --json`) at startup. The GUI runs `modweaver.py` behind the scenes, so it can do exactly what the CLI can.
+
 ---
 
 ## Tracks and parts
@@ -315,6 +331,7 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 ```text
 .
 ├── modweaver.py       # Top-level launcher (prints the usage when run with no arguments)
+├── modweaver_gui.pyw  # GUI launcher (same as `python -m mod_weaver.gui`)
 ├── listen_samples.bat # Windows batch that renders listening samples (3 per item of DESIGN.md §11) into output\listen\
 ├── mod_weaver/        # The package. Also runnable as `python -m mod_weaver`
 │   ├── core/          # Stable layer: data model, DSP, sample synthesis (Patch system), harmony, groove (EXT-1),
@@ -322,7 +339,8 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 │   │                   #   timeline / render (mp3))
 │   ├── profiles/      # Genre machinery: GenreProfile base, registry (auto-discovers genres/), shared helpers
 │   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres)
-│   └── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 51 genres)
+│   ├── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 51 genres)
+│   └── gui/           # GUI (tkinter). Runs the CLI as a child process
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md          # Design document (the current specification; Japanese)
 ├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)

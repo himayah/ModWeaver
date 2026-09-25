@@ -2,9 +2,9 @@
 
 | 項目 | 内容 |
 |:---|:---|
-| 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`） |
+| 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`・GUI `modweaver_gui.pyw`） |
 | 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) |
-| 最終更新 | 2026-09-24（2026-09-21〜24 に書かれた設計書7本をこの2本に統合。統合前の原文は git 履歴で参照できる） |
+| 最終更新 | 2026-09-25（GUI と CLI の `--json`・`--output-dir` を追加。2026-09-24 に、09-21〜24 に書かれた設計書7本をこの2本に統合。統合前の原文は git 履歴で参照できる） |
 
 ---
 
@@ -67,6 +67,7 @@ Python 標準ライブラリだけで、波形合成から作曲・シーケン�
 ### 2.1 レイヤーと依存規則
 
 ```text
+gui/ ┄┄(子プロセス)┄┄▶ modweaver.py
 cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿・補助）◀── genres/（ジャンル本体）
    │            │                    │                                    │
    └────────────┴────────────────────┴──────────────▶ core/（不変層）◀─────┘
@@ -74,6 +75,7 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 
 - `core` は `profiles`・`genres`・`engine` を import しない。`genres` は `core` と `profiles`（基底・登録簿・補助）だけに依存する。
 - `engine` は `profiles.base` と `core` に依存する。`cli` は `engine` と `profiles` に依存する。
+- `gui` は `mod_weaver` のほかのモジュールを import しない。CLI を子プロセスとして起動し、`--json` の出力だけで情報を受け取る（§12）。
 - `core` 内: `pitch`（依存なし）← `dsp` ← `synth` ← `synth_presets`、`model` ← `harmony` ← `composer`。
   形式モジュール（`writer`・`verify`・`s3m`・`it`・`midi`・`render`・`timeline`・`effects`）は `model`・`pitch`・`formats` を参照する。
   `formats` は各形式モジュールを遅延 import する（循環回避）。
@@ -84,7 +86,8 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 |:---|:---|
 | `modweaver.py` / `mod_weaver/__main__.py` | 起動スクリプト（`cli.main` へ委譲）。`python modweaver.py` と `python -m mod_weaver` は同じ |
 | `mod_weaver/__init__.py` | `__version__`（1.1.0）・`__url__` |
-| `cli.py` | 引数解析・表示言語・バナー・終了コード（§8） |
+| `cli.py` | 引数解析・表示言語・バナー・JSON 出力・終了コード（§8） |
+| `modweaver_gui.pyw` / `gui/` | GUI（§12）。`bridge.py`（CLI の呼び出し。tkinter 不使用）・`app.py`（tkinter の画面）・`texts.py`（日英の文言） |
 | `engine.py` | 作曲の実行・テンポ・検査・書込（§5.3〜5.5） |
 | `errors.py` | 例外階層（§8.7） |
 | `profiles/base.py` | `GenreProfile` 基底（§5.1） |
@@ -1191,9 +1194,11 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | `--seed` | `-s` | 100000〜999999 の乱数 | 任意の整数 |
 | `--format` | `-f` | `mod` | `mod` / `xm` / `s3m` / `it` / `midi` / `mp3` |
 | `--output` | `-o` | `output/<genre>_<seed>.<拡張子>` | 明示すればそのパスへ書く（存在しない親フォルダはエラー） |
+| `--output-dir` | – | `output` | `--output` を省略したときの出力フォルダ（無ければ作る）。`--output` とは同時に使えない（終了コード 2） |
 | `--tempo` | `-t` | ジャンルが決める | `120` または `80-100`（§5.5） |
 | `--channels` | `-c` | ジャンルが曲ごとに決める | `4`・`6`・`8`（奇数は MOD の互換性のため受け付けない）。ジャンルが選べない数ならエラー（終了コード 2。§6.14） |
 | `--list-genres` | – | – | 全ジャンルの id・別名・1行説明を区分（気分・ジャンル・〜風）ごとに表示して終了 |
+| `--json` | – | – | `--list-genres` と生成結果を機械向けの JSON で出す（§8.8） |
 | `--english` | `-e` | – | 表示を英語にする（§8.5） |
 | `--version` | `-v` | – | `ModWeaver <版>` と GitHub URL を表示して終了（他の引数より優先） |
 | `--help` | `-h` | – | 使い方を表示して終了。末尾は区分ごとのジャンル id だけ（説明は `--list-genres`） |
@@ -1232,7 +1237,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | コード | 意味 | 例外 |
 |:---|:---|:---|
 | 0 | 成功（引数なし・`--help`・`--list-genres`・`--version` を含む） | |
-| 2 | 引数エラー、未登録ジャンル、対応できないテンポ | argparse、`ProfileNotFoundError`、`TempoRangeError` |
+| 2 | 引数エラー、未登録ジャンル、対応できないテンポ・チャンネル数 | argparse、`ProfileNotFoundError`、`TempoRangeError`、`ChannelCountError` |
 | 3 | 生成・検査エラー | `PlanError`・`VerificationError` ほか `ModGenError` |
 | 4 | 出力エラー | `OutputError` |
 | 5 | mp3 の外部ツール不足 | `ExternalToolError` |
@@ -1241,6 +1246,15 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 例外階層: `ModGenError` ← `ProfileNotFoundError`・`PitchRangeError`・`CellConflictError`・`ChannelConflictError`・`SampleConstraintError`・`TempoRangeError`・`PlanError`・`VerificationError(issues)`・`OutputError`・`ExternalToolError`。
 
 ログは `logging.getLogger("mod_weaver")`。ハンドラは cli だけが設定し（stderr、WARNING 以上）、ライブラリ層は設定しない。検査の WARN は WARNING として出る。バナーは stdout。
+
+### 8.8 JSON 出力（`--json`）
+
+GUI など、ほかのプログラムから CLI を呼ぶための出力。人向けの表示（バナー・一覧）は読み取りに使わない（言語で文言が変わり、形も変わりうるため）。
+
+- stdout に JSON を1つだけ出す。非 ASCII は `\uXXXX` にする（Windows でパイプの文字コードが cp932 でも化けない）。
+- エラーは今までどおり stderr と終了コード（§8.7）。そのとき stdout には何も出さない。`-e` は JSON の中身を変えない。
+- `--list-genres --json`（カタログ）: `version`・`url`・`default_genre`・`random_genre`（`["random", "r"]`）・`default_format`・`formats`（`name`・`extension`・`description`）・`tempo`（`min`・`max`）・`channels`（`[4, 6, 8]`）・`seed_range`・`categories`（`id`・`ja`・`en`。区分の表示名）・`genres`（`id`・`display_name`・`category`・`aliases`・`description`・`description_en`・`tempo_range`・`channel_choices`）・`mp3`（`available`・`ffmpeg`（パス）・`error`。`render.check_ffmpeg` と同じ検査）。ジャンルの並びは `--list-genres` と同じ（区分順・id 順）。
+- 生成時の `--json`（結果）: `genre`・`display_name`・`random_genre`・`format`・`seed`・`bpm`・`tempo_request`（`"80-100"` など。指定なしは null）・`channels`・`channels_request`（指定なしは null）・`summary`（バナーの要約行）・`path`（絶対パス）・`repro`（`--seed` まで含む再現コマンド）。
 
 ---
 
@@ -1299,11 +1313,11 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 |:---|:---|:---|
 | 単体 | `tests/unit/` | pitch・dsp・synth・model（Cell の直列化、put の規則、Instrument の範囲検査）・writer（レイアウト・原子的書込）・verify（ミューテーションで各コードが出る）・harmony・composer・engine（`apply_tempo`・契約検査・V15 は 4ch だけ）・registry（自動検出・登録時の検査）・各形式・timeline・midi |
 | ジャンル | `tests/profiles/` | 文法・音域・ChannelPlan・決定性・構成（例: suspense の shock 前 8 row に発音が無い、march の Oom-Pah・ロール、全 arp が上限内）。第３段階の35ジャンルは `test_stage3_genres.py` が共通に検査（20 seed × 全形式で構造検査の ERROR・WARN なし（編成を選ぶジャンルは編成ごとに 10 seed）、宣言の整合、決定性、`--tempo` で曲も編成も変わらない、区間で鳴らさないパートに音が無い、最後のサビの転調、どの編成でも同じ音符、seed で全編成が選ばれる、ループの音色を畳む宣言を弾く） |
-| 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足） |
+| 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足、`--json`・`--output-dir`）。GUI の `bridge`（本物の CLI を子プロセスで動かす。別形式の書き出しが同じ曲になる、中止、pythonw の置き換え）と画面の通し確認（画面が出せない環境では skip） |
 | 回帰 | `tests/regression/` | nostalgic を凍結した旧実装 `tests/reference/twilight_pad_v1.py`（SHA-256 固定）と 20 seed で比較。作曲（`plan()` の結果と pattern のセル配置）はバイト一致、サンプル波形は長さ・ピークが近いこと、ファイル全体は検査が通ること |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
 
-- 実行: `python -m pytest -q`（3455 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2756 件）で実プレイヤー検査を省略し、マージ前に全部流す。
+- 実行: `python -m pytest -q`（3481 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2782 件）で実プレイヤー検査を省略し、マージ前に全部流す。
 - 新しいジャンルは、全形式・複数 seed で構造検査が通ること、実プレイヤーの音割れ検査に通ること、`gm_voices` が全楽器ぶんあること、1ファイル1ジャンルであることがテストで自動的に確かめられる。
 
 ---
@@ -1337,3 +1351,39 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | racing-breaks の3系統のドラム・ベースの型、低音の量（キックの掃引・サブベースの音量）、エレピの揺れ | §6.18 の初期値（120 Hz 未満の割合だけ解析値に合わせた） | 同上 |
 | 気分ジャンルの「相性」（晴れ・夜など） | §6.16 に記録するだけ | 天気・時間帯から選ぶ機能を作るときに属性（例: `affinity`）を足す |
 | 外部ジャンルのプラグイン読込、WAV レンダラ | なし | 要件外 |
+
+---
+
+## 12. GUI（`modweaver_gui.pyw`・`mod_weaver/gui/`）
+
+CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw`（Windows はダブルクリックでコンソール窓なし）か `python -m mod_weaver.gui`。`--lang=ja` / `--lang=en` で表示言語を指定でき、省略時は OS のロケール（日本語なら ja、それ以外は en）。画面は tkinter / ttk（標準ライブラリなので NFR-1 を守れる）。
+
+### 12.1 方針
+
+- **CLI を子プロセスで呼ぶ**。GUI は `mod_weaver` のほかのモジュールを import しない。生成が長引いても画面が固まらず、中止（子プロセスを kill）もできる。
+- **CLI で選べるものは起動時に CLI から受け取る**（`--list-genres --json`。§8.8）。ジャンルの数・名前・説明・区分、形式、テンポの上下限、チャンネル数、mp3 が使えるかを GUI に書き込まない。ジャンルを足しても GUI は変えなくてよい。
+- **結果は `--json` で受け取る**。バナーの文章は読み取らない。
+- 見た目は各 OS の ttk 標準テーマに任せる（Linux だけ `clam`）。色やフォントを固定しない。
+
+### 12.2 構成
+
+| モジュール | 役割 |
+|:---|:---|
+| `gui/bridge.py` | tkinter を使わない部分。カタログ・結果のデータ型、画面の設定 → 引数（`build_args`）、入力の検査、子プロセスの起動（`Job`。別スレッドで待ち、中止できる）、関連付けアプリで開く・フォルダで表示。テストは画面なしで動く |
+| `gui/app.py` | 画面。設定は tk の変数、作った曲は一覧で持ち、言語の切替やカタログの読込後は画面を作り直す。別スレッドの結果はキュー経由で画面スレッドへ渡す |
+| `gui/texts.py` | 日英の文言表（`cli.MESSAGES` と同じ考え方）。ジャンルの文言は持たない |
+
+子プロセスは `python modweaver.py …`（再現コマンドが `python modweaver.py` になる）。`PYTHONUTF8=1` で起動し（stderr の文字化け対策）、Windows ではコンソール窓を出さない。GUI が pythonw.exe で動いているときは隣の python.exe で CLI を起動する。
+
+### 12.3 画面
+
+- 左: ジャンル一覧（区分ごとの木。検索欄は id・表示名・別名・説明の日英を対象にし、区分でも絞れる）と「ジャンルもランダムに選ぶ」（`--genre random`。候補はテンポ・チャンネル数の指定に合うジャンルだけになる。§8.3）。
+- 右上: 選んだジャンルの表示名・区分・別名・テンポの制限（全域でないジャンルだけ）・選べるチャンネル数・説明。
+- 設定: テンポ（ジャンルに任せる／固定／範囲）、チャンネル数（ジャンルが選べない数は押せない。選んでいた数が使えないジャンルに替えたら「任せる」に戻す）、シード（毎回ランダム／固定）、形式（mp3 が使えなければ注意を出す）、保存フォルダ（`--output-dir`。既定はリポジトリの `output`）。ファイル名は CLI の既定（`<genre>_<seed>.<拡張子>`）に任せる。
+- 生成（Ctrl+Enter・F5）・中止・状態表示。入力がおかしければ CLI を呼ばずに知らせる。CLI が失敗したら終了コードごとの説明と stderr の最終行を出す。
+- 「作った曲」: その回に作った曲の一覧（新しい順）。再生（OS の関連付け。関連付けが無ければ OpenMPT などの案内）、フォルダで表示、再現コマンドのコピー、**別の形式でも書き出す**（同じ seed で、指定があったテンポ・チャンネル数だけ渡す＝同じ曲）、**設定に読み込む**（seed を固定してテンポや形式だけ変える等）。選んだ曲の要約行・パス・再現コマンドを下に出す。
+- 「ログ」: 実行した引数、stderr（警告）、終了コードと所要時間。
+
+### 12.4 将来課題
+
+- 設定の保存（保存フォルダ・言語・最後の設定）、複数曲の一括生成、アプリ内での再生（標準ライブラリだけでは MOD 等を鳴らせない。mp3 に書き出して OS のプレイヤーで鳴らすのが現状の方法）。

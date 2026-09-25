@@ -4,10 +4,12 @@
 5=外部ツール（mp3 出力の ffmpeg）が無い・機能不足 / 1=想定外例外。
 ログは stderr（WARNING 以上）、バナーは stdout。
 画面表示（usage・ジャンル一覧・バナー）は既定で日本語、``-e`` / ``--english`` で英語（DESIGN.md §8.5）。
+``--json`` はジャンル一覧・生成結果を機械向けの JSON で stdout に出す（GUI などから呼ぶため。DESIGN.md §8.8）。
 """
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import random
 import re
@@ -20,7 +22,7 @@ from typing import Optional, Sequence
 
 from . import __url__, __version__, profiles
 from .profiles import registry
-from .core import formats
+from .core import formats, render
 from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, channel_choices, generate
 from .errors import (
     ChannelCountError, ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError,
@@ -52,6 +54,8 @@ MESSAGES = {
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
+        "output_dir": "--output を省略したときの出力フォルダ（既定: output。無ければ作る）",
+        "json": "ジャンル一覧（--list-genres）・生成結果を機械向けの JSON で出す",
         "epilog_head": "ジャンル一覧（{n} 種類）:",
         "epilog_tail": "各ジャンルの説明は --list-genres で表示します",
         "alias": "別名",
@@ -82,6 +86,8 @@ MESSAGES = {
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
         "version": "print the version and the GitHub repository URL, then exit",
+        "output_dir": "folder for the output file when --output is omitted (default: output; created if missing)",
+        "json": "print the genre list (--list-genres) or the generation result as machine-readable JSON",
         "epilog_head": "genres ({n}):",
         "epilog_tail": "use --list-genres to see what each genre sounds like",
         "alias": "alias",
@@ -99,12 +105,15 @@ MESSAGES = {
 }
 
 
-def default_output_path(genre_id: str, seed: int, fmt: str = formats.DEFAULT_FORMAT) -> Path:
+def default_output_path(genre_id: str, seed: int, fmt: str = formats.DEFAULT_FORMAT,
+                        directory: Optional[Path] = None) -> Path:
     """``--output`` 省略時の既定出力先: ``output/<genre>_<seed><ext>``（カレントディレクトリの ``output`` にまとめる）。
+    ``directory``（``--output-dir``）を渡せば ``output`` の代わりにそのフォルダ。
 
     拡張子は出力形式の ``OutputFormat.extension``（``mod``→``.mod``、``midi``→``.mid``）。中身の形式と
     拡張子を一致させないと、プレイヤー側がマジックバイトと拡張子の不一致で読み込みに失敗する。"""
-    return OUTPUT_DIR / f"{genre_id}_{seed}{formats.get_format(fmt).extension}"
+    folder = OUTPUT_DIR if directory is None else Path(directory)
+    return folder / f"{genre_id}_{seed}{formats.get_format(fmt).extension}"
 
 
 def _configure_logging() -> None:
@@ -141,6 +150,73 @@ def genre_listing(lang: str = "ja") -> str:
             alias = f" ({m['alias']}: {', '.join(p.aliases)})" if p.aliases else ""
             lines.append(f"  {p.id}{alias}\n      {p.description_en if lang == 'en' else p.description}")
     return "\n".join(lines)
+
+
+def ffmpeg_status() -> dict:
+    """mp3 出力に使う ffmpeg の状態（``--list-genres --json`` 用）。検査は ``render.check_ffmpeg`` と同じ。"""
+    try:
+        return {"available": True, "ffmpeg": render.check_ffmpeg(), "error": None}
+    except ExternalToolError as e:
+        return {"available": False, "ffmpeg": None, "error": str(e)}
+
+
+def catalog() -> dict:
+    """``--list-genres --json``: GUI などが起動時に読む、CLI で選べるもの一式（DESIGN.md §8.8）。
+
+    ジャンルの説明・区分名は日英の両方を入れる（呼ぶ側が表示言語を切り替えても再取得しなくて済むように）。"""
+    fmts = formats.get_formats()
+    return {
+        "version": __version__,
+        "url": __url__,
+        "default_genre": DEFAULT_GENRE,
+        "random_genre": list(RANDOM_GENRE),
+        "default_format": formats.DEFAULT_FORMAT,
+        "formats": [{"name": f.name, "extension": f.extension, "description": f.description} for f in fmts.values()],
+        "tempo": {"min": TEMPO_MIN, "max": TEMPO_MAX},
+        "channels": list(CHANNEL_CHOICES),
+        "seed_range": list(SEED_RANGE),
+        "categories": [{"id": c, "ja": MESSAGES["ja"]["categories"][c], "en": MESSAGES["en"]["categories"][c]}
+                       for c, _ in _by_category()],
+        "genres": [
+            {
+                "id": p.id,
+                "display_name": p.display_name,
+                "category": p.category,
+                "aliases": list(p.aliases),
+                "description": p.description,
+                "description_en": p.description_en,
+                "tempo_range": list(p.tempo_range),
+                "channel_choices": list(channel_choices(p)),
+            }
+            for _, ps in _by_category() for p in ps
+        ],
+        "mp3": ffmpeg_status(),
+    }
+
+
+def result_json(profile, result: Result, repro: str, random_genre: bool) -> dict:
+    """``--json`` の生成結果。バナーと同じ内容を機械向けに（DESIGN.md §8.8）。"""
+    plan = result.plan
+    requested = result.tempo_request
+    return {
+        "genre": profile.id,
+        "display_name": profile.display_name,
+        "random_genre": random_genre,
+        "format": result.fmt,
+        "seed": result.seed,
+        "bpm": plan.bpm,
+        "tempo_request": None if requested is None else str(requested),
+        "channels": len(plan.channel_plan if plan.channel_plan is not None else profile.channel_plan),
+        "channels_request": result.channels_request,
+        "summary": list(plan.summary),
+        "path": str(Path(result.path).resolve()) if result.path is not None else None,
+        "repro": f"{repro} --seed {result.seed}",
+    }
+
+
+def print_json(data: dict) -> None:
+    # ASCII だけで出す（Windows でパイプの文字コードが cp932 になっても化けない・落ちない）
+    print(json.dumps(data, ensure_ascii=True, indent=1))
 
 
 def genre_ids_by_category(lang: str = "ja", width: int = 78) -> str:
@@ -235,12 +311,15 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
     opts.add_argument("--seed", "-s", type=int, default=None, help=m["seed"])
     opts.add_argument("--format", "-f", choices=names, default=None,
                       help=m["format"].format(default=formats.DEFAULT_FORMAT, names=", ".join(names)))
-    opts.add_argument("--output", "-o", type=str, default=None, help=m["output"])
+    out = opts.add_mutually_exclusive_group()
+    out.add_argument("--output", "-o", type=str, default=None, help=m["output"])
+    out.add_argument("--output-dir", type=str, default=None, metavar="DIR", help=m["output_dir"])
     opts.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
                       help=m["tempo"].format(lo=TEMPO_MIN, hi=TEMPO_MAX))
     opts.add_argument("--channels", "-c", type=int, choices=CHANNEL_CHOICES, default=None, metavar="N",
                       help=m["channels"].format(choices="/".join(map(str, CHANNEL_CHOICES))))
     opts.add_argument("--list-genres", action="store_true", help=m["list_genres"])
+    opts.add_argument("--json", action="store_true", help=m["json"])
     opts.add_argument("--english", "-e", action="store_true", help=m["english"])
     opts.add_argument("--version", "-v", action="version", version=f"ModWeaver {__version__}\n{__url__}",
                       help=m["version"])
@@ -304,7 +383,10 @@ def main(
         lang = "en"                   # -es 5 のようにまとめて書いた場合
 
     if args.list_genres:
-        print(genre_listing(lang))
+        if args.json:
+            print_json(catalog())
+        else:
+            print(genre_listing(lang))
         return 0
 
     random_genre = args.genre in RANDOM_GENRE
@@ -315,7 +397,7 @@ def main(
         if args.output:
             out = args.output
         else:
-            out = default_output_path(profile.id, seed, fmt)
+            out = default_output_path(profile.id, seed, fmt, args.output_dir)
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
@@ -345,7 +427,10 @@ def main(
         repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
     if args.channels is not None:
         repro += f" --channels {args.channels}"   # 指定しなければ seed で同じ編成になる
-    print_banner(profile, result, repro, random_genre, lang)
+    if args.json:
+        print_json(result_json(profile, result, repro, random_genre))
+    else:
+        print_banner(profile, result, repro, random_genre, lang)
     return 0
 
 

@@ -29,12 +29,15 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
   The default is Amiga ProTracker 4-channel MOD (`M.K.`). 6- and 8-channel songs (e.g. `pop` in its standard 6 channels, 8-channel `orchestral`) become FastTracker-style multichannel MOD (`6CHN` / `8CHN`). You can also choose `.xm` / `.s3m` / `.it` (tracker formats), General MIDI `.mid` (playable in DAWs and GM synths) and `.mp3` (rendered with ffmpeg). Automated tests play every tracker format with OpenMPT's playback engine (libopenmpt) and check that it sounds at the same pitch and length as the MOD.
 - **Tempo control (`--tempo`)**:
   Fix the BPM with `--tempo 120`, or give a range such as `--tempo 80-100` to pick one at random within it. With the same seed you get "the same song" at a different tempo.
+- **GUI**:
+  Pick a genre and settings in a window to generate, play and export songs in other formats without typing commands ([4. Using the GUI](#4-using-the-gui)).
 
 ---
 
 ## Requirements
 
 - **Python 3.10 or later** (no extra `pip install` needed)
+- **Only for the GUI: tkinter** (part of Python's standard library and included in the python.org installers for Windows and macOS; on Linux it may be a separate package, e.g. `sudo apt install python3-tk` on Debian/Ubuntu, or `brew install python-tk` for Homebrew's Python)
 - **Only for `--format mp3`: ffmpeg** (built with **libopenmpt** and **libmp3lame**)
   - The MP3 is made by writing the song as `.xm`, playing it with ffmpeg's built-in libopenmpt (OpenMPT's playback engine) and encoding it to MP3. ModWeaver itself has no audio playback engine.
   - Put `ffmpeg` on your PATH, or set the environment variable `MODWEAVER_FFMPEG` to the path of the executable.
@@ -48,7 +51,7 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
 
 ### 1. Running
 
-Running `python modweaver.py` with no arguments prints the usage (the same as `--help`) and exits. To make a song, give options as shown below.
+Running `python modweaver.py` with no arguments prints the usage (the same as `--help`) and exits. To make a song, give options as shown below. To use a window instead, see [4. Using the GUI](#4-using-the-gui).
 
 **The usage, genre list and results are shown in Japanese by default. Add `-e` (`--english`) to get them in English**, as the examples below do.
 
@@ -271,7 +274,7 @@ You can also check the current list with `python modweaver.py -e --list-genres` 
 | Code | Meaning |
 |:---|:---|
 | `0` | Success (including running with no arguments, `--help`, `--list-genres` and `--version`) |
-| `2` | Argument error, unknown genre, or a tempo the genre cannot play (including `--genre random` when no genre supports the tempo) |
+| `2` | Argument error, unknown genre, or a tempo or channel count the genre cannot use (including `--genre random` when no genre supports it) |
 | `3` | Generation or structure-check error |
 | `4` | Output error (e.g. the file cannot be written) |
 | `5` | `--format mp3` and ffmpeg is not found, or lacks libopenmpt / libmp3lame |
@@ -295,7 +298,7 @@ The generated `.mod` / `.xm` / `.s3m` / `.it` files play right away in the track
 
 ### 4. Using the GUI
 
-You can also use ModWeaver from a window instead of the command line (nothing extra to install; it uses Python's built-in tkinter).
+You can also use ModWeaver from a window instead of the command line (it uses Python's built-in tkinter; if tkinter is missing on Linux, see [Requirements](#requirements)).
 
 ```bash
 python modweaver_gui.pyw             # start the GUI
@@ -305,7 +308,7 @@ python modweaver_gui.pyw --lang=ja   # Japanese (the default follows the OS lang
 
 On Windows, **double-click `modweaver_gui.bat`** (no console window). It works even when no application is associated with `.pyw` files (e.g. Python installed without the `py` launcher). If `pythonw` is not on PATH, set the `PYW` environment variable to the Python to use (e.g. `set PYW=py -3w`).
 
-- Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5).
+- Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5). Picking a genre fills the tempo fields with its typical tempo (Fixed) and its usual range (Range); channel counts the genre cannot use are disabled.
 - From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
 - The genre list and available formats are read from the CLI (`--list-genres --json`) at startup. The GUI runs `modweaver.py` behind the scenes, so it can do exactly what the CLI can.
 

@@ -87,7 +87,7 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 | `modweaver.py` / `mod_weaver/__main__.py` | 起動スクリプト（`cli.main` へ委譲）。`python modweaver.py` と `python -m mod_weaver` は同じ |
 | `mod_weaver/__init__.py` | `__version__`（1.1.0）・`__url__` |
 | `cli.py` | 引数解析・表示言語・バナー・JSON 出力・終了コード（§8） |
-| `modweaver_gui.pyw` / `gui/` | GUI（§12）。`bridge.py`（CLI の呼び出し。tkinter 不使用）・`app.py`（tkinter の画面）・`texts.py`（日英の文言） |
+| `modweaver_gui.pyw`・`modweaver_gui.bat` / `gui/` | GUI（§12）。`bridge.py`（CLI の呼び出し。tkinter 不使用）・`app.py`（tkinter の画面）・`texts.py`（日英の文言） |
 | `engine.py` | 作曲の実行・テンポ・検査・書込（§5.3〜5.5） |
 | `errors.py` | 例外階層（§8.7） |
 | `profiles/base.py` | `GenreProfile` 基底（§5.1） |
@@ -1356,7 +1356,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 
 ## 12. GUI（`modweaver_gui.pyw`・`mod_weaver/gui/`）
 
-CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw`（Windows はダブルクリックでコンソール窓なし）か `python -m mod_weaver.gui`。`--lang=ja` / `--lang=en` で表示言語を指定でき、省略時は OS のロケール（日本語なら ja、それ以外は en）。画面は tkinter / ttk（標準ライブラリなので NFR-1 を守れる）。
+CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw` か `python -m mod_weaver.gui`。Windows では `modweaver_gui.bat` のダブルクリック（`start "" pythonw modweaver_gui.pyw`。`.pyw` にアプリが関連付けられていない環境でも動く。Python は環境変数 `PYW` で変えられる。cmd は複数バイトの行を読み違えるのでバッチは ASCII だけで書く）。`--lang=ja` / `--lang=en` で表示言語を指定でき、省略時は OS のロケール（日本語なら ja、それ以外は en）。画面は tkinter / ttk（標準ライブラリなので NFR-1 を守れる）。
 
 ### 12.1 方針
 

@@ -296,10 +296,12 @@ https://github.com/himayah/ModWeaver
 コマンドを打たずに画面から使うこともできます（追加のインストールは不要。Python 標準の tkinter を使います）。
 
 ```bash
-python modweaver_gui.pyw          # Windows はファイルのダブルクリックでも起動できます
+python modweaver_gui.pyw          # 起動
 python -m mod_weaver.gui          # 同じもの
 python modweaver_gui.pyw --lang=en   # 英語で表示（既定は OS の言語。メニューの「表示」でも切り替え可）
 ```
+
+Windows では **`modweaver_gui.bat` をダブルクリック**すると起動します（コンソール窓なし）。`.pyw` にアプリが関連付けられていない環境（Python を `py` ランチャーなしで入れた場合など）でも動きます。`pythonw` が PATH に無ければ、環境変数 `PYW` に起動する Python を指定してください（例: `set PYW=py -3w`）。
 
 - 左の一覧からジャンルを選び（検索・区分での絞り込み可。「ジャンルもランダムに選ぶ」も可）、テンポ・チャンネル数・シード・出力形式・保存フォルダを決めて「生成」（Ctrl+Enter / F5）。
 - 「作った曲」の一覧から、再生（OS に登録されたアプリで開く）、フォルダで表示、再現コマンドのコピー、**別の形式でも書き出す**（同じ曲を MP3 や MIDI などでも作る）、**設定に読み込む**（シードを固定してテンポや形式だけ変える）ができます。
@@ -329,6 +331,7 @@ python modweaver_gui.pyw --lang=en   # 英語で表示（既定は OS の言語�
 .
 ├── modweaver.py       # トップレベル起動スクリプト（引数なしなら使い方を表示）
 ├── modweaver_gui.pyw  # GUI の起動スクリプト（`python -m mod_weaver.gui` と同じ）
+├── modweaver_gui.bat  # Windows で GUI をダブルクリックで起動するバッチ（.pyw の関連付けが無くても可）
 ├── listen_samples.bat # 試聴用の曲をまとめて作るバッチ（Windows。DESIGN.md §11 の試聴項目ごとに3例、output\listen\ へ）
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・

@@ -400,3 +400,72 @@ def test_random_genre_with_channels_excludes_genres_that_cannot_use_it(tmp_path,
     assert code == 0 and err == "" and "チャンネル  : 8 (指定)" in stdout
     picked = seen[-1]
     assert "pop" in picked and "orchestral" in picked and "calm" not in picked and "nostalgic" not in picked
+
+
+# --- --json / --output-dir（DESIGN.md §8.8。GUI から呼ぶため） ---
+
+def test_list_genres_json_describes_everything_the_cli_accepts(capsys):
+    import json
+
+    from mod_weaver import __version__, profiles
+    from mod_weaver.core import formats
+    from mod_weaver.engine import channel_choices
+
+    code, out, err = run_cli(["--list-genres", "--json"], capsys)
+    assert code == 0 and err == ""
+    assert out.isascii()                                    # パイプの文字コードに左右されない
+    data = json.loads(out)
+    assert data["version"] == __version__ and data["default_genre"] == cli.DEFAULT_GENRE
+    assert data["random_genre"] == list(cli.RANDOM_GENRE)
+    assert [f["name"] for f in data["formats"]] == list(formats.format_names())
+    assert data["tempo"] == {"min": 32, "max": 255} and data["channels"] == [4, 6, 8]
+    assert [c["id"] for c in data["categories"]] == ["mood", "genre", "style"]
+    assert data["categories"][0] == {"id": "mood", "ja": "気分", "en": "Mood"}
+    ids = [g["id"] for g in data["genres"]]
+    assert sorted(ids) == sorted(p.id for p in profiles.list_profiles())
+    calm = next(g for g in data["genres"] if g["id"] == "calm")
+    p = profiles.get_profile("calm")
+    assert calm["description"] == p.description and calm["description_en"] == p.description_en
+    assert calm["channel_choices"] == list(channel_choices(p)) and calm["tempo_range"] == list(p.tempo_range)
+    assert set(data["mp3"]) == {"available", "ffmpeg", "error"}
+
+
+def test_list_genres_json_reports_missing_ffmpeg(tmp_path, capsys, monkeypatch):
+    import json
+    monkeypatch.setenv("MODWEAVER_FFMPEG", str(tmp_path / "no-such-ffmpeg"))
+    code, out, _ = run_cli(["--list-genres", "--json"], capsys)
+    mp3 = json.loads(out)["mp3"]
+    assert code == 0 and mp3["available"] is False and mp3["ffmpeg"] is None and "ffmpeg" in mp3["error"]
+
+
+def test_generation_json_result(tmp_path, capsys):
+    import json
+    out = tmp_path / "p.xm"
+    code, stdout, err = run_cli(["-g", "pop", "-s", "5", "-f", "xm", "-t", "100-120", "-c", "6", "-o", str(out),
+                                 "--json"], capsys)
+    assert code == 0 and err == ""
+    data = json.loads(stdout)
+    assert data["genre"] == "pop" and data["random_genre"] is False and data["format"] == "xm"
+    assert data["seed"] == 5 and 100 <= data["bpm"] <= 120 and data["tempo_request"] == "100-120"
+    assert data["channels"] == 6 and data["channels_request"] == 6
+    assert data["path"] == str(out.resolve()) and out.exists()
+    assert data["summary"] and all(isinstance(s, str) for s in data["summary"])
+    assert data["repro"] == (f"python -m mod_weaver.cli --genre pop --format xm --tempo {data['bpm']} "
+                             "--channels 6 --seed 5")
+
+
+def test_generation_json_error_keeps_exit_code_and_stderr(tmp_path, capsys):
+    code, out, err = run_cli(["-g", "calm", "-c", "8", "--json", "-o", str(tmp_path / "x.mod")], capsys)
+    assert code == 2 and out == "" and "cannot use 8 channels" in err
+
+
+def test_output_dir_replaces_default_folder(tmp_path, capsys, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    code, *_ = run_cli(["-s", "1", "-f", "it", "--output-dir", "songs/new"], capsys)
+    assert code == 0 and (tmp_path / "songs" / "new" / "nostalgic_1.it").exists()
+    assert not (tmp_path / "output").exists()
+
+
+def test_output_and_output_dir_are_exclusive(tmp_path, capsys):
+    code, _, err = run_cli(["-o", str(tmp_path / "a.mod"), "--output-dir", str(tmp_path)], capsys)
+    assert code == 2 and "not allowed with" in err

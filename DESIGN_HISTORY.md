@@ -488,6 +488,7 @@ CLI でできることを画面から使いたい（Windows 11 / macOS / Linux�
 - Windows の pythonw.exe（.pyw のダブルクリック）で動いているときは、隣の python.exe で CLI を起動する（CREATE_NO_WINDOW でコンソール窓は出さない）。Windows の Python 3.12 で、pythonw からの起動と mp3 の書き出しを確かめた。
 - 「別の形式でも書き出す」は再現コマンドと同じく、指定があったテンポ・チャンネル数だけ渡す。指定しなかったものは seed で同じになる。
 - ttk の indeterminate の進捗バーは、止めた後も塊が残る。止めたら determinate の 0 に戻す。
+- ユーザーの Windows 11 では `.pyw` のダブルクリックで「アプリを選択」が出た。Python を `py` ランチャーなしで入れると `.pyw` の関連付けができない。関連付けに頼らない `modweaver_gui.bat`（`start "" pythonw …`）を足した。バッチに UTF-8 の日本語コメントを書くと、`chcp 65001` の後で cmd が行を読み違えてエラーを出した（`listen_samples.bat` は今のところ動いているが同じ危険がある）ので、このバッチは ASCII だけにした。
 
 ---
 

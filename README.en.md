@@ -298,10 +298,12 @@ The generated `.mod` / `.xm` / `.s3m` / `.it` files play right away in the track
 You can also use ModWeaver from a window instead of the command line (nothing extra to install; it uses Python's built-in tkinter).
 
 ```bash
-python modweaver_gui.pyw             # on Windows you can also double-click the file
+python modweaver_gui.pyw             # start the GUI
 python -m mod_weaver.gui             # the same
 python modweaver_gui.pyw --lang=ja   # Japanese (the default follows the OS language; also switchable from the View menu)
 ```
+
+On Windows, **double-click `modweaver_gui.bat`** (no console window). It works even when no application is associated with `.pyw` files (e.g. Python installed without the `py` launcher). If `pythonw` is not on PATH, set the `PYW` environment variable to the Python to use (e.g. `set PYW=py -3w`).
 
 - Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5).
 - From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
@@ -332,6 +334,7 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 .
 ├── modweaver.py       # Top-level launcher (prints the usage when run with no arguments)
 ├── modweaver_gui.pyw  # GUI launcher (same as `python -m mod_weaver.gui`)
+├── modweaver_gui.bat  # Windows: double-click to start the GUI (works without a .pyw file association)
 ├── listen_samples.bat # Windows batch that renders listening samples (3 per item of DESIGN.md §11) into output\listen\
 ├── mod_weaver/        # The package. Also runnable as `python -m mod_weaver`
 │   ├── core/          # Stable layer: data model, DSP, sample synthesis (Patch system), harmony, groove (EXT-1),

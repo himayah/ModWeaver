@@ -1,7 +1,7 @@
 """ModWeaver の GUI の起動スクリプト。``python -m mod_weaver.gui`` と同機能。
 
-Windows では拡張子 .pyw のダブルクリックでコンソール窓なしに起動する（pythonw）。
-ほかの OS では ``python3 modweaver_gui.pyw``。``--lang=en`` / ``--lang=ja`` で表示言語を指定できる。
+Windows では ``modweaver_gui.bat`` のダブルクリックでコンソール窓なしに起動する（pythonw。
+.pyw にアプリが関連付けられていれば .pyw のダブルクリックでも可）。ほかの OS では ``python3 modweaver_gui.pyw``。``--lang=en`` / ``--lang=ja`` で表示言語を指定できる。
 """
 import sys
 

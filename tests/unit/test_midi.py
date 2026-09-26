@@ -141,3 +141,13 @@ def test_sounding_hz_matches_sample_data():
                 x = raw[len(raw) // 20:]
             f = yin(x, dsp.CLOCK / PERIODS[spec.rate_note])
             assert abs(1200 * math.log2(f / spec.sounding_hz)) < 50, (cls.id, key, spec.sounding_hz, f)
+
+
+@pytest.mark.parametrize("genre", ["calm", "orchestral"])
+def test_channel_volume_is_full_and_loudest_note_is_velocity_127(genre):
+    """音量の底上げ（DESIGN.md §7.9）: 全チャンネルの CC7 が 127、最も大きい音が velocity 127。"""
+    *_, mf = render(genre)
+    channels = {m.channel for tr in mf.tracks for m in tr if m.type == "note_on"}
+    cc7 = {m.channel: m.value for tr in mf.tracks for m in tr if m.type == "control_change" and m.control == 7}
+    assert channels <= set(cc7) and set(cc7.values()) == {127}
+    assert max(m.velocity for tr in mf.tracks for m in tr if m.type == "note_on") == 127

@@ -11,10 +11,11 @@
 """
 from __future__ import annotations
 
+import copy
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from ..errors import (
     CellConflictError,
@@ -219,6 +220,12 @@ class CellGrid:
     def get(self, row: int, ch: int) -> Cell:
         self._check_pos(row, ch)
         return self._cells[row][ch]
+
+    def mapped(self, fn: Callable[[Cell], Cell]) -> "CellGrid":
+        """全セルに ``fn`` を適用した複製（配置を変えない変換用。音量の一律変更など）。"""
+        new = copy.copy(self)
+        new._cells = [[fn(c) for c in row] for row in self._cells]
+        return new
 
     def serialize(self) -> bytes:
         return b"".join(c.serialize() for r in self._cells for c in r)

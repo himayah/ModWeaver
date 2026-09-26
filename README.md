@@ -340,11 +340,12 @@ Windows では **`modweaver_gui.bat` をダブルクリック**すると起動�
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
 │   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
 │   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /
-│   │                   #        timeline / render(mp3)）
+│   │                   #        timeline / render(mp3)）・出力音量の底上げ（level）
 │   ├── profiles/      # ジャンルの仕組み: GenreProfile 基底・登録簿（genres/ の自動検出）・ジャンル共通の補助
-│   │                   #        （band_common: 第３段階の35ジャンルが共有する骨格 BandProfile）
+│   │                   #        （band_common: 第３段階の35ジャンルが共有する骨格 BandProfile）・ジャンル別の音量の測定値（levels）
 │   ├── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。51ジャンル）
 │   └── gui/           # GUI（tkinter）。CLI を子プロセスとして呼ぶ
+├── tools/             # 開発用: calibrate_levels.py（ジャンル別の最大振幅を ffmpeg で測り直す。DESIGN.md §7.9）
 ├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md          # 設計書（現在の仕様）
 ├── DESIGN_HISTORY.md  # 設計の経緯（決定の理由・訂正・見送ったもの）

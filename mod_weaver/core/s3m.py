@@ -36,7 +36,7 @@ EMPTY_NOTE = 255
 ORDER_END = 255
 CHANNEL_UNUSED = 255
 PAN_TABLE_ENABLED = 0xFC
-MASTER_VOLUME = 0x80 | 48  # bit7=ステレオ、下位7bit=マスター音量（ST3 の既定 48）
+STEREO = 0x80              # マスター音量の bit7。下位7bit は WriteOptions.mix_volume（ST3 の既定 48）
 
 
 def note_byte(t: int) -> int:
@@ -144,7 +144,7 @@ def serialize_s3m(song: Song, opts) -> bytes:
     out += bytes([0x1A, 16, 0, 0])
     out += struct.pack("<HHHHHH", len(orders), len(song.samples), n_patterns, 0, CWT_V, FFI_UNSIGNED)
     out += b"SCRM"
-    out += bytes([64, 6, opts.initial_bpm, MASTER_VOLUME, 16, PAN_TABLE_ENABLED])
+    out += bytes([64, 6, opts.initial_bpm, STEREO | opts.mix_volume, 16, PAN_TABLE_ENABLED])
     out += bytes(8) + struct.pack("<H", 0)
     out += _channel_settings(pans)
     assert len(out) == HEADER_SIZE

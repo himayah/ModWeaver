@@ -187,7 +187,7 @@ def serialize_midi(song: Song, opts) -> bytes:
             conductor.append((start * TICK_SCALE, CTRL, _meta(0x58, bytes([num, den.bit_length() - 1, 24, 8]))))
             prev_sig = sig
 
-    # ---- 楽器チャンネルの初期設定（音色・ベンドレンジ・finetune・パン） ----
+    # ---- 楽器チャンネルの初期設定（音量・音色・ベンドレンジ・finetune・パン） ----
     first_channel: dict[int, int] = {}
     for ev in tl.events:
         if isinstance(ev, tl_mod.NoteOn):
@@ -201,6 +201,7 @@ def serialize_midi(song: Song, opts) -> bytes:
         name = (song.instrument_names[idx - 1] if song.instrument_names else spec.name).encode("ascii")
         ev = tracks[ch]
         ev.append((0, CTRL, _meta(0x03, b"Drums" if voice.is_drum else name)))
+        ev.append((0, CTRL, _cc(ch, 7, 127)))     # チャンネル音量は最大（GM の既定 100 は約 −4 dB）
         if voice.is_drum:
             ev.append((0, CTRL, _cc(ch, 10, 64)))
             continue

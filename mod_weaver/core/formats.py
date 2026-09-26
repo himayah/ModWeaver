@@ -31,6 +31,7 @@ class WriteOptions:
     gm_voices: Mapping[str, object] = field(default_factory=dict)   # 楽器名 → midi.GmVoice（MIDI のみ使用）
     rows_per_measure: int = 16                  # MIDI の拍子（可変拍子は measure_rows で上書き）
     measure_rows: tuple[tuple[int, ...], ...] = ()   # pattern ごとの小節長（row）列。空なら rows_per_measure 固定
+    mix_volume: int = 48                        # S3M マスター音量・IT mix volume（core/level.py が決める）
 
 
 @dataclass(frozen=True)

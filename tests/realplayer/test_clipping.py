@@ -9,12 +9,13 @@ import dataclasses
 import pytest
 
 from mod_weaver import engine, profiles
+from mod_weaver.core import level
 from tests.realplayer import peak, requires_openmpt
 
 pytestmark = requires_openmpt
 
 TRACKER_FORMATS = ["mod", "xm", "s3m", "it"]
-SEEDS = [1, 11]
+SEEDS = [1, 11, 7777]   # 7777 は音量の測定（tools/calibrate_levels.py）に使っていない seed
 CLIP = 1.0          # float 出力の 1.0 = 0 dBFS。これ以上は整数 PCM・MP3 化で割れる
 
 
@@ -26,6 +27,8 @@ def test_real_playback_does_not_clip(genre, fmt, seed):
     song, plan = engine.compose_song(p, seed)
     pk = peak(engine.serialize(p, song, plan, fmt), f".{fmt}")
     assert 0.05 < pk < CLIP, f"{genre} {fmt} seed {seed}: peak {pk:.3f}"
+    if fmt in ("s3m", "it"):     # 音量の底上げ（DESIGN.md §7.9）: ヘッダの音量で目標の近くまで持ち上がる
+        assert pk > 10 ** ((level.TARGET_PEAK_DB - 6) / 20), f"{genre} {fmt} seed {seed}: too quiet {pk:.3f}"
 
 
 def test_multichannel_genres_generate_without_v15_warnings(tmp_path):

@@ -343,11 +343,12 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 ├── mod_weaver/        # The package. Also runnable as `python -m mod_weaver`
 │   ├── core/          # Stable layer: data model, DSP, sample synthesis (Patch system), harmony, groove (EXT-1),
 │   │                   #   variable measures (EXT-2), writer/verify, output formats (formats / s3m / it / midi /
-│   │                   #   timeline / render (mp3))
+│   │                   #   timeline / render (mp3)), output loudness boost (level)
 │   ├── profiles/      # Genre machinery: GenreProfile base, registry (auto-discovers genres/), shared helpers
-│   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres)
+│   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres), measured per-genre peaks (levels)
 │   ├── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 51 genres)
 │   └── gui/           # GUI (tkinter). Runs the CLI as a child process
+├── tools/             # For development: calibrate_levels.py (re-measures per-genre peaks with ffmpeg; DESIGN.md §7.9)
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md          # Design document (the current specification; Japanese)
 ├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)

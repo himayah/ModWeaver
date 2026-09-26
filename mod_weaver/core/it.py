@@ -36,7 +36,6 @@ ORDER_END = 255
 FLAG_STEREO = 0x01
 FLAG_OLD_EFFECTS = 0x10
 GLOBAL_VOLUME = 128
-MIX_VOLUME = 48
 CHANNEL_DISABLED = 0x80
 SAMPLE_FLAG_HAS_DATA = 0x01
 SAMPLE_FLAG_LOOP = 0x10
@@ -131,7 +130,7 @@ def serialize_it(song: Song, opts) -> bytes:
     out += bytes([4, 16])                                  # row highlight（拍・小節の目安表示）
     out += struct.pack("<HHHHHHHH", len(orders), 0, len(song.samples), n_patterns, CWT_V, CMWT,
                        FLAG_STEREO | FLAG_OLD_EFFECTS, 0)
-    out += bytes([GLOBAL_VOLUME, MIX_VOLUME, 6, opts.initial_bpm, 128, 0])
+    out += bytes([GLOBAL_VOLUME, opts.mix_volume, 6, opts.initial_bpm, 128, 0])
     out += struct.pack("<HII", 0, 0, 0)                     # message length/offset, reserved
     pans = [pan64(p) for p in opts.channel_pans]
     out += bytes(pans + [32 | CHANNEL_DISABLED] * (64 - len(pans)))

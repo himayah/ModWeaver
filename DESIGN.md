@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`・GUI `modweaver_gui.pyw`） |
 | 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) |
-| 最終更新 | 2026-09-25（GUI と CLI の `--json`・`--output-dir` を追加。2026-09-24 に、09-21〜24 に書かれた設計書7本をこの2本に統合。統合前の原文は git 履歴で参照できる） |
+| 最終更新 | 2026-09-26（出力音量の底上げ §7.8・§7.9。2026-09-25 に GUI と CLI の `--json`・`--output-dir` を追加。2026-09-24 に、09-21〜24 に書かれた設計書7本をこの2本に統合。統合前の原文は git 履歴で参照できる） |
 
 ---
 
@@ -113,7 +113,8 @@ cli.py ──▶ engine.py ──▶ profiles/（仕組み: 基底・登録簿�
 | `core/effects.py` | MOD エフェクト → S3M/IT エフェクトの変換表（§7.6） |
 | `core/timeline.py` | Song を tick 単位で解釈したイベント列と曲長（§7.7） |
 | `core/midi.py` | SMF シリアライザ・`GmVoice`・検査（§7.7） |
-| `core/render.py` | ffmpeg による MP3 化（§7.8） |
+| `core/render.py` | ffmpeg による MP3 化と音量調整（§7.8） |
+| `core/level.py`・`profiles/levels.py` | 出力音量の底上げ（音量の値・S3M/IT のヘッダ音量）と、その根拠のジャンル別の測定値（§7.9） |
 
 ### 2.3 生成の流れ
 
@@ -129,7 +130,7 @@ cli.main
      │   ├─ post_processors（スウィング・サイドチェイン等）
      │   └─ apply_tempo（tempo_policy="engine" のとき）
      ├─ formats.check_channels（形式のチャンネル上限。曲の物理チャンネル数で）
-     ├─ serialize（形式ごと）→ verify（形式ごと。ERROR なら VerificationError、ファイルは書かない）
+     ├─ leveled（形式ごとの音量の底上げ。§7.9）→ serialize（形式ごと）→ verify（形式ごと。ERROR なら VerificationError、ファイルは書かない）
      └─ write_file（一時ファイル → os.replace の原子的書込）
 ```
 
@@ -406,7 +407,7 @@ class Song:
 - import に失敗したファイル、何も登録しないファイルは WARNING を出して無視する（1ファイルの不具合で他のジャンルまで使えなくしない）。検出前から import 済みのモジュールは登録の有無を検査しない（ジャンルモジュールを直接 import すると、その途中で検出が走り、登録前のモジュールが返るため）。
 - `register_profile` の検査（違反は `ValueError`）: `id` が空でない、`description`・`description_en` がどちらも空でない1行、`id`・別名が予約語（`random`・`r`）でない、id・別名の重複が無い。
 - **1ファイル＝1ジャンル**（テストで検査）。ジャンル以外の補助モジュールは `mod_weaver/profiles/` に置く。
-- 新しいジャンルに必要なもの: `@register_profile` 付きの `GenreProfile` サブクラス、日本語・英語の1行説明、全楽器の `gm_voices`、そして全形式で実プレイヤーの音割れ検査に通ること（§9.2）。
+- 新しいジャンルに必要なもの: `@register_profile` 付きの `GenreProfile` サブクラス、日本語・英語の1行説明、全楽器の `gm_voices`、`tools/calibrate_levels.py <ジャンル>` で測った最大振幅（`profiles/levels.py`。無いと音量を底上げせず、テストが失敗する。§7.9）、そして全形式で実プレイヤーの音割れ検査に通ること（§9.2）。
 - `get_profile(name)`（別名も可。未登録は `ProfileNotFoundError`）、`list_profiles()`（id 順）、`resolve_id(name)`。
 
 ---
@@ -1109,7 +1110,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 | `mp3` | `.mp3` | XM に準ずる（1..32） | ― | ― | なし（ffmpeg の出力） |
 
 - `OutputFormat(name, extension, max_channels, serialize, verify, description)`。全シリアライザは `(Song, WriteOptions) -> bytes`。
-- `WriteOptions(channel_pans, initial_bpm, instrument_names, gm_voices, rows_per_measure, measure_rows)` はジャンル由来の形式中立な情報（Song 本体には持たせない）。
+- `WriteOptions(channel_pans, initial_bpm, instrument_names, gm_voices, rows_per_measure, measure_rows, mix_volume)` はジャンル由来の形式中立な情報（Song 本体には持たせない）。
 - **チャンネルパン**（0=左…255=右）: ①ジャンルの `channel_pans` 宣言 ②全サンプルが既定パン（128）なら Amiga 風 L R R L を 64/192 に緩めて繰り返す（0/255 の完全分離は耳障り）③明示パンのあるサンプルがあれば、各チャンネルで再生順に最初に鳴るサンプルの pan。
 - エフェクトは次のものだけを使う。変換表に無いエフェクトは各 writer が例外で止める（新しいジャンルが未知のエフェクトを使っても黙って化けない）: `0xy` アルペジオ、`1xx`/`2xx` ポルタメント、`3xx` トーンポルタメント、`4xy` ビブラート、`9xx` サンプルオフセット、`Cxx` 音量（`Cell.vol`）、`D00` パターンブレイク、`E1x`/`E2x` 微小ポルタメント、`E9x` リトリガ、`EDx` ノートディレイ、`ECx` ノートカット、`Fxx`（<0x20 Speed、≥0x20 BPM）。
 
@@ -1128,14 +1129,14 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 ### 7.4 S3M（`core/s3m.py`）
 
-- `SCRM`、`Cwt/v=0x1320`、`ffi=2`（unsigned サンプル）、初期 speed 6・tempo=曲の BPM、ステレオ。チャンネル設定はパン ≤128 を左（L1–L8）、それ以外を右（R1–R8）に割り当て、チャンネルパン表（`0x20 | pan>>4`、`dp=0xFC`）も書く。**上限 16 チャンネル**。
+- `SCRM`、`Cwt/v=0x1320`、`ffi=2`（unsigned サンプル）、初期 speed 6・tempo=曲の BPM、ステレオ、マスター音量は `WriteOptions.mix_volume`（既定 48、§7.9）。チャンネル設定はパン ≤128 を左（L1–L8）、それ以外を右（R1–R8）に割り当て、チャンネルパン表（`0x20 | pan>>4`、`dp=0xFC`）も書く。**上限 16 チャンネル**。
 - サンプルは 8-bit unsigned（signed ^ 0x80）、`C2Spd = round(8363 × 2^(finetune/96))`。
 - note = `((t // 12) + 3) << 4 | (t % 12)`（t=12＝period 428＝ST3 の C-4）。音量は volume column（S3M に音量エフェクトは無い）。パターンは 64 row・パック形式・16 byte 境界のパラポインタ。
 
 ### 7.5 IT（`core/it.py`）
 
 - サンプルモード（インストゥルメント不使用）。1 楽器スロット＝1 IT sample。エンベロープ・NNA は使わない。
-- `Cmwt=0x0214`、stereo、**linear slides=0**（Amiga スライドで MOD と同じ）、**Old Effects=1**（ビブラート深さが MOD と一致。0 だと半分になる）、初期 speed 6・tempo=曲の BPM、global volume 128、mix volume 48。
+- `Cmwt=0x0214`、stereo、**linear slides=0**（Amiga スライドで MOD と同じ）、**Old Effects=1**（ビブラート深さが MOD と一致。0 だと半分になる）、初期 speed 6・tempo=曲の BPM、global volume 128、mix volume は `WriteOptions.mix_volume`（既定 48、§7.9）。
 - チャンネルパン（0–64、未使用は +128 で無効）、チャンネル音量 64。サンプルは 8-bit signed・非圧縮、`C5Speed = round(8363 × 2^(finetune/96))`、既定パンは明示パンのあるサンプルだけ。
 - note = `t + 48`（t=12 → C-5）。音量は volume column、パターンはチャンネルマスク方式のパック形式。
 
@@ -1161,7 +1162,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 - `timeline`: Song を tick 単位で解釈し、order を辿って `Fxx`・`D00`・`EDx`・`E9x`・`0xy` を処理したイベント列（tick・絶対秒・チャンネル・発音/音量/停止）と曲長を返す。MIDI の生成と曲長の検査で使う。
 - **SMF format 1、PPQ=96**（1 tracker tick = 4 MIDI tick、4分音符 = 24 tracker tick）。tempo meta = 60,000,000 / BPM。Speed の変化（スウィング）や `EDx` は tick 数の違いとして厳密に再現され、テンポカーブは tempo meta の列になる。
-- Track 0: 曲名・テンポ・拍子（可変拍子は measure ごと）。以降は**楽器ごとに1トラック**。ドラム楽器は MIDI ch 10、旋律楽器は sample 番号順に ch 1–9・11–16。足りなければ同じ GM program の楽器を相乗りさせ、それでも足りなければエラー。
+- Track 0: 曲名・テンポ・拍子（可変拍子は measure ごと）。各楽器チャンネルの頭で CC7（チャンネル音量）を 127 にする（GM の既定 100 は約 −4 dB）。以降は**楽器ごとに1トラック**。ドラム楽器は MIDI ch 10、旋律楽器は sample 番号順に ch 1–9・11–16。足りなければ同じ GM program の楽器を相乗りさせ、それでも足りなければエラー。
 - **GM 音色**: `GmVoice(program=)` か `GmVoice(drum_note=)` を各ジャンルが楽器ごとに `gm_voices` で宣言する。楽器名からの推測はしない（全ジャンルの全楽器に宣言があることをテストで保証）。
 - 変換規則:
 
@@ -1169,7 +1170,7 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
   |:---|:---|:---|
   | 音高 | `sounding_hz` × period 比から求めた実音（§3.1） | 厳密 |
   | 半音未満のずれ・finetune（maqam の微分音含む） | 楽器チャンネル単位の固定ピッチベンド（±2半音レンジ） | 厳密 |
-  | 発音時の音量 | velocity = round(vol/64×127)（最小 1） | 厳密 |
+  | 発音時の音量 | velocity = round(vol/64×127)（最小 1）。vol は §7.9 で最大が 64 になるまで持ち上げてある | 厳密 |
   | 発音中の音量変化（サイドチェイン等） | CC11（その楽器を鳴らすトラッカーチャンネルが1つのとき） | 近似 |
   | 音の終わり | 次の発音／vol 0／`ECx`／ワンショットの自然減衰長／曲末のうち最も早いもの | 厳密 |
   | `EDx`・Speed 変化・`E9x`・`0xy` | tick 位置・再発音・tick ごとの音高切替 | 厳密 |
@@ -1183,6 +1184,20 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 ### 7.8 MP3（`core/render.py`）
 
 曲を XM にして一時ファイルに書き、`ffmpeg -f libopenmpt -i tmp.xm -c:a libmp3lame -b:a 192k`（44.1 kHz ステレオ）で符号化する。ModWeaver は再生エンジンを持たない（自前の再生エンジンは大きく、しかも自作 writer を自作 player で検証する自己一致の罠に陥るため）。ffmpeg は PATH か環境変数 `MODWEAVER_FFMPEG` で探す。ffmpeg が無い、`-demuxers` に libopenmpt が無い、`-encoders` に libmp3lame が無い場合は、何が足りないかを示して `ExternalToolError`（終了コード 5、ファイルは作らない）。
+
+- **音量は2パスで整える**: 1回目に `-af volumedetect` で平均（`mean_volume`）と最大振幅（`max_volume`）を測り、2回目に `volume=<g>dB,alimiter=limit=−1 dBFS:level=0` を掛けて符号化する。`g = max(0, min(−14 − 平均, −1 + 4 − 最大))`: 平均を −14 dBFS に近づけるが、リミッタで削るのは 4 dB まで（ピークの鋭い曲は目標に届かなくても潰しすぎない）。大きい曲を下げることはしない。`alimiter` の `level=0` は必須（既定の自動レベルは出力を正規化し直してしまう）。
+- 実測（seed 1）: 平均 −13〜−16 dBFS、最大 −1 dBFS 前後（以前は平均 −17〜−31 dBFS）。
+
+### 7.9 出力音量の底上げ（`core/level.py`・`profiles/levels.py`）
+
+トラッカー形式の大きさは再生エンジンのミキシングで決まる。以前は全ジャンルで最大振幅が −2〜−13 dBFS に留まり、平均は −15〜−30 dBFS と小さかった（2026-09-26、DESIGN_HISTORY.md §12.10）。書き出すときに形式ごとに次のように持ち上げる。作曲には触れない（同じ seed なら音符・効果・波形は同じで、音量の値とヘッダだけが変わる）。
+
+- **根拠は実測**: `profiles/levels.py` の `PEAK_DB` に、ジャンルごと・形式（MOD/XM/S3M/IT）ごとの、底上げ前の最大振幅の最悪値を持つ。`tools/calibrate_levels.py` が seed 1〜12（既定の編成）と、編成を選ぶジャンルは各編成 × seed 101〜103 を libopenmpt で再生して作る。**ジャンルの音量・音色を変えたら作り直す**（`python tools/calibrate_levels.py <ジャンル>`。音割れ検査が失敗して気付ける）。
+- **目標は最悪値で −2 dBFS**（`TARGET_PEAK_DB`）。測っていない seed が測った最悪値を超える量は、1つを除いた残りの最大との比較（3372 例）で最大 0.94 dB だったので、2 dB の余裕で足りる。
+- **S3M/IT**: ヘッダのマスター音量／mix volume（既定 48、上限 127／128）を先に使う。ミキシング後に線形に効く（libopenmpt で 48→96 が +6.0 dB であることを確認）。上限に当たったら残りを音量の値で。
+- **MOD/XM**（MP3 の中間の XM も）: 形式に全体の音量が無いので、全ての音量の値（サンプル既定音量と `Cell.vol`）を同じ倍率で上げる。**倍率は最大の音量が 64 になるまで**（64 で頭打ちにすると音量どうしの比が崩れる）、4ch の曲では**検査 V15 の左右の同時合計が 120 を超えないところまで**（MOD は Amiga の固定配置、XM は実際に書かれるパン。XM は `Px` の丸めで 64/192 が 68/204 になり、左右の重みの和が 1.07 になる）。そのため最大の音量がもともと 64 のジャンルはほとんど上がらない。
+- **MIDI**: 音割れは受け手の音源次第で測れないので、最大の音量が velocity 127 になるまで上げる（加えて CC7=127、§7.7）。
+- 実測（seed 1）: S3M/IT は +2〜+10 dB で最大 −2〜−5 dBFS。MOD/XM は音量の値に余裕のあるジャンルだけ +1〜+6 dB（ambient・calm・acoustic-ssw・bossa-nova など）。
 
 ---
 
@@ -1300,8 +1315,8 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 |:---|:---|
 | 形式間の等価性 | 同じ Song を MOD と XM/S3M/IT で再生し、曲長（±1%＋0.1 秒）・平均周波数（ゼロ交差法 ±5%）・RMS 包絡の相関（>0.8）が一致。orchestral は XM を基準に MOD/S3M/IT を比較 |
 | テンポ | 全ジャンルが表示 BPM どおりの再生時間で鳴る（±2%＋0.3 秒）。`timeline` の曲長が実再生の長さと一致（−0.01〜0.2 秒。tick の丸めで数 ms 短くなる BPM がある） |
-| 音割れ | 全ジャンル × MOD/XM/S3M/IT × 2 seed、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認 |
-| MP3 | 作れること、デコードした長さ（±0.5 秒）・ステレオ・無音でないこと・音割れ率 < 0.1% |
+| 音割れ | 全ジャンル × MOD/XM/S3M/IT × 3 seed（1 つは音量の測定に使っていない seed）、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認。S3M/IT は底上げが効いていること（最大振幅 > −8 dBFS）も見る |
+| MP3 | 作れること、デコードした長さ（±0.5 秒）・ステレオ・無音でないこと・音割れ率 < 0.1%。静かなジャンルも平均が目標（−14 dBFS）の 4 dB 以内に上がり、0 dBFS を超えないこと |
 
 ### 9.3 目で・耳で確かめること（自動化の対象外）
 
@@ -1319,7 +1334,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | 回帰 | `tests/regression/` | nostalgic を凍結した旧実装 `tests/reference/twilight_pad_v1.py`（SHA-256 固定）と 20 seed で比較。作曲（`plan()` の結果と pattern のセル配置）はバイト一致、サンプル波形は長さ・ピークが近いこと、ファイル全体は検査が通ること |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
 
-- 実行: `python -m pytest -q`（3483 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2784 件）で実プレイヤー検査を省略し、マージ前に全部流す。
+- 実行: `python -m pytest -q`（3708 件。実プレイヤー検査を含むと数分〜十数分かかる。ffmpeg が無ければ実プレイヤー検査は skip）。普段は `python -m pytest -q -m "not slow"`（2802 件）で実プレイヤー検査を省略し、マージ前に全部流す。
 - 新しいジャンルは、全形式・複数 seed で構造検査が通ること、実プレイヤーの音割れ検査に通ること、`gm_voices` が全楽器ぶんあること、1ファイル1ジャンルであることがテストで自動的に確かめられる。
 
 ---
@@ -1345,6 +1360,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | prog-rock の lead のビブラート | なし | 必要なら march 相当のヘルパーを足す |
 | nostalgic の pad/flute の −17.6 セント | K=32/L=1024 のまま | 直すなら K=6/L=190（+0.49 セント）。出力が変わるので回帰基準の更新とセット |
 | MIDI のグライド | 目標音へ即時切替 | ピッチベンドでの近似は将来課題 |
+| MOD/XM の音量（§7.9。最大の音量が 64 のジャンルは上がらない） | 音量の値の一律の倍率だけ | 大きくするなら、音量の値を圧縮する（大きい音を 64 で頭打ちにし小さい音を上げる）か、OpenMPT の拡張（サンプルのプリアンプ）を書く。前者はジャンルの音量の設計を変え、後者は OpenMPT 系のプレイヤーでしか効かない |
 | 第３段階の35ジャンルの音量・音色の釣り合い | 構造検査と実プレイヤーの音割れ検査に通る初期値（耳での調整は未実施） | 試聴で調整 |
 | folk の前打音の確率、neo-soul の「よれ」の確率 | 0.3、スネア 0.35・ハット 0.25 | 同上 |
 | jrpg のゼクエンツ | 音域の上端の音は上げずにそのまま | 動機ごとオクターブ下げるなどは将来課題 |

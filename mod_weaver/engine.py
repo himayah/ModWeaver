@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
-from .core import formats, writer
+from .core import formats, level, writer
 from .core import verify as verify_mod
 from .core.model import (
     MAX_SAMPLES,
@@ -28,6 +28,7 @@ from .core.model import (
 )
 from .errors import ChannelCountError, PlanError, SampleConstraintError, TempoRangeError, VerificationError
 from .profiles.base import GenreProfile
+from .profiles.levels import PEAK_DB
 
 log = logging.getLogger("mod_weaver")
 
@@ -309,9 +310,19 @@ def write_options(profile: GenreProfile, song: Song, plan: SongPlan) -> formats.
     )
 
 
-def serialize(profile: GenreProfile, song: Song, plan: SongPlan, fmt: str = formats.DEFAULT_FORMAT) -> bytes:
-    """Song を ``fmt`` 形式のバイト列にする（検査はしない）。"""
-    return formats.get_format(fmt).serialize(song, write_options(profile, song, plan))
+def leveled(profile: GenreProfile, song: Song, plan: SongPlan, fmt: str) -> tuple[Song, formats.WriteOptions]:
+    """``fmt`` で書き出す Song と付帯情報に、ジャンルの測定値に基づく音量の底上げを施す（core/level.py）。"""
+    opts = write_options(profile, song, plan)
+    lv = level.plan_level(song, fmt, PEAK_DB.get(profile.id), opts.channel_pans)
+    return level.apply_volume_gain(song, lv.volume_gain), dataclasses.replace(opts, mix_volume=lv.header_volume)
+
+
+def serialize(profile: GenreProfile, song: Song, plan: SongPlan, fmt: str = formats.DEFAULT_FORMAT, *,
+              raw: bool = False) -> bytes:
+    """Song を ``fmt`` 形式のバイト列にする（検査はしない）。``raw=True`` なら音量を底上げしない（測定用）。"""
+    if raw:
+        return formats.get_format(fmt).serialize(song, write_options(profile, song, plan))
+    return formats.get_format(fmt).serialize(*leveled(profile, song, plan, fmt))
 
 
 def generate(
@@ -332,7 +343,7 @@ def generate(
     song, plan = compose_song(profile, seed, tempo=tempo, channels=channels)
     physical = effective_channel_plan(profile, plan)
     formats.check_channels(output, len(physical), profile.id)
-    data = output.serialize(song, write_options(profile, song, plan))
+    data = output.serialize(*leveled(profile, song, plan, fmt))
 
     issues: list[verify_mod.Issue] = []
     if verify and output.verify is not None:

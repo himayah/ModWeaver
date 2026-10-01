@@ -1161,7 +1161,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | F0 準備（**完了**） | ブランチを作る。現行 main で全形式の試聴用の曲を作って保存（§13.3）。§13.4 の要実測のうち、XM・IT の 16-bit と再生レートの実験を先に行う（設計の前提が崩れないかの確認） | §13.3・§13.4 | 基準の曲がある。16-bit・任意の再生レートが libopenmpt で意図どおり鳴る。**結果: 両方とも確認済み（§13.4）** |
 | F1 core（**完了**） | `SampleSpec` の拡張、`synth.render(oversample, bits)`、`dsp` の係数の換算、`chord_patch` の移動と一般化、`GmVoice` の `core/model.py` への移動、描画のキャッシュ | §8・§13.1 I8 | I7 が通る。既存の synth のテストが通る。**全プリセットの描画時間を m=1 と S3M・XM・IT の倍率で測り、1曲の生成時間を見積もってディスクキャッシュの要否を決める**（§8.6）。**結果: I7・既存テストとも通過。44.1kHz 相当（m≈2.66・bits=16）での全39 BandProfile ジャンルのサンプル合成時間を実測し、最悪値は gamelan の 1.15〜1.2秒（22 楽器、ゴング等の長い減衰音が複数）。NFR-3 の目安 2 秒を下回るので、ディスクキャッシュは入れない（プロセス内キャッシュのみ実装）。挙動が変わって遅くなった場合は §8.6 の設計のまま追加できる** |
 | F2 framework（作曲側、**完了**） | `target.py`・`score.py`・`plan.py`・`genre.py`・`context.py`・`compose.py`・部品集 `gens/` | §4〜§7 | 架空の小さなジャンルで Score が作れる。部品のテスト（現行 `band_common` の型と同じ row・音量・確率が出る）。**結果: 両方とも確認済み（§16.4）** |
-| F3 TrackerRealizer（MOD） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い |
+| F3 TrackerRealizer（MOD）（**完了**） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い。**結果: `mod_weaver/framework/realize/`（lanes.py・samples.py・tracker.py）を実装。pop・racing-breaks は 4/6/8ch、march は現行どおり 4ch 専用で全て生成・検査（0 ERROR）が通る（seed 1〜5 で確認）。ladder の結果が現行 ARRANGEMENTS のチャンネル数と一致（§16.5）。`output/f3-trial/*.mod` を生成済み、ユーザーの試聴待ち。詳細・設計の隙間は §16.5** |
 | F4 S3M・XM・IT・MP3 | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る |
 | F5 MIDI | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり |
 | F6 A・B の移植 | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの） |
@@ -1199,6 +1199,69 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
   という別名にした（ジェネレータのクラス名 `Groove` と型名が同じだと Python の名前空間で衝突するため）。
 - **`Layer`・`Echo` は `Part.follow` を自分では読まない**（フレームワークが「鳴る区間」を判定するので、
   `Echo.section()` は `ctx.part.follow` からソースのパート名を引いて `ctx.events_of()` するだけで書ける）。
+
+### 16.5 F3 の実装で埋めた設計の隙間
+
+`mod_weaver/framework/realize/`（`lanes.py`・`samples.py`・`tracker.py`）として実装した。F4 以降も
+同じ名前・考え方を前提にしてよい。
+
+- **Cell の表現は F3 では一般化しなかった**。§9.6 の形式ごとの汎用 Cell は作らず、既存の
+  `core.model.Cell`/`Pattern`/`Song` をそのまま使い、`TrackerRealizer.realize_mod()` は
+  `(Song, WriteOptions)` を返すところまでを担う。実際の `serialize()`/`verify()`/`write_file()` は
+  呼び出し側が既存の `core.formats`/`core.writer` で行う（F3 は MOD 専用なので、MOD 固有の型を直接
+  使うほうが単純で、無用な抽象化を避けられる。汎用化は S3M/XM/IT が実際に必要になる F4 で行う）。
+- **`NoteEvent.chord` は根音（オフセット0）を含む**。§5.1 の説明文は「根音からの半音の列」とだけ
+  書いてあり、根音自体を含むかどうかが曖昧だったが、既存の `gens/comp.py` 等が
+  `chord=CHORD_QUALITIES[quality]`（例 `(0, 4, 7)`）をそのまま渡す実装になっていたため、「含む」で
+  統一した（和音の声部数は `len(chord)`。`len(chord)+1` ではない）。`core.synth.chord_patch()` の
+  `intervals` も同じ規約（根音を含む）。
+- **`Kit` に `group_pan: Mapping[str, int]` を追加**した。§6.3 の `Kit` にはグループごとのパンが無く、
+  「分ける」段階の lane のパンが全部 `Part.pan` 頼みになってしまう（pop の hat 系を kick/snare 系と
+  別のパンに振れない）。グループ名→パンの表を足し、「分ける」段階は楽器の属するグループのパン、
+  「1本」の段階は `Part.pan` を使う。
+- **sample 番号の上限（31。MOD）を `samples.py` で検査する**。§9.3 の ladder は**チャンネル**予算だけを
+  扱い、サンプル予算は別の制約として `plan_samples()` の最後で `len(order) > target.sample.max_samples`
+  を見て `PlanError` にした（ladder の段階を遡ってサンプル数を減らす仕組みは作っていない。F3 の3ジャンル
+  はどの予算でも十分少ないため実害は無いが、将来多楽器のジャンルで31を超えたら、ジャンル側で
+  `Kit` のグループをまとめるか和音を減らす必要がある）。
+- **MOD の音高は整数の tracker note に丸める**。`NoteEvent.pitch` の小数部（セント）は、MOD の
+  `Cell.note` が標準の36音の Period 表しか持てないため実現できない（S3M/XM の fine `instrument`
+  単位での微調整や、IT の高分解能な note は F4 で検討する）。F3 の3ジャンルはいずれも整数の音高しか
+  使わないため実害は無い。
+- **row 0 にテンポ／Speed を書けない区間への対策**: §9.9 の想定どおり row 0 の全チャンネルが
+  埋まっていることがあり得るため（密な打楽器編成等）、`_insert_near_start()` が先頭 8 row の中から
+  空きを探す（旧 `core/groove.py` の「row 0 に空きを残す契約」は新フレームワークのジャンルには課さない）。
+- **サイドチェインのダッキングは簡略化した**: `_apply_sidechain()` は、ダッキング対象の各 row で
+  「今その lane に設定されている音量」を遡って求め、それを `ratio`/`release_steps` で減衰させる。
+  トリガーが密集する（ダッキングの区間が重なる）ジャンルでは、2つ目のトリガーが「既にダッキング済みの
+  音量」を基準にさらに下げてしまい、意図より下がりすぎることがある（racing-breaks はトリガーの間隔が
+  十分あるため実害は無い）。本当の「元の音量を基準にした重ね合わせ」が要るジャンルが出たら、
+  重ならないよう `release_steps` を調整するか、ここを拡張する。
+- **`Glide` の速度が指定なしのときの既定値**: `Glide.param` が `None` のとき、本来は直前の音の
+  period から `automation.portamento_param()` で計算すべきだが、Score 層は period を持たない
+  （lane に実際に割り当てるまで前の tracker note が決まらない）。F3 時点でどのジャンルも `Glide` を
+  使わないため、最小値（1）を既定にするだけに留めた（trap の808グライド等、実際に使うジャンルが
+  出る F7 までに、lane 割当後の前後関係から計算するよう直す）。
+- **`follow` 先を持たないジェネレータ（`Echo` 等）の lane は `insts=()` になる**。`Echo` は
+  自分の楽器を持たず、写した元のイベントの楽器名をそのまま使うため、lane 構築時に `Part.gen.inst`
+  を引けない。実際の発音は `Placement.inst`（イベントごとの実際の楽器名）で解決するので実害は無いが、
+  `samples.py`・`lanes.py` の「lane の insts からサンプル／パンを引く」経路はこの種の lane では
+  空振りする（follow 元の楽器が既に自分の lane で同じサンプルを持っているので問題にならない）。
+- **march は `Harmony`/`default_plan()` を使わない**。進行の和音ごとの小節数が不揃い（sousa の最後の
+  和音だけ2小節）で、`default_plan()` は小節数を和音の数で均等に割る前提のため使えない。nostalgic と
+  同様 `harmony=None` とし、`plan()` を全面的に上書きして `SectionPlan` を直接組み立てる
+  （§15.4 に明記はなかったが、suspense 系も同じ理由で同じ扱いになる見込み）。
+- **試験移植した3ジャンルは `mod_weaver/genres/` に置かず、`tests/framework/realize/genres/`
+  に置いた**。旧 `GenreProfile` 版と id が同じだが、新旧で登録簿が別なので実害は無い。F6・F7 で
+  本物の移植をするときに、この3ファイルを本番の場所へ移して書き直す（置き場所の都合で書いた
+  コードなので、そのまま昇格はしない）。
+- **ladder の R2（kit を「まとめる」）は全 kit パートをまとめて1段階で適用する**。§9.3 の表が
+  R1・R3・R4 とだけ「後ろから一つずつ」と書き、R2 にはその注記が無いことを文字どおりに解釈した
+  （pop・racing-breaks は kit パートが1つしか無くこの解釈でしか検証できていないので、複数の kit
+  パートを持つジャンルが出たら、ladder の結果を見て意図どおりか確かめること）。
+- **3ジャンルの生成例と検査結果**: `tests/framework/realize/test_ported_genres.py`
+  （`test_generate_reference_files_for_listening`）が `output/f3-trial/*.mod` を書き出す。ユーザーが
+  実際に試聴して確認する（ffmpeg が使えるサンドボックスでは同じ内容を `.mp3` にも変換できる）。
 
 ---
 

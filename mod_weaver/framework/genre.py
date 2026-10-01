@@ -97,10 +97,18 @@ class Kit:
     groups: tuple[tuple[str, tuple[str, ...]], ...]   # 「まとめた」段階の lane: (lane名, 楽器名…)
     priority: Mapping[str, int] = field(default_factory=dict)   # 楽器名 → 優先度（未記載 1）
     single_priority: Optional[Mapping[str, int]] = None         # 1本の段階だけの優先度。None なら priority
+    group_pan: Mapping[str, int] = field(default_factory=dict)  # グループ名 → パン（未記載は Part.pan。
+    # 「分ける」段階は楽器の属するグループのパンを引く。「1本」の段階は Part.pan）
 
     @property
     def instruments(self) -> tuple[str, ...]:
         return tuple(name for _lane, names in self.groups for name in names)
+
+    def group_of(self, inst: str) -> Optional[str]:
+        for lane, names in self.groups:
+            if inst in names:
+                return lane
+        return None
 
 
 @dataclass(frozen=True)
@@ -233,6 +241,10 @@ def _validate_kit(cls: type, part: Part) -> None:
             if n not in seen:
                 raise PlanError(f"{cls.id}: part {part.name!r} kit.{label} references instrument {n!r} "
                                  f"not in any group")
+    group_names = {lane for lane, _names in kit.groups}
+    for lane in kit.group_pan:
+        if lane not in group_names:
+            raise PlanError(f"{cls.id}: part {part.name!r} kit.group_pan references unknown group {lane!r}")
 
 
 def _check_no_cycle(cls: type, part_names: list[str]) -> None:

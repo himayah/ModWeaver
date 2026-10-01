@@ -1,9 +1,10 @@
 """依存の規則（FRAMEWORK_REDESIGN.md §13.1 I8）の検査。``ast`` でモジュールの import 文を調べる。
 
-``mod_weaver/framework/`` 自身が ``core`` の形式系（writer・s3m・it・midi・render・verify・level）と
-``framework.realize``（まだ存在しない。F3 以降で作る）を import しないことを確かめる。``genres/*.py`` 側の
-検査（新しい ``Genre`` を使うジャンルが同じ規則を守ること）は、そのジャンルが実際に書き直される F6・F7 で
-対象ファイルを広げる（今はまだ旧 ``GenreProfile`` のジャンルしか無く、旧ジャンルはこの規則の対象外）。
+``mod_weaver/framework/`` 自身（``framework/realize/`` を除く）が ``core`` の形式系（writer・s3m・it・
+midi・render・verify・level）を import しないことを確かめる。``framework/realize/`` は Realizer そのもの
+なので対象外（F3 で実装。意図的に形式系を import する）。``genres/*.py`` 側の検査（新しい ``Genre`` を
+使うジャンルが同じ規則を守ること）は、そのジャンルが実際に書き直される F6・F7 で対象ファイルを広げる
+（今はまだ旧 ``GenreProfile`` のジャンルしか無く、旧ジャンルはこの規則の対象外）。
 """
 from __future__ import annotations
 
@@ -48,8 +49,11 @@ def test_framework_does_not_import_core_format_modules(path: pathlib.Path) -> No
     assert not bad, f"{path.relative_to(ROOT)} imports forbidden core format module(s): {bad}"
 
 
-def test_framework_realize_package_does_not_exist_yet() -> None:
-    """F3 で ``framework/realize/`` を作ったら、このテストを更新してその中身も検査対象に含める。"""
-    assert not (FRAMEWORK_DIR / "realize").exists(), (
-        "framework/realize/ now exists -- extend this test's scope to include it per §13.1 I8"
-    )
+def test_framework_realize_package_is_excluded_and_not_empty() -> None:
+    """``framework/realize/`` は Realizer 自身なので、上の検査の対象外（I8 の例外）。空のまま
+    放置されていないことだけ確認する（実際に形式系を import するかどうかは Realizer の設計次第。
+    F3 の ``tracker.py`` は ``Song``/``WriteOptions`` を組み立てるところまでが責務で、実際の
+    serialize/verify/write は呼び出し側 (``core.formats``/``core.writer``) に任せているため、
+    ``writer``/``level`` 等を直接 import する義務は無い）。"""
+    realize_files = sorted((FRAMEWORK_DIR / "realize").glob("*.py"))
+    assert realize_files

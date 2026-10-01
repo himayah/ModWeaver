@@ -1,0 +1,60 @@
+=== XM: relative_note=0, finetune sweep (Amiga frequency table) ===
+xm finetune=-128             predicted= 7893.621 Hz  measured= 7889.593 Hz  error=  -0.88 cents  OK
+xm finetune=-96              predicted= 8008.436 Hz  measured= 8011.587 Hz  error=  +0.68 cents  OK
+xm finetune=-64              predicted= 8124.922 Hz  measured= 8121.600 Hz  error=  -0.71 cents  OK
+xm finetune=-32              predicted= 8243.101 Hz  measured= 8251.095 Hz  error=  +1.68 cents  OK
+xm finetune=-1               predicted= 8359.227 Hz  measured= 8331.777 Hz  error=  -5.69 cents  OK
+xm finetune=0                predicted= 8363.000 Hz  measured= 8359.030 Hz  error=  -0.82 cents  OK
+xm finetune=1                predicted= 8366.775 Hz  measured= 8359.030 Hz  error=  -1.60 cents  OK
+xm finetune=32               predicted= 8484.643 Hz  measured= 8484.466 Hz  error=  -0.04 cents  OK
+xm finetune=64               predicted= 8608.055 Hz  measured= 8600.894 Hz  error=  -1.44 cents  OK
+xm finetune=96               predicted= 8733.262 Hz  measured= 8732.182 Hz  error=  -0.21 cents  OK
+xm finetune=127              predicted= 8856.292 Hz  measured= 8827.805 Hz  error=  -5.58 cents  OK
+
+=== XM: finetune=0, relative_note sweep ===
+xm relative_note=-24         predicted= 2090.750 Hz  measured= 2093.878 Hz  error=  +2.59 cents  OK
+xm relative_note=-12         predicted= 4181.500 Hz  measured= 4185.456 Hz  error=  +1.64 cents  OK
+xm relative_note=-1          predicted= 7893.621 Hz  measured= 7898.802 Hz  error=  +1.14 cents  OK
+xm relative_note=0           predicted= 8363.000 Hz  measured= 8359.030 Hz  error=  -0.82 cents  OK
+xm relative_note=1           predicted= 8860.290 Hz  measured= 8856.487 Hz  error=  -0.74 cents  OK
+xm relative_note=12          predicted=16726.000 Hz  measured=16729.944 Hz  error=  +0.41 cents  OK
+xm relative_note=24          predicted=33452.000 Hz  measured=33448.006 Hz  error=  -0.21 cents  OK
+
+=== XM: combined (non-round target) ===
+xm rn=3 ft=47                predicted=10158.528 Hz  measured=10129.935 Hz  error=  -4.88 cents  OK
+xm rn=-5 ft=-83              predicted= 6034.848 Hz  measured= 6019.983 Hz  error=  -4.27 cents  OK
+xm rn=7 ft=113               predicted=13185.877 Hz  measured=13183.689 Hz  error=  -0.29 cents  OK
+
+=== XM: wide note range (relative_note=finetune=0), xm_note across the full 1..96 ===
+xm xm_note=1                 predicted=  522.688 Hz  measured=  523.534 Hz  error=  +2.80 cents  OK
+xm xm_note=13                predicted= 1045.375 Hz  measured= 1047.067 Hz  error=  +2.80 cents  OK
+xm xm_note=25                predicted= 2090.750 Hz  measured= 2093.878 Hz  error=  +2.59 cents  OK
+xm xm_note=37                predicted= 4181.500 Hz  measured= 4185.456 Hz  error=  +1.64 cents  OK
+xm xm_note=49                predicted= 8363.000 Hz  measured= 8359.030 Hz  error=  -0.82 cents  OK
+xm xm_note=61                predicted=16726.000 Hz  measured=16729.944 Hz  error=  +0.41 cents  OK
+xm xm_note=73                predicted=33452.000 Hz  measured=33448.006 Hz  error=  -0.21 cents  OK
+xm xm_note=85                predicted=66904.000 Hz  measured=66907.883 Hz  error=  +0.10 cents  OK
+xm xm_note=96                predicted=126297.934 Hz  measured=126701.764 Hz  error=  +5.53 cents  OK
+
+=== IT: C5Speed direct, at reference note C-5 (it_note=60) ===
+it C5Speed=8363              predicted= 8363.000 Hz  measured= 8359.030 Hz  error=  -0.82 cents  OK
+it C5Speed=4000              predicted= 4000.000 Hz  measured= 3996.469 Hz  error=  -1.53 cents  OK
+it C5Speed=12000             predicted=12000.000 Hz  measured=11997.533 Hz  error=  -0.36 cents  OK
+it C5Speed=20000             predicted=20000.000 Hz  measured=20002.467 Hz  error=  +0.21 cents  OK
+it C5Speed=65535             predicted=65535.000 Hz  measured=65534.918 Hz  error=  -0.00 cents  OK
+it C5Speed=100               predicted=  100.000 Hz  measured=  379.112 Hz  error=+2307.15 cents  FAIL
+it C5Speed=44100             predicted=44100.000 Hz  measured=44104.050 Hz  error=  +0.16 cents  OK
+it C5Speed=7919              predicted= 7919.000 Hz  measured= 7917.629 Hz  error=  -0.30 cents  OK
+
+=== IT: fixed C5Speed=8363, note sweep across IT's wider 0..119 range (checks 2^((note-60)/12) beyond the current 36-note model) ===
+it note=0                    predicted=  261.344 Hz  measured=  379.336 Hz  error=+645.03 cents  FAIL
+it note=24                   predicted= 1045.375 Hz  measured= 1046.664 Hz  error=  +2.13 cents  OK
+it note=48                   predicted= 4181.500 Hz  measured= 4184.969 Hz  error=  +1.44 cents  OK
+it note=60                   predicted= 8363.000 Hz  measured= 8359.030 Hz  error=  -0.82 cents  OK
+it note=72                   predicted=16726.000 Hz  measured=16729.944 Hz  error=  +0.41 cents  OK
+it note=96                   predicted=66904.000 Hz  measured=66907.883 Hz  error=  +0.10 cents  OK
+it note=119                  predicted=252595.868 Hz  measured=252589.915 Hz  error=  -0.04 cents  OK
+
+=== recheck with a window long enough for the (sub-Hz) output tone ===
+it C5Speed=100 (re-check)    predicted=  100.000 Hz  measured=  256.000 Hz  error=+1627.37 cents  FAIL  (output tone ~0.391 Hz, period ~2.56 s)
+it note=0 (re-check)         predicted=  261.344 Hz  measured=  261.381 Hz  error=  +0.24 cents  OK  (output tone ~1.021 Hz, period ~0.98 s)

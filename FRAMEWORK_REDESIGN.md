@@ -1160,7 +1160,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 |:---|:---|:---|:---|
 | F0 準備（**完了**） | ブランチを作る。現行 main で全形式の試聴用の曲を作って保存（§13.3）。§13.4 の要実測のうち、XM・IT の 16-bit と再生レートの実験を先に行う（設計の前提が崩れないかの確認） | §13.3・§13.4 | 基準の曲がある。16-bit・任意の再生レートが libopenmpt で意図どおり鳴る。**結果: 両方とも確認済み（§13.4）** |
 | F1 core（**完了**） | `SampleSpec` の拡張、`synth.render(oversample, bits)`、`dsp` の係数の換算、`chord_patch` の移動と一般化、`GmVoice` の `core/model.py` への移動、描画のキャッシュ | §8・§13.1 I8 | I7 が通る。既存の synth のテストが通る。**全プリセットの描画時間を m=1 と S3M・XM・IT の倍率で測り、1曲の生成時間を見積もってディスクキャッシュの要否を決める**（§8.6）。**結果: I7・既存テストとも通過。44.1kHz 相当（m≈2.66・bits=16）での全39 BandProfile ジャンルのサンプル合成時間を実測し、最悪値は gamelan の 1.15〜1.2秒（22 楽器、ゴング等の長い減衰音が複数）。NFR-3 の目安 2 秒を下回るので、ディスクキャッシュは入れない（プロセス内キャッシュのみ実装）。挙動が変わって遅くなった場合は §8.6 の設計のまま追加できる** |
-| F2 framework（作曲側） | `target.py`・`score.py`・`plan.py`・`genre.py`・`context.py`・`compose.py`・部品集 `gens/` | §4〜§7 | 架空の小さなジャンルで Score が作れる。部品のテスト（現行 `band_common` の型と同じ row・音量・確率が出る） |
+| F2 framework（作曲側、**完了**） | `target.py`・`score.py`・`plan.py`・`genre.py`・`context.py`・`compose.py`・部品集 `gens/` | §4〜§7 | 架空の小さなジャンルで Score が作れる。部品のテスト（現行 `band_common` の型と同じ row・音量・確率が出る）。**結果: 両方とも確認済み（§16.4）** |
 | F3 TrackerRealizer（MOD） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い |
 | F4 S3M・XM・IT・MP3 | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る |
 | F5 MIDI | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり |
@@ -1171,6 +1171,34 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 ### 16.3 作業量の見積もり
 
 このプロジェクトのこれまでの進み方（35ジャンルと BandProfile を設計を含めて1日、全体で約5日）を基準に、**約 8〜11 日**（F1〜F2 で 2〜3 日、F3 で 1〜1.5 日、F4〜F5 で 2〜3 日（3形式の writer・parser・検査器の拡張と §13.4 の要実測9項目、MIDI Realizer）、F6 で 1〜1.5 日、F7 で 1.5〜2 日、テストと文書は各フェーズに含む）。これとは別に、試聴にユーザーの時間がかかる（51ジャンル×3曲×約2.3分で、1形式あたり約6時間）。
+
+### 16.4 F2 の実装で埋めた設計の隙間
+
+本章・§4〜§7 のコード片は「インターフェースの仕様」（§0）であり、実装時に次の点を具体化した。F3 以降で
+同じ名前・考え方を前提にしてよい。
+
+- **`SectionCtx`/`MeasureCtx` に `genre: Genre` を持たせた**。§6.6 の属性一覧には無いが、``ctx.note()`` が
+  楽器の存在・音程の有無を検査する（`genre.instruments`）のに必須で、`BassLine`・`Comp`（非和音）・`Lead`
+  が音域を引く（`genre.harmony.registers.*`）のにも使う。
+- **`Section.parts` の既定値 `ALL`**（§6.3）は具体的な名前の集合を持てない（`Section` 単体はジャンルの
+  `parts` 宣言を知らない）ので、空の frozenset を予約値にし、`plan.default_plan()` が
+  `Genre.parts` から「`follow` を持たないパート名の全部」に展開する。
+- **`framework/registry.py` を新設**した。§2.4 の「そのまま残す」は現行 `profiles/registry.py`
+  （`GenreProfile` 用）を指しており、`Genre` 用の登録簿はそれとは別に要る（移行が終わるまで2つの登録簿が
+  並行する。F8 で旧い方を削除する）。
+- **`MeasureCtx` は `SectionCtx` を属性委譲で包む**実装にした（独自の `__init__` を持ち、`plan`・`song`・
+  `rng`・`state` 等は `__getattr__` で親に委譲し、`note`/`off`/`automate`/`tempo`/`_check_step` だけ
+  ``m.start`` を足して上書きする）。`state`・`song_state` は辞書への参照なので、委譲経由でも書き込みが
+  正しく親に反映される。
+- **Score の検査（§6.9 の4）のうち `poly` 超過の判定**は、`dur=None` の発音を「次の同じ楽器の発音まで」と
+  見なす区間重なりの掃引で行う（lane の実際の割当は F3 の Realizer の仕事なので、ここでは粗い近似）。
+- **部品の一部に、表の引数名と違う名前を付けた**（表は「インターフェースの仕様」であって逐語的なシグネチャ
+  ではない。§0）: `Arp` は表の `steps`（打点の row 集合）と `MeasurePlan.steps`（小節の step 数）が紛らわし
+  いので `steps: tuple[int,...]` のまま残しつつ、本文中の表記は変えず実装側のコメントで区別した。
+  `Groove` は `grooves: Mapping[str, GroovePattern]` とし、`Hit` の列の型エイリアスは `GroovePattern`
+  という別名にした（ジェネレータのクラス名 `Groove` と型名が同じだと Python の名前空間で衝突するため）。
+- **`Layer`・`Echo` は `Part.follow` を自分では読まない**（フレームワークが「鳴る区間」を判定するので、
+  `Echo.section()` は `ctx.part.follow` からソースのパート名を引いて `ctx.events_of()` するだけで書ける）。
 
 ---
 

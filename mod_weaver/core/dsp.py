@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import random as _random
+import struct
 from typing import Callable, Iterable, Sequence
 
 from ..errors import SampleConstraintError
@@ -36,6 +37,17 @@ def pad_even(b: bytes) -> bytes:
 def to_pcm(values: Iterable[float], gain: float = 127.0) -> bytes:
     """float 列 → 8bit signed PCM（符号なし表現の bytes）。``clamp(v*gain) & 0xFF`` → 偶数長。"""
     return pad_even(bytes(clamp(v * gain) & 0xFF for v in values))
+
+
+def clamp16(x: float) -> int:
+    """[-32768, 32767] へ丸める（``clamp`` の16-bit版。FRAMEWORK_REDESIGN.md §8.2）。"""
+    return max(-32768, min(32767, int(round(x))))
+
+
+def to_pcm16(values: Iterable[float], gain: float = 32767.0) -> bytes:
+    """float 列 → 16bit signed PCM（リトルエンディアン）。1 サンプル＝2 byte なので ``to_pcm`` と違い
+    偶数長パディングは不要（常に偶数長になる）。"""
+    return b"".join(struct.pack("<h", clamp16(v * gain)) for v in values)
 
 
 # ============================================================
@@ -124,13 +136,46 @@ def one_pole_lp(data: Sequence[float], a: float) -> list[float]:
 
 
 def diff_hp(data: Sequence[float]) -> list[float]:
-    """一次差分 HP（旧ハイハットと同式）。``y[i] = x[i] − x[i−1]``、``x[−1]=0``。"""
+    """一次差分 HP（旧ハイハットと同式）。``y[i] = x[i] − x[i−1]``、``x[−1]=0``。
+
+    遮断周波数は常に「呼び出し時の実際のレートの ``DIFF_HP_CUTOFF_RATIO`` 倍」になる（レートに比例して動く）。
+    内部レートを oversample したときにこの遮断周波数を固定したい場合は ``one_pole_hp`` を使う
+    （FRAMEWORK_REDESIGN.md §8.2・§18.1）。
+    """
     out: list[float] = []
     prev = 0.0
     for x in data:
         out.append(x - prev)
         prev = x
     return out
+
+
+# ---- oversample（FRAMEWORK_REDESIGN.md §8.2）: フィルタ係数の換算 ----
+
+DIFF_HP_CUTOFF_RATIO = math.asin(1.0 / (2.0 * math.sqrt(2.0))) / math.pi   # ≈ 0.115027
+# ↑ diff_hp の −3dB 点が「呼び出し時のレート」の何倍かという定数。diff_hp の周波数特性
+#   |H(f)| = 2|sin(πf/fs)| を 1/√2 で解いた f/fs。
+
+
+def scale_lp_coeff(a: float, oversample: float) -> float:
+    """``one_pole_lp``/``noise_lp`` の係数 a を、内部レートが ``oversample`` 倍になっても同じ遮断周波数の
+    ままになるよう換算する（``y=a·y+(1−a)·x`` の遮断は a の対数に比例するため ``a' = a^(1/oversample)``）。
+    ``oversample=1.0`` では ``a`` をそのまま返す（既存の挙動を変えない）。"""
+    return a if oversample == 1.0 else a ** (1.0 / oversample)
+
+
+def lp_coeff_for_cutoff(fc: float, rate: float) -> float:
+    """目標の遮断周波数 ``fc``（Hz）に対応する一次 LP の係数（``y=a·y+(1−a)·x`` が ``rate`` Hz で
+    動くときに ``fc`` を −3dB 点にする、一般的な一次 IIR の近似式 ``a = e^(−2π·fc/rate)``）。"""
+    return math.exp(-TWO_PI * fc / rate)
+
+
+def one_pole_hp(data: Sequence[float], a: float) -> list[float]:
+    """一次 HP ＝ 信号 − 一次 LP（係数 a は ``lp_coeff_for_cutoff`` で求める）。``diff_hp`` と違い
+    遮断周波数を呼び出し側が指定できるので、oversample 時に ``diff_hp`` の遮断周波数を固定して
+    置き換えるのに使う（§8.2。実際の音は試聴で確かめる。§18.1）。"""
+    lp = one_pole_lp(data, a)
+    return [x - y for x, y in zip(data, lp)]
 
 
 # ---- 完全ループ ----

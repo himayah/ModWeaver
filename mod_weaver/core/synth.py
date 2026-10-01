@@ -67,9 +67,10 @@ nostalgic の大半の音色がこの流儀）。
 """
 from __future__ import annotations
 
+import functools
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Optional, Sequence, Union
 
 from ..errors import SampleConstraintError
@@ -245,30 +246,88 @@ class Patch:
 
 
 # ============================================================
+# 和音サンプル
+# ============================================================
+# 第３段階のジャンル向けに profiles/band_common.py にあった chord_patch() をここへ移す
+# （FRAMEWORK_REDESIGN.md §8.4）。quality 文字列ではなく intervals（半音オフセットの列）を直接受けるように
+# 一般化し、core/pitch.CHORD_QUALITIES の値をそのまま渡せるようにした。
+
+MAX_LOOP_CHORD_CENTS = 12.0   # ループの和音で、構成音のサイクル数を整数に丸めたときに許す音程誤差
+
+
+def chord_patch(base: Patch, intervals: Sequence[float], *, strum_ms: float = 0.0, label: str = "") -> Patch:
+    """``base`` の音色で、根音からの半音オフセット ``intervals``（和音の形）を1サンプルに焼き込んだ Patch
+    （根音の高さで鳴らす）。``core/pitch.CHORD_QUALITIES`` の値（例 "maj" → ``(0, 4, 7)``）をそのまま渡せる。
+
+    ToneLayer を構成音の数だけ複製して各部分音を音程比倍する（機械的な変換で美的判断を含まない）。
+    PitchSweep・Noise のレイヤー（打鍵の雑音など）は1回だけ残す。``strum_ms`` > 0 なら構成音ごとに
+    鳴り始めを遅らせてギターのストロークにする（OneShot のみ）。ループの素材はサイクル数を整数に丸めるので、
+    基本サイクル数が大きい（例: K=120）素材でないと音程がずれる（誤差が ``MAX_LOOP_CHORD_CENTS`` を超えたら例外）。
+    ``label`` はサンプル名の接尾辞（例 "maj"）。呼び出し側が和音の由来（quality 名など）を知っていれば渡す。
+    """
+    is_loop = isinstance(base.finish, Loop)
+    gain = 1.0 / math.sqrt(len(intervals))
+    layers: list[WeightedLayer] = []
+    for i, semi in enumerate(intervals):
+        ratio = 2.0 ** (semi / 12.0)
+        for wl in base.layers:
+            layer = wl.layer
+            if isinstance(layer, ToneLayer):
+                partials = []
+                for mult, weight, alpha in layer.partials:
+                    m = mult * ratio
+                    if is_loop:
+                        rounded = round(m)
+                        err = abs(1200.0 * math.log2(rounded / m))
+                        if err > MAX_LOOP_CHORD_CENTS:
+                            raise SampleConstraintError(
+                                f"{base.name}: chord {label or intervals} is {err:.1f} cents off "
+                                f"(cycle {mult} too small)")
+                        m = rounded
+                    partials.append((m, weight, alpha))
+                layers.append(WeightedLayer(ToneLayer(tuple(partials), layer.filter), wl.weight * gain,
+                                            0.0 if is_loop else wl.offset_ms + i * strum_ms))
+            elif i == 0:
+                layers.append(wl)
+    name = f"{base.name[:13]}{label}"[:22]
+    return replace(base, name=name, layers=tuple(layers))
+
+
+# ============================================================
 # render
 # ============================================================
 
-def _filter_fn(f: FilterSpec) -> Callable[[list[float]], list[float]]:
+def _filter_fn(f: FilterSpec, *, oversample: float, base_rate: float, rate: float) -> Callable[[list[float]], list[float]]:
     """``FilterSpec`` に対応する信号列 → 信号列の関数。"lp_sweep" はノイズ生成に内蔵の時変フィルタ
     （``dsp.noise_lp``）であり、既存信号への後処理としては無効。
 
     ``_apply_post_filter``（そのまま適用）と ``_render_loop_body``（``dsp.circular`` で包んで適用）が共用する。
+    ``oversample``（内部レートの倍率 m）・``base_rate``（m=1 のときのレート）・``rate``（実際に使う
+    内部レート＝base_rate×m）は、m>1 でも遮断周波数を変えないための換算に使う（FRAMEWORK_REDESIGN.md §8.2）。
+    ``oversample=1.0`` では換算が恒等（``a^1=a``）になり、"hp" は従来どおり ``dsp.diff_hp`` のまま
+    （現行の挙動と完全に一致する）。
     """
     if f.kind == "none":
         return lambda xs: xs
     if f.kind == "lp":
-        return lambda xs: dsp.one_pole_lp(xs, f.a)
+        a = dsp.scale_lp_coeff(f.a, oversample)
+        return lambda xs: dsp.one_pole_lp(xs, a)
     if f.kind == "hp":
-        return dsp.diff_hp
+        if oversample == 1.0:
+            return dsp.diff_hp
+        a = dsp.lp_coeff_for_cutoff(dsp.DIFF_HP_CUTOFF_RATIO * base_rate, rate)
+        return lambda xs: dsp.one_pole_hp(xs, a)
     raise SampleConstraintError(f"filter kind {f.kind!r} is only valid as noise generation (lp_sweep)")
 
 
-def _apply_post_filter(xs: list[float], f: FilterSpec) -> list[float]:
+def _apply_post_filter(xs: list[float], f: FilterSpec, *, oversample: float, base_rate: float,
+                        rate: float) -> list[float]:
     """既存の信号列へのフィルタ。ToneLayer/PitchSweepLayer の filter と Patch.post_filter が共用する。"""
-    return _filter_fn(f)(xs)
+    return _filter_fn(f, oversample=oversample, base_rate=base_rate, rate=rate)(xs)
 
 
-def _render_tone_oneshot(layer: ToneLayer, f0: float, rate: float, n: int) -> list[float]:
+def _render_tone_oneshot(layer: ToneLayer, f0: float, rate: float, n: int, *, oversample: float,
+                          base_rate: float) -> list[float]:
     out = [0.0] * n
     for mult, weight, alpha in layer.partials:
         f = f0 * mult
@@ -276,10 +335,11 @@ def _render_tone_oneshot(layer: ToneLayer, f0: float, rate: float, n: int) -> li
             t = i / rate
             env = 1.0 if alpha is None else math.exp(-alpha * t)
             out[i] += weight * math.sin(TWO_PI * f * t) * env
-    return _apply_post_filter(out, layer.filter)
+    return _apply_post_filter(out, layer.filter, oversample=oversample, base_rate=base_rate, rate=rate)
 
 
-def _render_pitch_sweep(layer: PitchSweepLayer, rate: float, n: int) -> list[float]:
+def _render_pitch_sweep(layer: PitchSweepLayer, rate: float, n: int, *, oversample: float,
+                         base_rate: float) -> list[float]:
     fs, fe, k = layer.freq_start, layer.freq_end, layer.pitch_decay
     out = []
     for i in range(n):
@@ -287,18 +347,18 @@ def _render_pitch_sweep(layer: PitchSweepLayer, rate: float, n: int) -> list[flo
         phase = TWO_PI * (fe * t + (fs - fe) / k * (1.0 - math.exp(-k * t)))
         env = 1.0 if layer.decay_alpha is None else math.exp(-layer.decay_alpha * t)
         out.append(math.sin(phase) * env)
-    return _apply_post_filter(out, layer.filter)
+    return _apply_post_filter(out, layer.filter, oversample=oversample, base_rate=base_rate, rate=rate)
 
 
-def _render_noise(layer: NoiseLayer, rng: random.Random, rate: float, n: int) -> list[float]:
+def _render_noise(layer: NoiseLayer, rng: random.Random, rate: float, n: int, *, oversample: float,
+                   base_rate: float) -> list[float]:
     if layer.filter.kind == "lp_sweep":
-        raw = dsp.noise_lp(rng, n, layer.filter.a_start, layer.filter.a_end)
+        a_start = dsp.scale_lp_coeff(layer.filter.a_start, oversample)
+        a_end = dsp.scale_lp_coeff(layer.filter.a_end, oversample)
+        raw = dsp.noise_lp(rng, n, a_start, a_end)
     else:
         raw = [rng.uniform(-1.0, 1.0) for _ in range(n)]
-        if layer.filter.kind == "hp":
-            raw = dsp.diff_hp(raw)
-        elif layer.filter.kind == "lp":
-            raw = dsp.one_pole_lp(raw, layer.filter.a)
+        raw = _filter_fn(layer.filter, oversample=oversample, base_rate=base_rate, rate=rate)(raw)
     out = []
     for i, x in enumerate(raw):
         if layer.decay_alpha is not None:
@@ -311,11 +371,12 @@ def _render_noise(layer: NoiseLayer, rng: random.Random, rate: float, n: int) ->
     return out
 
 
-def _render_loop_body(layer: ToneLayer, length: int) -> list[float]:
+def _render_loop_body(layer: ToneLayer, length: int, *, oversample: float, base_rate: float,
+                       rate: float) -> list[float]:
     """Loop 仕上げ用の1周期本体。フィルタは境界の連続性を保つため ``dsp.circular`` で包んで適用する。"""
     terms = [(mult, weight) for mult, weight, _ in layer.partials]
     body = dsp.seamless_terms(length, terms)
-    return dsp.circular(_filter_fn(layer.filter), body)
+    return dsp.circular(_filter_fn(layer.filter, oversample=oversample, base_rate=base_rate, rate=rate), body)
 
 
 def _normalized(xs: Sequence[float], peak: float) -> list[float]:
@@ -327,11 +388,39 @@ def _ms_to_samples(ms: float, rate: float) -> int:
     return max(1, round(ms / 1000.0 * rate))
 
 
-def render(patch: Patch) -> SampleSpec:
-    """``Patch`` から ``SampleSpec`` を合成する（core/synth.py の唯一の公開エントリ）。"""
-    rate = dsp.sample_rate(patch.rate_note)
+def _scale_even(n: int, oversample: float) -> int:
+    """サンプル数で書かれた値（``Loop.length``・``attack_samples``）を oversample 倍し、偶数に丸める
+    （FRAMEWORK_REDESIGN.md §8.2）。``oversample=1.0`` では ``n`` が偶数である限り ``n`` をそのまま返す
+    （既存の挙動を変えない）。"""
+    return max(2, 2 * round(n * oversample / 2.0))
+
+
+@functools.lru_cache(maxsize=None)
+def render(patch: Patch, *, oversample: float = 1.0, bits: int = 8) -> SampleSpec:
+    """``Patch`` から ``SampleSpec`` を合成する（core/synth.py の唯一の公開エントリ）。
+
+    ``oversample``（m、既定 1.0）は内部の合成レートを ``base_rate×m`` に上げる
+    （FRAMEWORK_REDESIGN.md §8.2）。``m=1.0``・``bits=8``（ともに既定値）は現行（MOD 向け）と
+    完全に同じバイト列を返す。``bits=16`` は 16-bit signed PCM で量子化する。
+
+    ``(patch, oversample, bits)`` をキーにプロセス内でキャッシュする（§8.6。``Patch`` は frozen
+    dataclass なのでハッシュできる）。返り値の ``SampleSpec`` はキャッシュヒット時に**同じオブジェクト**を
+    返すので、呼び出し側は書き換えない（``dataclasses.replace()`` で複製してから変える。既存のコードは
+    すでにそうしている）。CLI は1回ごとに新しいプロセスなので、このキャッシュは同一プロセス内の
+    繰り返し呼び出し（テストの総当たり等）にだけ効く。1曲あたりの生成時間がこれで足りない場合に、
+    ディスクキャッシュを足すかどうかを F1 completion で判断する（§8.6）。
+    """
+    if oversample < 1.0:
+        raise SampleConstraintError(f"{patch.name}: oversample must be >= 1.0: {oversample}")
+    if bits not in (8, 16):
+        raise SampleConstraintError(f"{patch.name}: bits must be 8 or 16: {bits}")
+    base_rate = dsp.sample_rate(patch.rate_note)
+    rate = base_rate * oversample
+    real_rate = dsp.CLOCK / PERIODS[patch.rate_note]
     rng = random.Random(patch.noise_seed)
     f0 = hz(patch.rate_note + patch.shift) if patch.pitched else 1.0
+    quantize = dsp.to_pcm if bits == 8 else dsp.to_pcm16
+    bytes_per_sample = bits // 8
 
     if isinstance(patch.finish, OneShot):
         n = max(2, round(patch.finish.duration * rate))
@@ -339,18 +428,18 @@ def render(patch: Patch) -> SampleSpec:
         for wl in patch.layers:
             layer = wl.layer
             if isinstance(layer, ToneLayer):
-                sig = _render_tone_oneshot(layer, f0, rate, n)
+                sig = _render_tone_oneshot(layer, f0, rate, n, oversample=oversample, base_rate=base_rate)
             elif isinstance(layer, PitchSweepLayer):
-                sig = _render_pitch_sweep(layer, rate, n)
+                sig = _render_pitch_sweep(layer, rate, n, oversample=oversample, base_rate=base_rate)
             elif isinstance(layer, NoiseLayer):
-                sig = _render_noise(layer, rng, rate, n)
+                sig = _render_noise(layer, rng, rate, n, oversample=oversample, base_rate=base_rate)
             else:
                 raise SampleConstraintError(f"{patch.name}: unknown layer type {type(layer).__name__}")
             offset = round(wl.offset_ms / 1000.0 * rate)
             for i in range(offset, n):
                 mix[i] += wl.weight * sig[i - offset]
         if patch.post_filter is not None:
-            mix = _apply_post_filter(mix, patch.post_filter)
+            mix = _apply_post_filter(mix, patch.post_filter, oversample=oversample, base_rate=base_rate, rate=rate)
         if patch.decay_alpha is not None:
             for i in range(n):
                 mix[i] *= math.exp(-patch.decay_alpha * i / rate)
@@ -365,30 +454,34 @@ def render(patch: Patch) -> SampleSpec:
         xs = _normalized(mix, patch.peak) if patch.peak is not None else mix
         if patch.saturate is not None:
             xs = [math.tanh(patch.saturate * x) for x in xs]
-        data = dsp.to_pcm(xs)
+        data = quantize(xs)
         loop = None
+        rate_hz = real_rate * oversample
     else:
         assert isinstance(patch.finish, Loop)
-        length, attack_samples = patch.finish.length, patch.finish.attack_samples
+        length = _scale_even(patch.finish.length, oversample)
+        attack_samples = _scale_even(patch.finish.attack_samples, oversample) if patch.finish.attack_samples else 0
         body = [0.0] * length
         for wl in patch.layers:
-            layer_body = _render_loop_body(wl.layer, length)   # type は Patch.__post_init__ が保証
+            layer_body = _render_loop_body(wl.layer, length, oversample=oversample, base_rate=base_rate, rate=rate)
             for i in range(length):
                 body[i] += wl.weight * layer_body[i]
         xs = _normalized(body, patch.peak) if patch.peak is not None else body
         if patch.saturate is not None:
             xs = [math.tanh(patch.saturate * x) for x in xs]
         if attack_samples > 0:
-            data = dsp.to_pcm(dsp.with_attack(xs, attack_samples))
-            loop = (attack_samples // 2, length // 2)
+            data = quantize(dsp.with_attack(xs, attack_samples))
+            loop = (attack_samples * bytes_per_sample // 2, length * bytes_per_sample // 2)
         else:
-            data = dsp.to_pcm(xs)
-            loop = (0, length // 2)
+            data = quantize(xs)
+            loop = (0, length * bytes_per_sample // 2)
+        rate_hz = real_rate * length / patch.finish.length
 
     return SampleSpec(
         patch.name, data, patch.volume, loop=loop, rate_note=patch.rate_note,
         shift=patch.shift, pitched=patch.pitched, finetune=patch.finetune,
-        sounding_hz=_sounding_hz(patch, f0, rate),
+        sounding_hz=_sounding_hz(patch, f0, base_rate),
+        bits=bits, rate_hz=rate_hz,
     )
 
 

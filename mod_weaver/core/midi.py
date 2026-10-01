@@ -25,7 +25,7 @@ from typing import Optional
 from ..errors import PlanError
 from . import timeline as tl_mod
 from .dsp import CLOCK
-from .model import Song
+from .model import GmVoice, Song
 from .pitch import PERIODS
 
 PPQ = 96
@@ -38,24 +38,10 @@ BEND_PER_SEMITONE = 4096                          # ±2 半音レンジ
 UNPITCHED_NOTE = 60                               # 音高を持たない非ドラム音色（効果音等）の発音 note
 
 
-@dataclass(frozen=True)
-class GmVoice:
-    """楽器 1 つの GM 音色。``program``（0..127、旋律楽器）か ``drum_note``（35..81、ch10）のどちらか一方。"""
-    program: Optional[int] = None
-    drum_note: Optional[int] = None
-
-    def __post_init__(self) -> None:
-        if (self.program is None) == (self.drum_note is None):
-            raise ValueError("GmVoice needs exactly one of program / drum_note")
-        if self.program is not None and not 0 <= self.program <= 127:
-            raise ValueError(f"GM program out of range: {self.program}")
-        if self.drum_note is not None and not 27 <= self.drum_note <= 87:
-            raise ValueError(f"GM drum note out of range: {self.drum_note}")
-
-    @property
-    def is_drum(self) -> bool:
-        return self.drum_note is not None
-
+# GmVoice は core/model.py に定義がある（FRAMEWORK_REDESIGN.md §13.1 I8。genres/*.py が core の形式系
+# を import しないようにするため）。ここでは import するだけで、このモジュールの名前空間からも
+# 引き続き ``from ..core.midi import GmVoice`` で参照できる（Python の import の仕組みにより自然に
+# そうなるだけで、互換のための再エクスポートを意図したものではない）。
 
 # ------------------------------------------------------------
 # SMF の低レベル部品

@@ -46,9 +46,9 @@ from ..core.model import (
     SongPlan,
 )
 from ..core.pitch import CHORD_QUALITIES, MODES, Scale, fold_into_range
-from ..core.synth import Loop, Patch, ToneLayer, WeightedLayer
+from ..core.synth import Loop, Patch
 from ..core.synth_presets import PRESETS
-from ..errors import PlanError, SampleConstraintError
+from ..errors import PlanError
 from .base import GenreProfile
 
 ROWS_PER_PATTERN = 64
@@ -59,45 +59,14 @@ ALL_PARTS = frozenset({"drums", "bass", "comp", "lead", "pad", "arp", "fx"})
 # 和音サンプル
 # ============================================================
 
-MAX_LOOP_CHORD_CENTS = 12.0   # ループの和音で、構成音のサイクル数を整数に丸めたときに許す音程誤差
-
-
 def chord_patch(base: Patch, quality: str, *, strum_ms: float = 0.0) -> Patch:
     """``base`` の音色で和音 ``quality`` を1サンプルに焼き込んだ Patch（根音の高さで鳴らす）。
 
-    ToneLayer を構成音の数だけ複製して各部分音を音程比倍する（機械的な変換で美的判断を含まない）。
-    PitchSweep・Noise のレイヤー（打鍵の雑音など）は1回だけ残す。``strum_ms`` > 0 なら構成音ごとに
-    鳴り始めを遅らせてギターのストロークにする（OneShot のみ）。ループの素材はサイクル数を整数に丸めるので、
-    基本サイクル数が大きい（例: K=120）素材でないと音程がずれる（誤差が ``MAX_LOOP_CHORD_CENTS`` を超えたら例外）。
+    FRAMEWORK_REDESIGN.md §8.4 で ``core/synth.py`` へ移し、``quality`` 文字列ではなく intervals
+    を直接受けるように一般化した。ここでは quality → intervals の変換だけ行う薄い委譲にする
+    （band_common.py のこれまでの呼び出し側・エラー文言・サンプル名を変えないため）。
     """
-    import math
-
-    intervals = CHORD_QUALITIES[quality]
-    is_loop = isinstance(base.finish, Loop)
-    gain = 1.0 / math.sqrt(len(intervals))
-    layers: list[WeightedLayer] = []
-    for i, semi in enumerate(intervals):
-        ratio = 2.0 ** (semi / 12.0)
-        for wl in base.layers:
-            layer = wl.layer
-            if isinstance(layer, ToneLayer):
-                partials = []
-                for mult, weight, alpha in layer.partials:
-                    m = mult * ratio
-                    if is_loop:
-                        rounded = round(m)
-                        err = abs(1200.0 * math.log2(rounded / m))
-                        if err > MAX_LOOP_CHORD_CENTS:
-                            raise SampleConstraintError(
-                                f"{base.name}: loop chord {quality} is {err:.1f} cents off (cycle {mult} too small)")
-                        m = rounded
-                    partials.append((m, weight, alpha))
-                layers.append(WeightedLayer(ToneLayer(tuple(partials), layer.filter), wl.weight * gain,
-                                            0.0 if is_loop else wl.offset_ms + i * strum_ms))
-            elif i == 0:
-                layers.append(wl)
-    name = f"{base.name[:13]}{quality}"[:22]
-    return dataclasses.replace(base, name=name, layers=tuple(layers))
+    return synth.chord_patch(base, CHORD_QUALITIES[quality], strum_ms=strum_ms, label=quality)
 
 
 # ============================================================

@@ -34,6 +34,33 @@ MAX_SAMPLE_BYTES = 131070  # 65535 words
 
 
 # ============================================================
+# GmVoice
+# ============================================================
+# core/midi.py（形式系）ではなくここに置く理由: FRAMEWORK_REDESIGN.md の新しい枠組みでは
+# genres/*.py が core の形式系（writer・s3m・it・midi・render・verify・level）を import しない
+# （§3.1・§13.1 I8）。Instrument.gm の型として genres が GmVoice を参照する必要があるので、
+# 形式系ではないここに置く。core/midi.py は ``from .model import GmVoice`` で使う。
+
+@dataclass(frozen=True)
+class GmVoice:
+    """楽器 1 つの GM 音色。``program``（0..127、旋律楽器）か ``drum_note``（35..81、ch10）のどちらか一方。"""
+    program: Optional[int] = None
+    drum_note: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        if (self.program is None) == (self.drum_note is None):
+            raise ValueError("GmVoice needs exactly one of program / drum_note")
+        if self.program is not None and not 0 <= self.program <= 127:
+            raise ValueError(f"GM program out of range: {self.program}")
+        if self.drum_note is not None and not 27 <= self.drum_note <= 87:
+            raise ValueError(f"GM drum note out of range: {self.drum_note}")
+
+    @property
+    def is_drum(self) -> bool:
+        return self.drum_note is not None
+
+
+# ============================================================
 # Cell
 # ============================================================
 
@@ -269,9 +296,11 @@ class Pattern(CellGrid):
 @dataclass
 class SampleSpec:
     name: str                      # ASCII ≤22
-    data: bytes                    # 偶数長 ≥2、符号なし表現の 8bit signed PCM
+    data: bytes                    # 偶数長 ≥2、符号なし表現の 8bit（``bits=8``）または 16bit signed PCM
     volume: int                    # 0..64
-    loop: Optional[tuple[int, int]] = None   # (start_words, length_words) length>1。None は (0,1)
+    loop: Optional[tuple[int, int]] = None   # (start_words, length_words) length>1。None は (0,1)。
+    # ↑ "word" は常に「data の2 byte」を指す（8-bit なら 2 サンプル、16-bit なら 1 サンプル）。
+    #   writer 側は常に ×2 するだけで byte 位置に戻せる（FRAMEWORK_REDESIGN.md §8.2）
     rate_note: int = 24            # 生成レートを決める tracker note（既定 C-3）
     shift: int = 0                 # n = t + shift（DESIGN.md §3.1）
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
@@ -281,7 +310,12 @@ class SampleSpec:
     # ↑ tracker note ``rate_note``（finetune 0）で鳴らしたときに実際に聞こえる基本周波数（Hz）。
     #   synth.render() が記録する。音高を持たない音色は None。MIDI 出力が実音の高さを求めるのに使う
     #   （合成は dsp.sample_rate()＝実際の Paula 再生レートの半分を基準に波形を作るため、論理 note の
-    #   pitch.hz(n) とは一致しない。DESIGN.md §3.1）
+    #   pitch.hz(n) とは一致しない。DESIGN.md §3.1）。oversample（m）に依存しない値（FRAMEWORK_REDESIGN.md §8.1）
+    bits: int = 8                  # 8 | 16（FRAMEWORK_REDESIGN.md §8.2）。8-bit の全ジャンルは既定のまま
+    rate_hz: Optional[float] = None
+    # ↑ ``rate_note`` で鳴らすときに実際に使うべき再生レート（Hz）。synth.render() が oversample から
+    #   計算する。S3M/IT の C2Spd・C5Speed や XM の relative_note+finetune は、この値から求める
+    #   （FRAMEWORK_REDESIGN.md §8.2・§10）。MOD は Period 表だけで再生レートが決まるので参照しない
 
     @property
     def length_words(self) -> int:
@@ -297,9 +331,13 @@ class SampleSpec:
         n = self.name
         if len(n) > 22 or not n.isascii():
             raise SampleConstraintError(f"sample name must be ASCII and <=22 chars: {n!r}")
+        if self.bits not in (8, 16):
+            raise SampleConstraintError(f"sample {n!r}: bits must be 8 or 16: {self.bits}")
         if len(self.data) < 2 or len(self.data) % 2 != 0:
             raise SampleConstraintError(f"sample {n!r}: length must be even and >=2 (got {len(self.data)})")
-        if len(self.data) > MAX_SAMPLE_BYTES:
+        if self.bits == 8 and len(self.data) > MAX_SAMPLE_BYTES:
+            # MOD/S3M の 8-bit サイズ上限（65535 word）。16-bit や他形式の上限は Realizer/SampleCaps が
+            # 持つ（FRAMEWORK_REDESIGN.md §4.1・§8.2）ので、ここでは 8-bit のときだけ検査する
             raise SampleConstraintError(f"sample {n!r}: length {len(self.data)} exceeds {MAX_SAMPLE_BYTES}")
         if not 0 <= self.volume <= 64:
             raise SampleConstraintError(f"sample {n!r}: volume out of range: {self.volume}")

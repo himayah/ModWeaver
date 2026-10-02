@@ -115,3 +115,27 @@ def test_cents_variant_shifts_the_pitch_by_exactly_that_much(fmt, cents):
         expected = base.sounding_hz * 2 ** ((d * 100 + cents) / 1200)
         got = fft_freq(audio, RATE, i * ROW_S + 0.25, 0.8, expected)
         assert abs(cents_between(got, expected)) <= TOLERANCE_CENTS[fmt], (fmt, cents, d, got, expected)
+
+
+@pytest.mark.parametrize("key", TONAL)
+def test_midi_note_number_matches_the_pitch_the_player_actually_sounds(key):
+    """MidiRealizer の音高（§11.3）が、実プレイヤーで鳴る実音と一致する（MIDI は実音から求めるので、
+    トラッカー形式の音高の検査 I4 と同じ高さを指すこと）。"""
+    import types
+
+    from mod_weaver.core.model import GmVoice
+    from mod_weaver.framework.genre import Instrument
+    from mod_weaver.framework.realize.midi import _Info
+
+    patch = PRESETS[key]
+    info = _Info(types.SimpleNamespace(instruments={"x": Instrument(patch=patch, gm=GmVoice(program=0))}))
+    target = resolve("it", None, make_genre(), seed=1)
+    spec = render_for(patch, target)
+    codec = Codec("it")
+    ts = _tones(patch, spec.sounding_hz)
+    audio = decode_f32(serialize(_song("it", spec, [codec.n_ref + (t - patch.rate_note) for t in ts])), ".it", RATE)
+    for i, t in enumerate(ts):
+        midi = info.midi_pitch("x", t + patch.shift)
+        expected = 440.0 * 2 ** ((midi - 69) / 12)
+        got = fft_freq(audio, RATE, i * ROW_S + 0.25, 0.8, expected)
+        assert abs(cents_between(got, expected)) <= TOLERANCE_CENTS["it"], (key, t, got, expected)

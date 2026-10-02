@@ -1163,7 +1163,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | F2 framework（作曲側、**完了**） | `target.py`・`score.py`・`plan.py`・`genre.py`・`context.py`・`compose.py`・部品集 `gens/` | §4〜§7 | 架空の小さなジャンルで Score が作れる。部品のテスト（現行 `band_common` の型と同じ row・音量・確率が出る）。**結果: 両方とも確認済み（§16.4）** |
 | F3 TrackerRealizer（MOD）（**完了**） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い。**結果: `mod_weaver/framework/realize/`（lanes.py・samples.py・tracker.py）を実装。pop・racing-breaks は 4/6/8ch、march は現行どおり 4ch 専用で全て生成・検査（0 ERROR）が通る（seed 1〜5 で確認）。ladder の結果が現行 ARRANGEMENTS のチャンネル数と一致（§16.5）。`output/f3-trial/*.mod` を生成済み、ユーザーの試聴待ち。詳細・設計の隙間は §16.5** |
 | F4 S3M・XM・IT・MP3（**完了**） | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る。**結果: 3ジャンル × S3M・XM・IT（MOD は F3 と同じ経路に載せ替え）で I2・I3・I5・I6 が通り、I4（実音）は全プリセットのうち測れる34音色 × 4形式で通る（許容は XM・IT 7 セント、MOD 9、S3M 12。理由は §16.6）。MP3 は IT 経由 320 kbps。§13.4 の F4 の実測項目は Glide を除き完了。`output/f4-trial/` に試聴用を生成済み（ユーザーの試聴待ち）。詳細・設計の隙間は §16.6** |
-| F5 MIDI | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり |
+| F5 MIDI（**実装完了・GM 音源での試聴待ち**） | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり。**結果: `framework/realize/midi.py`・`core/native_midi.py`。3ジャンルが検査（ERROR 無し）・決定性・長さ（Score の時間軸と tick 単位で一致）を満たし、音高の式は実プレイヤーで測った実音と一致する（34音色）。この環境に GM 音源が無いので実際に鳴らしての確認は未実施（`output/f5-trial/*.mid` を生成済み）。詳細は §16.7** |
 | F6 A・B の移植 | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの） |
 | F7 C の移植 | 11ジャンル（march を除く） | §15.4 | 同上 |
 | F8 仕上げ | engine・cli を新しい経路だけにし、旧コード（§2.4 の「捨てる」）を削除。音量の実測（`calibrate_levels.py`）、出力の基準（`golden.json`。§13.2）、`listen_samples.py`、GUI、README、DESIGN.md への統合と DESIGN_HISTORY.md への経緯の記録、本書の削除 | §14 | 全テスト（realplayer を含む）が通る。全ジャンルを試聴し、ユーザーの確認を得てから main にマージ |
@@ -1366,6 +1366,36 @@ S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker
   （平均 −14 dB）を通るので、ピークだけを揃える他形式より大きく聞こえる。全ジャンルの実測表は F8（表は今は3ジャンルだけ）。
 - 旧 `engine`・`cli`・`formats.py` の登録簿への接続（`--format` から新しい経路を呼ぶこと）は F8。F4 の時点で新経路は
   `native.serialize(realize(...))` を直接呼ぶ。
+
+### 16.7 F5 の実装で埋めた設計の隙間
+
+`framework/realize/midi.py`（`realize_midi(genre, score, plan, target) -> bytes`）と、新しい検査器 `core/native_midi.py`
+（PPQ 480。`native.verify("midi", data)`）。旧 `core/midi.py`（PPQ 96・`Song` 用）は F8 まで残し、低水準の部品
+（`_track`・`_meta`・`_cc`）と `parse_midi` だけ再利用した。
+
+- **時間**: 1 tracker tick ＝ 20 MIDI tick。区間ごとの step→tick の写像（`_step_time`）がスウィング
+  （2 step の組の後ろの step を `long` tick 目から）を含む。TempoEvent は時刻順にそのまま置き、拍子は小節ごとに
+  `step 数 × tick` から求める（求まらなければ `Meter.signature`）。
+  **MIDI はスウィングを実装済みだが、トラッカー側の Realizer は未実装のまま（§16.6）**。
+- **音高**: `midi = 69 + 12 log2(sounding_hz/440) + (t − rate_note) + tune_cents/100`（t ＝ 書かれた音高 − shift）。
+  設計書 §11.3 の `n + 36 + offset` と同じ実音を指す（§8.1 の基準から直接導いた形）。整数でない部分はピッチベンド
+  （±2 半音。`Glide` のあるパートは ±12）。**セントの違う音が重なるパートはセントの値ごとに別チャンネル**
+  （重ならないパートは1チャンネルで発音ごとにベンド）。チャンネルが足りなければ同じ program の単一楽器パートが相乗り、
+  それでも足りなければ `PlanError`。打楽器と旋律の混在するパートは `PlanError`。
+- **終わり（§11.3 の「長さ」）**: `dur` ＞（ループ: 区間の終わり／ワンショット: 自然減衰の長さ）と、同じパート・同じ楽器の
+  次の発音のうち早いもの。自然減衰は曲の初期テンポで tick に換算する（テンポ変化のある曲では少しずれる）。`NoteOff`・`Cut`
+  で短くなり、曲の終わりを超えない。同じチャンネル・同じ音高の重なりは次の発音の頭で切る（止まらない音を作らない）。
+- **奏法**: `Delay`＝発音を遅らせる、`Retrig`＝間隔ごとの再発音、`Arpeggio`＝1 tracker tick ごとに音を切り替え（終わった後は
+  基の音が続く。トラッカーと同じ）、`Vibrato`＝CC1（深さのニブル × 8、終わりで 0）、`Glide`＝**直前の音が鳴っているときだけ**、
+  新しい音を直前の音の高さのベンドから 1 tracker tick ごとに目標へ動かす（直前の音が終わっていれば普通の発音。差が 12
+  半音を超えるときも普通の発音）、`Tremolo`・`Offset` は無視。和音は構成音を同時に発音し、`strum_ms` は tick にして遅らせる
+  （velocity は和音でも `1/√k` にしない）。
+- **ミキシング**: velocity ＝ `round(vel/64 × 127)` を、曲の最大が 127 になるまで一律に持ち上げる。`Automation`＝CC11（その
+  時点の発音の音量に対する比）・CC10・CC74、`Sidechain`＝対象パートの CC11（トリガーの発音ごとに下げて戻す）。
+  `Instrument.pan`／`Part.pan` は CC10（楽器が変わるたびに program change と一緒に出す）。
+- **検査（`native_midi.verify`）**: 旧検査（読める・EOT・note on/off の対応・テンポ）に、PPQ 480、velocity・ノート範囲、
+  メロディのチャンネルの program 指定、ドラムの音域（27..87）、**同時発音数が GM1 の保証する 24 を超えたら WARN** を加えた。
+- **まだ無いもの**: GM 音源で鳴らしての聴感の確認（この環境に音源が無い）。`Tremolo`（CC1 とは別の表現が無いので無視）。
 
 ---
 

@@ -173,4 +173,7 @@ def verify(fmt: str, data: bytes) -> list:
 
     if fmt == "mod":
         return verify_mod.verify(data)
+    if fmt == "midi":
+        from . import native_midi
+        return native_midi.verify(data)
     return {"s3m": native_s3m, "xm": native_xm, "it": native_it}[fmt].verify(data)

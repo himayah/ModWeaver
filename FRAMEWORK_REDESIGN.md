@@ -991,19 +991,19 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 
 ### 13.4 要実測の一覧（実装の最初の段階で確かめる）
 
-最初の3項目は F0 の段階で確かめた（結果は下の表の3列目）。それ以外は F4 で確かめる。
+最初の3項目は F0 の段階で、残りは F4 で確かめた（結果は下の表の3列目）。
 
 | 項目 | 確かめ方 | F0 の結果 |
 |:---|:---|:---|
 | XM・IT の 16-bit サンプルの読み込みと音量 | 同じ波形の 8-bit と 16-bit を libopenmpt で鳴らして振幅を比べる | **確認済み**。手組みの 16-bit XM・IT（1 サンプル・ループ）を libopenmpt で再生し、全音域で意図した高さ・振幅で鳴ることを確認した（下記2項目の測定がそのまま振幅・波形の健全性も示す）。XM は 16-bit でもサンプルデータの delta 符号化が必要（8-bit と同じ規約を 16-bit 語で適用。`core/writer._xm_delta_encode` は 8-bit 専用なので F4 で 16-bit 版を足す） |
 | XM の relative note・finetune による再生レート、拡張音域の音高 | I4 の仕組みで、音域の端の音を含めて測る | **確認済み**。Amiga 周波数表のまま、relative_note（-24..+24 半音）・finetune（-128..127 の全域）・XM note（1..96 の全域）を振り、FFT（窓 1 秒、放物線補間）で測定。67 点中、音域の上端（XM note 96）と finetune の極値付近で最大 5.7 セントの誤差、残りは 3 セント未満。**全点が I4 の許容 7 セント以内**（放物線補間を使った自前の測定スクリプトは `tests/realplayer` の既存のゼロ交差法より精度が高い。本番の検査 I4 もこの精度の測定に変える） |
-| S3M の C2Spd・IT の C5Speed を任意の値にしたときの音高 | 同上 | **IT で確認済み**（C5Speed 100〜65535、IT note 0..119 の全域で測定。最大誤差 2.1 セント）。S3M の C2Spd は IT の C5Speed と同じ関数（`s3m.c2spd`）を使っているので同じ結果が見込まれるが、**S3M 自体は未測定**（F4 で測る）。**設計への影響はない注意点が1件**: C5Speed を実用上あり得ない値（100 Hz 相当。本設計の `rate_hz` は常に `dsp.sample_rate()×oversample` 由来で実用域は約 4 kHz〜300 kHz）にすると、libopenmpt 側の下限処理と見られる挙動で意図しない高さが出た。実用域（4 kHz 以上）では再現しないので設計を変える必要はないが、F4 で IT・S3M の検査器に「C5Speed/C2Spd の実用下限（例 1 kHz）を下回ったら警告」を足すことを検討する |
-| `Tremolo` の深さが形式間で一致するか | 長い音にトレモロを掛け、振幅の変動を比べる | 未測定（F4） |
-| 拡張音域の `Glide` の速さ | 1オクターブのグライドの到達時間 | 未測定（F4） |
-| XM・IT のエンベロープ（リリース）の時間 | キーオフから無音までの時間 | 未測定（F4） |
-| IT の `Zxx` が既定のマクロで効くか | 白色雑音にカットオフを掛けて帯域を測る | 未測定（F4） |
-| IT の pattern の最小 row 数 | 16 row の pattern を書いて libopenmpt と OpenMPT で開く | 未測定（F4） |
-| XM のキーオフ（エンベロープ無し）で音が止まるか | 長いループ音にキーオフ | 未測定（F4） |
+| S3M の C2Spd・IT の C5Speed を任意の値にしたときの音高 | 同上 | **IT で確認済み**（C5Speed 100〜65535、IT note 0..119 の全域で測定。最大誤差 2.1 セント）。S3M の C2Spd は IT の C5Speed と同じ関数（`s3m.c2spd`）を使っているので同じ結果が見込まれるが、**S3M は F4 で測った（§16.6 の「S3M の音高」）**。**設計への影響はない注意点が1件**: C5Speed を実用上あり得ない値（100 Hz 相当。本設計の `rate_hz` は常に `dsp.sample_rate()×oversample` 由来で実用域は約 4 kHz〜300 kHz）にすると、libopenmpt 側の下限処理と見られる挙動で意図しない高さが出た。実用域（4 kHz 以上）では再現しないので設計を変える必要はないが、F4 で IT・S3M の検査器に「C5Speed/C2Spd の実用下限（例 1 kHz）を下回ったら警告」を足すことを検討する |
+| `Tremolo` の深さが形式間で一致するか | 長い音にトレモロを掛け、振幅の変動を比べる | **F4 で測定済み**。MOD・XM は一致。**S3M・IT は深さが正確に半分**（深さのニブル 2〜15 で比例）。`encode.Codec.tremolo` が S3M・IT の深さを 2 倍（上限 15）にして合わせる。MOD の深さ 8 以上は S3M・IT で頭打ち |
+| 拡張音域の `Glide` の速さ | 1オクターブのグライドの到達時間 | **未測定のまま F7 へ持ち越し**。Realizer はまだ直前の period を知らず `Glide.param` 無指定を最小速度にしている（§16.5）ので、測っても使える入力が無い。`Glide` を使う最初のジャンル（trap）を移植する F7 で、period の計算と一緒に測る |
+| XM・IT のエンベロープ（リリース）の時間 | キーオフから無音までの時間 | **F4 で測定済み**。点 `(0,64)`（サステイン）と `(release_s ÷ (2.5/BPM) tick, 0)` で、キーオフから振幅が 5% に落ちるまでが `release_s` に ±0.02 秒で一致（0.12・0.36・0.72 秒）。tick の換算は曲の**初期テンポ**で行うので、途中でテンポが変わる曲では長さがずれる |
+| IT の `Zxx` が既定のマクロで効くか | 白色雑音にカットオフを掛けて帯域を測る | **F4 で確認済み**。`Z127`→`Z32` で重心周波数が 10.8 kHz → 3.2 kHz → 1.6 kHz → 0.8 kHz と単調に下がる（埋め込みマクロは不要） |
+| IT の pattern の最小 row 数 | 16 row の pattern を書いて libopenmpt と OpenMPT で開く | **F4 で測定済み（libopenmpt のみ）**。12・16 row の pattern も正しい長さで再生できる。ただし IT の仕様の下限は 32 row なので、書き出しは設計どおり 32 row に詰めて最後の実際の row に `C00` を置く（OpenMPT・Schism での確認はしていない） |
+| XM のキーオフ（エンベロープ無し）で音が止まるか | 長いループ音にキーオフ | **F4 で測定済み**。XM は止まる（次の 50 ms で 0）。**IT の `===` はエンベロープ無しでは止まらない**（振幅が変わらない）。したがって Realizer は `release_s` のある楽器だけに `NOTE_OFF` を使い、他は `NOTE_CUT`（IT・S3M）／音量 0（XM・MOD）で止める |
 
 ---
 
@@ -1162,7 +1162,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | F1 core（**完了**） | `SampleSpec` の拡張、`synth.render(oversample, bits)`、`dsp` の係数の換算、`chord_patch` の移動と一般化、`GmVoice` の `core/model.py` への移動、描画のキャッシュ | §8・§13.1 I8 | I7 が通る。既存の synth のテストが通る。**全プリセットの描画時間を m=1 と S3M・XM・IT の倍率で測り、1曲の生成時間を見積もってディスクキャッシュの要否を決める**（§8.6）。**結果: I7・既存テストとも通過。44.1kHz 相当（m≈2.66・bits=16）での全39 BandProfile ジャンルのサンプル合成時間を実測し、最悪値は gamelan の 1.15〜1.2秒（22 楽器、ゴング等の長い減衰音が複数）。NFR-3 の目安 2 秒を下回るので、ディスクキャッシュは入れない（プロセス内キャッシュのみ実装）。挙動が変わって遅くなった場合は §8.6 の設計のまま追加できる** |
 | F2 framework（作曲側、**完了**） | `target.py`・`score.py`・`plan.py`・`genre.py`・`context.py`・`compose.py`・部品集 `gens/` | §4〜§7 | 架空の小さなジャンルで Score が作れる。部品のテスト（現行 `band_common` の型と同じ row・音量・確率が出る）。**結果: 両方とも確認済み（§16.4）** |
 | F3 TrackerRealizer（MOD）（**完了**） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い。**結果: `mod_weaver/framework/realize/`（lanes.py・samples.py・tracker.py）を実装。pop・racing-breaks は 4/6/8ch、march は現行どおり 4ch 専用で全て生成・検査（0 ERROR）が通る（seed 1〜5 で確認）。ladder の結果が現行 ARRANGEMENTS のチャンネル数と一致（§16.5）。`output/f3-trial/*.mod` を生成済み、ユーザーの試聴待ち。詳細・設計の隙間は §16.5** |
-| F4 S3M・XM・IT・MP3 | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る |
+| F4 S3M・XM・IT・MP3（**完了**） | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る。**結果: 3ジャンル × S3M・XM・IT（MOD は F3 と同じ経路に載せ替え）で I2・I3・I5・I6 が通り、I4（実音）は全プリセットのうち測れる34音色 × 4形式で通る（許容は XM・IT 7 セント、MOD 9、S3M 12。理由は §16.6）。MP3 は IT 経由 320 kbps。§13.4 の F4 の実測項目は Glide を除き完了。`output/f4-trial/` に試聴用を生成済み（ユーザーの試聴待ち）。詳細・設計の隙間は §16.6** |
 | F5 MIDI | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり |
 | F6 A・B の移植 | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの） |
 | F7 C の移植 | 11ジャンル（march を除く） | §15.4 | 同上 |
@@ -1262,6 +1262,104 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 - **3ジャンルの生成例と検査結果**: `tests/framework/realize/test_ported_genres.py`
   （`test_generate_reference_files_for_listening`）が `output/f3-trial/*.mod` を書き出す。ユーザーが
   実際に試聴して確認する（ffmpeg が使えるサンドボックスでは同じ内容を `.mp3` にも変換できる）。
+
+### 16.6 F4 の実装で埋めた設計の隙間
+
+S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker,samples}.py` として実装した。F5 以降も
+同じ名前・考え方を前提にしてよい。
+
+**構成**
+
+- **MOD も同じ経路に載せ替えた**。`tracker.realize()` が全トラッカー形式で `core.native.RealizedSong`（サンプル・
+  `RGrid` の pattern・order・パン・初期 BPM と Speed・`sample_release`）を返す。MOD は `native.to_mod_song()` で
+  既存の `model.Song` に変換して既存の `core/writer.serialize` に渡す（`realize_mod()` は F3 の形を保つ薄い入口）。
+  §9.6 の汎用 Cell は `core/native.py` の `RCell`（`note`・`sample`・`vol`・`fx`）として実装した。旧 `model.Cell`・旧 writer・
+  旧パーサ（`s3m.py`・`it.py`・`writer.serialize_xm`・`verify.py`）は F8 まで並行して残る（パーサは新しい検査器が再利用する
+  ので、IT の楽器と 16-bit の長さ、XM の音量エンベロープを読めるよう加算的に拡張した）。
+- **`RCell.note` は 0 始まりの半音番号**（C-0 = 0）。基準ノートは S3M・XM が C-4（48）、IT が C-5（60）で、`rate_hz` で
+  鳴る。writer が形式の表記（S3M の `(octave<<4)|semitone`、XM の +1）に直す。MOD だけは tracker note（0..35）のまま。
+  特別な値は `NOTE_CUT`（S3M・IT の `^^^`）と `NOTE_OFF`（XM の 97・IT の `===`）。
+- **`RCell` に `pan` を持たせなかった**（§9.6 の定義から外した）。XM は発音のたびにサンプルのパンへ戻るので、
+  **lane のパンごとに別のサンプル**（`samples.SampleKey` の4つ目の要素。名前に `@<pan>` が付く）にして、セルごとの
+  `Px` をやめた（ボリューム列は音量だけに使える）。S3M・IT のパンはヘッダ（IT は楽器・サンプルの既定パンを使わない）。
+  `Automation("pan")` はエフェクトで表す（S3M `S8x`・XM `8xx`・IT `Xxx`。優先順位が最も低く、他の効果があれば落とす）。
+  XM では、パンのオートメーションの後に同じ lane が次に発音すると、サンプルのパンへ戻る。
+- **コマンド文字は形式の表記**（`RCell.fx = ("H", param)`）。表は `encode.Codec` の1か所だけ。`Codec` は音高（`note()`）、
+  各奏法、Speed・テンポ・pattern の中断、音量スライド、パン、カットオフ、止めるセル（`stop_cell()`）を持つ。
+
+**セル化の規則（§9.6）の具体化**
+
+- 1セルに入りきらないときの優先順位は `encode.PRIORITY`（Delay > Glide > Retrig・Cut > Arpeggio > Offset > Vibrato・Tremolo >
+  音量スライド > パン・カットオフ）。トリガーの row を取れなかった Vibrato・Tremolo は次の row へ移す。他は落とす（DEBUG ログ）。
+- **MOD の音量とエフェクトの排他（§9.6 の2）を設計書どおりに実装した。F3 の挙動が変わる**: F3 は「トリガーのエフェクトが
+  あれば音量を常に落とす」だったが、今は音量が楽器の既定音量と等しければ書かず、違えば Delay・Glide・Retrig・Cut・Arpeggio・
+  Offset ではエフェクトを残して音量を落とし、Vibrato・Tremolo では**音量を残して奏法を次の row へ移す**。
+- **`strum_ms`（和音の声部のストローク。§9.5）を実装した**。F3 は未実装だった（記録も漏れていた）。声部 i の `strum_ms` を
+  `Delay(round(strum_ms ÷ 1 tick の ms))`（1 tick ＝ 2500/BPM ms、step の tick 数 − 1 で頭打ち）にする。MOD では Delay と
+  同じセルの音量が落ちる（§9.6 の2）ので、ストロークのある和音の声部は既定音量で鳴る。
+- `Offset` は**フレーム数**（16-bit は 2 byte で 1 フレーム）に対する割合で `xx = round(f × フレーム数 / 256)`、255 で頭打ち。
+  IT の 64 KiB を超える位置の `SAx` は使っていない。
+- **Speed・テンポ**は、全区間の `ticks_per_step` が同じなら曲の最初の区間（`order[0]`）にだけ、違うなら全区間の先頭に書く
+  （F3 は `score.sections` の作成順の最初に書いており、`order[0]` と違うと V10 に落ちる不具合の素だった）。row コマンドの場所は
+  制御チャンネルを最優先し（`RGrid.try_insert_command(prefer=)`）、埋まっていれば空のセル、音量・エフェクトの無い発音のセル。
+  非 MOD は音量が別の列なので、音量のある発音のセルにも相乗りできる。
+- **pattern**: MOD・S3M は 64 row 固定、IT は max(実際の長さ, 32) で足りない分は `C00`、XM は実際の長さ。上限（`max_rows`）を
+  超える区間は小節の境目で分ける。pattern 数・order 長の上限を超えたら `PlanError`。**同じ内容の pattern の統合はしていない**
+  （区間の繰り返しは同じ pattern 番号の繰り返しで足りている）。
+- チャンネル数は、MOD は予算（4/6/8）、他形式は実際の lane の数（制御チャンネル込み）。
+
+**サンプル（§8.4）**
+
+- `SampleKey = (楽器名, 和音の形, セント, パン)`。**実際に使われた鍵だけ**サンプルを作る（F3 は lane の `insts` を全部作った）。
+  並びは「楽器の宣言順の素の楽器 → 和音の形の変種」。
+- 微分音・`tune_cents`: MOD 以外で、書かれた音高の小数部と `Instrument.tune_cents` から整数セントを求め、**同じ波形で再生レートに
+  `2^(cents/1200)` を掛けた別サンプル**にする（S3M・IT は C2Spd・C5Speed、XM は relative note と finetune）。MOD は従来どおり
+  整数の tracker note に丸め、セントは無視する（MOD の finetune 変種は未実装。F7 の maqam・gamelan までに）。
+- `Instrument.pitched`（`None` 以外）の上書きをサンプルの `pitched` に反映するようにした（F3 は無視していた）。
+- 描画の倍率 m ＝ `max(1, target_rate ÷ 実際の再生レート)`。1サンプルの上限（S3M の 64000 byte）を超えたら m を下げて描き直す
+  （最大4回）。S3M の全サンプルが 64000 byte 以下・約 44.1 kHz になることをテストで確かめている。
+
+**書き出し（§10）**
+
+- XM: ボリューム列は `0x10 + vol`、16-bit サンプルは語単位の delta、relative note と finetune は `12 log2(rate_hz/8363)` を
+  1/128 半音に丸めて分ける（Amiga 周波数表。F0 の測定どおり）。リリースのエンベロープは 2 点（サステイン点＋0 へ落ちる点）。
+- IT: 楽器モード・NNA=Note Cut・キーボード表は全ノートをそのサンプルへ・楽器ヘッダ 554 byte。サンプルの長さとループは
+  「サンプル数」単位（16-bit は byte ÷ 2）。リリースのエンベロープは XM と同じ2点（サステインループ付き）。
+- S3M: 8-bit・C2Spd ＝ `round(rate_hz)`（65535 以下）。`Instrument.release_s` のある楽器の `NOTE_OFF` は使えないので音量スライド。
+- **検査器**（`native_s3m.verify`・`native_xm.verify`・`native_it.verify`）: §10.5 の項目に加えて、XM の音量列の範囲（0x10..0x50）、
+  XM のエンベロープ（点数・tick の単調増加）、IT の楽器モードのフラグ・キーボード表・NNA、pattern の row 数、
+  C2Spd・C5Speed が 1000 Hz を下回ったら WARN（V18。F0 の注意点）。コードは旧検査器と同じ番号体系で、新しく V17〜V22。
+- **MP3**: `render.render_mp3_from_it()`。`ffmpeg -f libopenmpt -i x.it ... -c:a libmp3lame -b:a 320k -compression_level 0`
+  （2パスの音量調整は旧と共通の `encode_mp3()`）。旧 `render_mp3()`（XM・192 kbps）は F8 まで残す。
+
+**リリース（§9.7）**
+
+- `release_s` のある楽器: XM・IT は `NOTE_OFF`＋エンベロープ、MOD・S3M は音量スライド（`Axy`／`Dxy`）を `ceil(release_s ÷ 1 row の秒数)`
+  個の row に置き、最後に止める（スライド量は `round(今の音量 ÷ (row 数 × (tick − 1)))`、1..15）。区間の終わりのループ停止だけは、
+  スライドが次の区間にはみ出せないので MOD・S3M では即時に止める。XM・IT の tick の換算は曲の初期テンポ。
+- 実測で、**IT の `===` はエンベロープの無い楽器では止まらない**ので、`release_s` の無い楽器は `NOTE_CUT`（IT）／音量 0（XM）で止める。
+
+**S3M の音高（I4 の許容を形式ごとに変えた理由）**
+
+- libopenmpt の S3M は ST3 の整数の周期表を再現しており、音高の誤差は基準オクターブで最大 ±5.6 セント、C2Spd が 44.1 kHz だと
+  周期が小さくなる高いオクターブで 8〜12 セントになる（実測: ノート 24..71 の全域。C2Spd を 22.05 kHz にしても 65・69 番で
+  8.7・9.4 セント）。これは形式固有でファイル側では直せない。
+- よって I4（`tests/realplayer/test_pitch.py`）の許容を **XM・IT 7 セント（設計書どおり）、MOD 9 セント（Period 表の丸め 5.9 に
+  FFT の測定誤差が乗る）、S3M 12 セント**とした。
+- I4 の対象は、基本周波数が一意に測れる持続音（ループ）の34プリセット。除外は `fb_supersaw`・`tension_strings`（複数の声を
+  ずらして重ねる音色。MOD でも同じ理由で外れる）。ワンショットは減衰が速く窓で測れないので対象外。最低音は期待周波数が 170 Hz
+  以上になる音まで（窓 0.8 秒の FFT 分解能。pad 系が 130 Hz で測れなかった）。
+
+**まだ無いもの（意図して持ち越し）**
+
+- **スウィング（§9.9）**: F3 から未実装（`SectionPlan.swing` を Realizer が読んでいない）。最初のスウィングのジャンルを移植する
+  F6 の前に入れる。入れるときは、スウィングのある曲では全区間の先頭に Speed を明示すること（直前の区間の Speed が残らないように）。
+- `Glide` の period 計算と拡張音域の速さ（§13.4 の表）、MOD の finetune 変種（微分音）、`Offset` の IT `SAx`。いずれも該当する
+  ジャンルの移植（F7）で。
+- 音量の底上げ（§9.10・`level.py`）と実測値（`PEAK_DB`）は F8。F4 の時点では持ち上げずに、**全形式で最大振幅が −3.4 dBFS 以下**
+  （3ジャンル・MOD 4/8ch・S3M・XM・IT。I6 の −0.5 dBFS に対して余裕がある）。IT の mix volume は 48 のまま。
+- 旧 `engine`・`cli`・`formats.py` の登録簿への接続（`--format` から新しい経路を呼ぶこと）は F8。F4 の時点で新経路は
+  `native.serialize(realize(...))` を直接呼ぶ。
 
 ---
 

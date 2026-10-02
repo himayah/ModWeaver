@@ -112,3 +112,42 @@ def correlation(x: list[float], y: list[float]) -> float:
     sx = math.sqrt(sum((a - mx) ** 2 for a in x))
     sy = math.sqrt(sum((b - my) ** 2 for b in y))
     return sxy / (sx * sy) if sx and sy else 0.0
+
+
+# ---- 高精度の音高測定（I4。FRAMEWORK_REDESIGN.md §13.1・§13.4）。numpy が要る ----
+
+def decode_f32(data: bytes, ext: str, rate: int = 48000, channels: int = 1):
+    """実プレイヤーで再生した波形（float32 の ndarray、チャンネル数 1 なら 1 次元）。"""
+    import numpy as np
+
+    exe = ffmpeg_with_openmpt()
+    assert exe, "ffmpeg with libopenmpt required"
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, f"song{ext}")
+        with open(src, "wb") as f:
+            f.write(data)
+        proc = subprocess.run([exe, "-hide_banner", "-nostdin", "-loglevel", "error", "-f", "libopenmpt", "-i", src,
+                               "-ac", str(channels), "-ar", str(rate), "-f", "f32le", "-"],
+                              capture_output=True, timeout=300)
+    assert proc.returncode == 0, proc.stderr.decode(errors="replace")
+    a = np.frombuffer(proc.stdout, dtype="<f4")
+    return a if channels == 1 else a.reshape(-1, channels)
+
+
+def fft_freq(samples, rate: int, start_s: float, dur_s: float, expected_hz: float, span: float = 0.12) -> float:
+    """``expected_hz`` の近く（±``span``）にある最大ピークの周波数（対数振幅の放物線補間。サブセント精度）。"""
+    import numpy as np
+
+    lo = int(start_s * rate)
+    w = samples[lo:lo + int(dur_s * rate)]
+    n_fft = 8 * len(w)     # ゼロ詰め（ピークの位置の補間を細かくする。分解能そのものは窓の長さで決まる）
+    mag = np.abs(np.fft.rfft(w * np.hanning(len(w)), n_fft))
+    freqs = np.fft.rfftfreq(n_fft, 1 / rate)
+    band = np.where((freqs >= expected_hz * (1 - span)) & (freqs <= expected_hz * (1 + span)))[0]
+    k = int(band[np.argmax(mag[band])])
+    a, b, c = (math.log(max(mag[k + d], 1e-12)) for d in (-1, 0, 1))
+    return (k + 0.5 * (a - c) / (a - 2 * b + c)) * rate / n_fft
+
+
+def cents_between(measured: float, expected: float) -> float:
+    return 1200.0 * math.log2(measured / expected)

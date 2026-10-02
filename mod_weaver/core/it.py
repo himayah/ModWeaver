@@ -39,6 +39,8 @@ GLOBAL_VOLUME = 128
 CHANNEL_DISABLED = 0x80
 SAMPLE_FLAG_HAS_DATA = 0x01
 SAMPLE_FLAG_LOOP = 0x10
+SAMPLE_FLAG_16BIT = 0x02
+INSTRUMENT_HEADER_SIZE = 554
 CVT_SIGNED = 0x01
 DFP_ENABLED = 0x80
 
@@ -189,6 +191,18 @@ class ParsedITSample:
 
 
 @dataclass
+class ParsedITInstrument:
+    name: bytes
+    nna: int
+    fadeout: int
+    dfp: int
+    keyboard: list[tuple[int, int]]          # 120 組の (note, sample 番号)
+    vol_env_flags: int = 0
+    vol_env_points: list[tuple[int, int]] = field(default_factory=list)   # (tick, 値)
+    vol_env_sustain: tuple[int, int] = (0, 0)
+
+
+@dataclass
 class ParsedIT:
     magic: bytes
     orders: list[int]
@@ -198,6 +212,7 @@ class ParsedIT:
     channel_pan: bytes
     samples: list[ParsedITSample] = field(default_factory=list)
     patterns: list[list[list[ParsedITCell]]] = field(default_factory=list)
+    instruments: list[ParsedITInstrument] = field(default_factory=list)
 
     @property
     def channels(self) -> int:
@@ -215,12 +230,24 @@ def parse_it(data: bytes) -> ParsedIT:
     flags = struct.unpack("<H", data[0x2C:0x2E])[0]
     pos = HEADER_SIZE
     orders = list(data[pos:pos + ord_num])
-    pos += ord_num + 4 * ins_num
+    pos += ord_num
+    ins_ptrs = struct.unpack(f"<{ins_num}I", data[pos:pos + 4 * ins_num])
+    pos += 4 * ins_num
     smp_ptrs = struct.unpack(f"<{smp_num}I", data[pos:pos + 4 * smp_num])
     pos += 4 * smp_num
     pat_ptrs = struct.unpack(f"<{pat_num}I", data[pos:pos + 4 * pat_num])
     pm = ParsedIT(data[0:4], orders, flags, data[0x32], data[0x33], data[0x40:0x80])
     n = pm.channels
+
+    for ptr in ins_ptrs:
+        h = data[ptr:ptr + INSTRUMENT_HEADER_SIZE]
+        if len(h) < INSTRUMENT_HEADER_SIZE or h[:4] != b"IMPI":
+            raise ITParseError(f"bad instrument header at {ptr}")
+        kb = [(h[0x40 + 2 * k], h[0x41 + 2 * k]) for k in range(120)]
+        ef, num, _lb, _le, slb, sle = h[0x130:0x136]
+        pts = [(struct.unpack("<H", h[0x137 + 3 * k:0x139 + 3 * k])[0], h[0x136 + 3 * k]) for k in range(min(num, 25))]
+        pm.instruments.append(ParsedITInstrument(h[0x20:0x3A], h[0x11], struct.unpack("<H", h[0x14:0x16])[0],
+                                                  h[0x19], kb, ef, pts, (slb, sle)))
 
     for ptr in smp_ptrs:
         h = data[ptr:ptr + SAMPLE_HEADER_SIZE]
@@ -229,7 +256,7 @@ def parse_it(data: bytes) -> ParsedIT:
         length, lb, le, c5 = struct.unpack("<IIII", h[0x30:0x40])
         data_ptr = struct.unpack("<I", h[0x48:0x4C])[0]
         s = ParsedITSample(h[0x14:0x2E], h[0x12], h[0x13], h[0x2E], h[0x2F], length, lb, le, c5)
-        s.data = data[data_ptr:data_ptr + length]
+        s.data = data[data_ptr:data_ptr + length * (2 if h[0x12] & SAMPLE_FLAG_16BIT else 1)]
         pm.samples.append(s)
 
     for ptr in pat_ptrs:

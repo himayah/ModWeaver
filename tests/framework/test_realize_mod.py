@@ -6,6 +6,8 @@ pattern への分割（§9.9）を、kit・和音・double・sidechain を持つ
 """
 from __future__ import annotations
 
+import pytest
+
 from mod_weaver.core.composer import RhythmMotif, ScaleRules
 from mod_weaver.core.formats import get_format
 from mod_weaver.core.model import ChordSpec, GmVoice
@@ -176,41 +178,62 @@ def test_sidechain_ducks_bass_near_kick_hits():
 # pattern への分割（§9.9）
 # ============================================================
 
-def test_split_into_patterns_short_section_gets_pattern_break():
-    from mod_weaver.core.model import Cell, CellGrid
-    from mod_weaver.framework.plan import MeasurePlan
-    from mod_weaver.framework.realize.tracker import _split_into_patterns
-
+def _split_ctx(fmt):
     import types
 
-    measures = tuple(MeasurePlan(index=i, start=i * 8, steps=8, chord=None, quality="maj", chord_offset=0,
-                                  next_chord=None) for i in range(4))   # 4 小節 * 8 step = 32 step
-    sec_plan = types.SimpleNamespace(name="x", measures=measures)
+    from mod_weaver.framework.realize.encode import Codec
+    from mod_weaver.framework.target import _TRACKER_LIMITS
 
-    grid = CellGrid(rows=32, plan=None, strict=False, channels=4)
-    grid.put(0, 0, Cell(24, 1, 0, 0))
-    chunks = _split_into_patterns(sec_plan, grid, budget=4)
+    _ch, max_rows, _pats, _orders = _TRACKER_LIMITS[fmt]
+    return types.SimpleNamespace(codec=Codec(fmt), target=types.SimpleNamespace(max_rows=max_rows), control=None)
+
+
+def _measures(n, steps):
+    from mod_weaver.framework.plan import MeasurePlan
+
+    return tuple(MeasurePlan(index=i, start=i * steps, steps=steps, chord=None, quality="maj", chord_offset=0,
+                              next_chord=None) for i in range(n))
+
+
+@pytest.mark.parametrize("fmt, rows, break_cmd", [("mod", 64, ("D", 0)), ("s3m", 64, ("C", 0)),
+                                                    ("it", 32, None), ("xm", 32, None)])
+def test_split_into_patterns_short_section_rows_and_break(fmt, rows, break_cmd):
+    import types
+
+    from mod_weaver.core.native import RCell, RGrid
+    from mod_weaver.framework.realize.tracker import _split_into_patterns
+
+    sec_plan = types.SimpleNamespace(name="x", measures=_measures(4, 8))   # 32 step
+    grid = RGrid(32, 4)
+    grid.put(0, 0, RCell(24, 1))
+    chunks = _split_into_patterns(_split_ctx(fmt), sec_plan, grid)
     assert len(chunks) == 1
     pat, steps = chunks[0]
-    assert pat.rows == 64 and steps == (8, 8, 8, 8)
-    assert any(pat.get(31, ch).effect == 0x0D for ch in range(4))   # 31 = 最後の実 row
+    assert pat.rows == rows and steps == (8, 8, 8, 8)
+    found = [pat.get(31, ch).fx for ch in range(4)]
+    assert (break_cmd in found) if break_cmd else all(f is None for f in found)
 
 
-def test_split_into_patterns_long_section_splits_at_measure_boundary():
-    from mod_weaver.core.model import CellGrid
-    from mod_weaver.framework.plan import MeasurePlan
-    from mod_weaver.framework.realize.tracker import _split_into_patterns
-
-    # 5 小節 * 16 step = 80 step（64 を超える）。4 小節目までで 64、5 小節目が次の pattern に出る
+def test_split_into_patterns_it_pads_to_32_rows_with_break_at_last_real_row():
     import types
 
-    measures = tuple(MeasurePlan(index=i, start=i * 16, steps=16, chord=None, quality="maj", chord_offset=0,
-                                  next_chord=None) for i in range(5))
-    sec_plan = types.SimpleNamespace(name="x", measures=measures)
+    from mod_weaver.core.native import RGrid
+    from mod_weaver.framework.realize.tracker import _split_into_patterns
 
-    grid = CellGrid(rows=80, plan=None, strict=False, channels=4)
-    chunks = _split_into_patterns(sec_plan, grid, budget=4)
-    assert len(chunks) == 2
-    assert chunks[0][1] == (16, 16, 16, 16)
-    assert chunks[1][1] == (16,)
-    assert chunks[0][0].rows == 64 and chunks[1][0].rows == 64
+    sec_plan = types.SimpleNamespace(name="x", measures=_measures(1, 16))   # 16 step
+    pat, steps = _split_into_patterns(_split_ctx("it"), sec_plan, RGrid(16, 4))[0]
+    assert pat.rows == 32 and steps == (16,)
+    assert ("C", 0) in [pat.get(15, ch).fx for ch in range(4)]
+
+
+@pytest.mark.parametrize("fmt, expected", [("mod", [(16, 16, 16, 16), (16,)]), ("s3m", [(16, 16, 16, 16), (16,)]),
+                                            ("xm", [(16, 16, 16, 16, 16)]), ("it", [(16,) * 5])])
+def test_split_into_patterns_long_section(fmt, expected):
+    import types
+
+    from mod_weaver.core.native import RGrid
+    from mod_weaver.framework.realize.tracker import _split_into_patterns
+
+    sec_plan = types.SimpleNamespace(name="x", measures=_measures(5, 16))   # 80 step
+    chunks = _split_into_patterns(_split_ctx(fmt), sec_plan, RGrid(80, 4))
+    assert [c[1] for c in chunks] == expected

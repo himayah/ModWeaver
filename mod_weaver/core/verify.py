@@ -365,6 +365,10 @@ class ParsedXMInstrument:
     name: bytes
     n_samples: int
     samples: list[ParsedXMSample] = field(default_factory=list)
+    vol_points: list[tuple[int, int]] = field(default_factory=list)   # 音量エンベロープの (tick, 値)
+    vol_type: int = 0           # bit0=有効、bit1=サステイン、bit2=ループ
+    vol_sustain: int = 0
+    fadeout: int = 0
 
 
 @dataclass
@@ -459,6 +463,14 @@ def parse_xm(data: bytes) -> ParsedXM:
         sample_header_size = 40
         if n_samples > 0 and pos + 33 <= len(data):
             sample_header_size = struct.unpack("<I", data[pos + 29:pos + 33])[0]
+        vol_points: list[tuple[int, int]] = []
+        vol_type = vol_sustain = fadeout = 0
+        if inst_size >= 243 and inst_start + 243 <= len(data):
+            n_vol = data[inst_start + 225]
+            vol_points = [struct.unpack("<HH", data[inst_start + 129 + 4 * k:inst_start + 133 + 4 * k])
+                          for k in range(min(n_vol, 12))]
+            vol_sustain, vol_type = data[inst_start + 227], data[inst_start + 233]
+            fadeout = struct.unpack("<H", data[inst_start + 239:inst_start + 241])[0]
         pos = inst_start + max(inst_size, 29)
         samples: list[ParsedXMSample] = []
         for _s in range(n_samples):
@@ -474,7 +486,8 @@ def parse_xm(data: bytes) -> ParsedXM:
         for s in samples:
             s.data = data[pos:pos + s.length] if pos <= len(data) else b""
             pos += s.length
-        pm.instruments.append(ParsedXMInstrument(name, n_samples, samples))
+        pm.instruments.append(ParsedXMInstrument(name, n_samples, samples, vol_points, vol_type, vol_sustain,
+                                                  fadeout))
 
     pm.consumed = pos
     return pm

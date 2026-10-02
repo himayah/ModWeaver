@@ -1,19 +1,23 @@
-"""MOD 向け TrackerRealizer（FRAMEWORK_REDESIGN.md §9.6〜§9.10）。
+"""TrackerRealizer（MOD・S3M・XM・IT。FRAMEWORK_REDESIGN.md §9）。
 
-``realize_mod(genre, score, plan, target)`` が Score を ``core.model.Song`` + ``core.formats.WriteOptions``
-にする。以降は既存の ``core.level``／``core.formats.get_format("mod")``／``core.writer`` をそのまま使う
-（F3 は MOD のみ。S3M/XM/IT は F4 で、ここに一般化した Cell 表現を足して対応する）。
+``realize(genre, score, plan, target)`` が Score を ``core.native.RealizedSong`` にする。形式の差は
+``encode.Codec`` の表と、``Target`` の上限（行数・pattern 数・サンプル数）だけで吸収する。
+書き出しは形式ごとの writer（``core/native_*.py``・MOD は ``core/writer.py``）が行う。
 """
 from __future__ import annotations
 
+import logging
+import math
 from typing import TYPE_CHECKING, Optional
 
-from ...core.model import Cell, CellGrid, Instrument as CellInstrument, Pattern, SampleSpec, Song
 from ...core import groove as groovemod
+from ...core.model import SampleSpec
+from ...core.native import RCell, RealizedSong, RGrid, to_mod_song
 from ...errors import PlanError
 from ..score import Arpeggio, Cut, Delay, Glide, NoteEvent, Offset, Retrig, TempoEvent, Tremolo, Vibrato
 from . import lanes as lanesmod
 from . import samples as samplesmod
+from .encode import PRIORITY, Codec
 from .lanes import AutomationPlacement, LaneLayout, Placement
 
 if TYPE_CHECKING:
@@ -23,45 +27,63 @@ if TYPE_CHECKING:
     from ..score import Score
     from ..target import Target
 
+log = logging.getLogger("mod_weaver")
+
+_TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（§9.9）
+
 
 # ============================================================
 # 公開エントリポイント
 # ============================================================
 
-def realize_mod(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target") -> tuple[Song, "WriteOptions"]:
-    from ...core.formats import WriteOptions
+class _Ctx:
+    """区間をまたいで共有する値（読み取り専用）。"""
 
-    if target.format != "mod":
-        raise NotImplementedError(f"realize_mod only supports format='mod' (got {target.format!r}); "
-                                   "other tracker formats land in F4")
+    def __init__(self, genre: "Genre", layout: LaneLayout, target: "Target", codec: Codec, bpm: int,
+                 specs: list[SampleSpec], slot_of: dict, release: tuple) -> None:
+        self.genre, self.layout, self.target, self.codec, self.bpm = genre, layout, target, codec, bpm
+        self.specs, self.slot_of, self.release = specs, slot_of, release
+        self.lane_by_index = {l.index: l for l in layout.lanes}
+        control = [l.index for l in layout.lanes if l.role == "control"]
+        self.control: Optional[int] = control[0] if control else None
+
+
+def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target") -> RealizedSong:
+    if target.kind != "tracker":
+        raise PlanError(f"TrackerRealizer cannot realize format {target.format!r}")
+    fmt = "it" if target.format == "mp3" else target.format
+    codec = Codec(fmt)
 
     layout = lanesmod.compute_layout(genre, score, target.budget)
-    specs, slot_of, inst_names = samplesmod.plan_samples(genre, layout, score, target)
     placements_by_section = lanesmod.assign_events(genre, layout, score)
-    cell_insts = {slot: CellInstrument(slot, specs[slot - 1]) for slot in slot_of.values()}
+    specs, slot_of, inst_names, release = samplesmod.plan_samples(genre, layout, score, target,
+                                                                    placements_by_section)
+    ctx = _Ctx(genre, layout, target, codec, plan.bpm, specs, slot_of, release)
+    n_ch = layout.budget if fmt == "mod" else len(layout.lanes)
 
-    section_grids: dict[str, CellGrid] = {}
-    prev_ticks: Optional[int] = None
+    if not score.order:
+        raise PlanError(f"{genre.id}: empty song (score.order is empty)")
+    ticks_set = {s.plan.meter.ticks_per_step for s in score.sections.values()}
+    first_section = score.order[0]
+
+    section_grids: dict[str, RGrid] = {}
     for name, sec_score in score.sections.items():
         sec_plan = sec_score.plan
         placements, autos = placements_by_section[name]
-        grid = CellGrid(rows=sec_plan.steps, plan=None, strict=False, channels=layout.budget)
-        _fill_notes(grid, layout, placements, cell_insts, specs, slot_of)
-        _apply_automation(grid, autos)
-        _apply_sidechain(grid, genre, layout, sec_score, specs)
-        ticks = sec_plan.meter.ticks_per_step
-        want_speed = ticks if ticks != prev_ticks else None
-        _write_tempo(grid, sec_score, plan.bpm, want_speed)
-        prev_ticks = ticks
+        grid = RGrid(sec_plan.steps, n_ch, exclusive=codec.exclusive_vol_fx)
+        _fill_notes(ctx, grid, sec_plan, placements)
+        _apply_automation(ctx, grid, autos)
+        _apply_sidechain(ctx, grid, sec_score)
+        write_speed = name == first_section or len(ticks_set) > 1   # 区間ごとに Speed が違うときだけ毎区間に書く
+        _write_tempo(ctx, grid, sec_score, sec_plan.meter.ticks_per_step if write_speed else None)
         section_grids[name] = grid
 
-    patterns: list[Pattern] = []
-    pattern_index_of: dict[str, list[int]] = {}    # 区間名 → その区間を構成する pattern index の並び
+    patterns: list[RGrid] = []
+    pattern_index_of: dict[str, list[int]] = {}
     measure_rows: list[tuple[int, ...]] = []
     for name, sec_score in score.sections.items():
-        chunks = _split_into_patterns(sec_score.plan, section_grids[name], layout.budget)
         idxs = []
-        for pat, steps in chunks:
+        for pat, steps in _split_into_patterns(ctx, sec_score.plan, section_grids[name]):
             idxs.append(len(patterns))
             patterns.append(pat)
             measure_rows.append(steps)
@@ -70,18 +92,31 @@ def realize_mod(genre: "Genre", score: "Score", plan: "SongPlan", target: "Targe
     order: list[int] = []
     for name in score.order:
         order.extend(pattern_index_of[name])
-    if not order:
-        raise PlanError(f"{genre.id}: empty song (score.order is empty)")
+    if len(patterns) > target.max_patterns:
+        raise PlanError(f"{genre.id}: {len(patterns)} patterns exceed {target.format}'s limit {target.max_patterns}")
+    if len(order) > target.max_orders:
+        raise PlanError(f"{genre.id}: order length {len(order)} exceeds {target.format}'s limit {target.max_orders}")
 
-    song = Song(title=genre.title, samples=specs, patterns=patterns, order=order,
-                instrument_names=inst_names)
+    return RealizedSong(
+        format=fmt, title=genre.title, samples=specs, patterns=patterns, order=order,
+        channel_pans=tuple(l.pan for l in layout.lanes), initial_bpm=plan.bpm, instrument_names=inst_names,
+        sample_release=release, measure_rows=tuple(measure_rows),
+        rows_per_measure=score.sections[first_section].plan.meter.steps)
 
-    channel_pans = tuple(l.pan for l in layout.lanes)
-    gm_voices = {name: genre.instruments[name].gm for name in dict.fromkeys(inst_names)}
-    opts = WriteOptions(channel_pans=channel_pans, initial_bpm=plan.bpm, instrument_names=inst_names,
-                         gm_voices=gm_voices, rows_per_measure=score.sections[score.order[0]].plan.meter.steps,
-                         measure_rows=tuple(measure_rows))
-    return song, opts
+
+def realize_mod(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target"
+                ) -> tuple["object", "WriteOptions"]:
+    """MOD 用の薄い入口: ``realize()`` の結果を ``core.model.Song`` + ``WriteOptions`` にする（F3 の形）。"""
+    from ...core.formats import WriteOptions
+
+    if target.format != "mod":
+        raise NotImplementedError(f"realize_mod only supports format='mod' (got {target.format!r})")
+    rs = realize(genre, score, plan, target)
+    gm_voices = {name: genre.instruments[name].gm for name in dict.fromkeys(rs.instrument_names)}
+    opts = WriteOptions(channel_pans=rs.channel_pans, initial_bpm=rs.initial_bpm,
+                         instrument_names=rs.instrument_names, gm_voices=gm_voices,
+                         rows_per_measure=rs.rows_per_measure, measure_rows=rs.measure_rows)
+    return to_mod_song(rs), opts
 
 
 # ============================================================
@@ -92,158 +127,222 @@ def _looped(spec: SampleSpec) -> bool:
     return spec.loop is not None
 
 
-def _offset_param(art: Offset, spec: SampleSpec) -> int:
-    length_bytes = len(spec.data)
-    return max(0, min(255, round(art.fraction * length_bytes / 256)))
+def _frames(spec: SampleSpec) -> int:
+    return len(spec.data) // (spec.bits // 8)
 
 
-def _trigger_effect(arts: tuple, spec: SampleSpec) -> Optional[tuple[int, int]]:
-    """トリガーの行に乗せる (effect, param)。複数あっても Cell は1つしか持てないため、
-    宣言順の最初の1つだけを使う（§9.6）。span 型（Vibrato/Tremolo）で ``at>0`` のものは
-    トリガー行には乗せない（``_apply_vibrato_tremolo`` が続く行に書く）。"""
-    for art in arts:
+def _candidates(ctx: _Ctx, p: Placement, spec: SampleSpec, step_ticks: int, note: Optional[int]) -> list:
+    """トリガーの row に乗せたい (優先度, 種類, fx) の候補（奏法の宣言順）。span 型は ``at == 0`` のものだけ。"""
+    codec = ctx.codec
+    out: list = []
+    for art in p.arts:
         if isinstance(art, Delay):
-            return 0xE, groovemod.delay_param(art.ticks)
-        if isinstance(art, Retrig):
-            return 0xE, groovemod.retrigger_param(art.ticks)
-        if isinstance(art, Cut):
-            if not 1 <= art.ticks <= 15:
-                raise PlanError(f"Cut ticks out of range: {art.ticks}")
-            return 0xE, 0xC0 | art.ticks
-        if isinstance(art, Offset):
-            return 0x9, _offset_param(art, spec)
-        if isinstance(art, Glide):
-            # 直前の tracker note が分からないため厳密な portamento_param は計算できない（score 層は
-            # period を知らない）。Glide.param が無指定のときは最小速度にする（現行ジャンルは未使用）。
-            return 0x3, art.param if art.param is not None else 1
-        if isinstance(art, Vibrato) and art.at == 0:
-            return 0x4, art.param
-        if isinstance(art, Tremolo) and art.at == 0:
-            return 0x7, art.param
-        if isinstance(art, Arpeggio):
-            return 0x0, (art.x << 4) | art.y
-    return None
+            groovemod.delay_param(art.ticks)    # 範囲の検査
+            out.append((PRIORITY["delay"], "delay", codec.delay(art.ticks)))
+        elif isinstance(art, Retrig):
+            groovemod.retrigger_param(art.ticks)
+            out.append((PRIORITY["retrig"], "retrig", codec.retrig(art.ticks)))
+        elif isinstance(art, Cut):
+            out.append((PRIORITY["cut"], "cut", codec.cut(art.ticks)))
+        elif isinstance(art, Offset):
+            xx = round(art.fraction * _frames(spec) / 256)
+            out.append((PRIORITY["offset"], "offset", codec.offset(xx)))
+        elif isinstance(art, Glide):
+            # 直前の tracker note が分からないため厳密な portamento_param は計算できない（score 層は period を
+            # 知らない）。Glide.param が無指定のときは最小速度にする（§16.5）。
+            out.append((PRIORITY["glide"], "glide", codec.glide(art.param if art.param is not None else 1)))
+        elif isinstance(art, Arpeggio):
+            top = (note or 0) + max(art.x, art.y)
+            if top > codec.note_range[1]:
+                from ...errors import PitchRangeError
+                raise PitchRangeError(f"{spec.name}: arpeggio {art.x:X}{art.y:X} on note {note} exceeds "
+                                       f"{codec.note_range[1]}")
+            out.append((PRIORITY["arpeggio"], "arpeggio", codec.arpeggio(art.x, art.y)))
+        elif isinstance(art, Vibrato) and art.at == 0:
+            out.append((PRIORITY["vibrato"], "vibrato", codec.vibrato(art.param)))
+        elif isinstance(art, Tremolo) and art.at == 0:
+            out.append((PRIORITY["tremolo"], "tremolo", codec.tremolo(art.param)))
+    return out
 
 
-def _apply_vibrato_tremolo(grid: CellGrid, lane: int, step: int, limit: int, art) -> None:
-    effect = 0x4 if isinstance(art, Vibrato) else 0x7
-    start = step + art.at
-    for row in range(start, min(start + art.steps, limit)):
-        if row == step:
-            continue   # トリガー行は _trigger_effect が既に書いている（at=0 のとき）
-        param = art.param if row == start else 0   # 継続行は「メモリ継続」の 0（PT の規約）
-        grid.put(row, lane, Cell(None, 0, effect, param))
-
-
-def _apply_arpeggio(grid: CellGrid, lane: int, step: int, limit: int, art: Arpeggio) -> None:
-    param = (art.x << 4) | art.y
-    for row in range(step, min(step + art.steps, limit)):
-        if row == step:
+def _span(ctx: _Ctx, grid: RGrid, lane: int, start: int, count: int, limit: int, first, rest) -> None:
+    """``start`` から ``count`` 行、``first`` を最初の行に、``rest`` を残りの行に書く（``limit`` 未満の row だけ）。
+    既に fx のある row（別の奏法）は潰さない。"""
+    for k, row in enumerate(range(start, min(start + count, limit))):
+        c = grid.get(row, lane)
+        if c.fx is not None:
             continue
-        grid.put(row, lane, Cell(None, 0, 0x0, param))   # 0xy に「継続」短縮形は無いので毎行書く
+        fx = first if k == 0 else rest
+        grid.put(row, lane, RCell(c.note, c.sample, c.vol, fx))
 
 
-def _apply_glide(grid: CellGrid, lane: int, step: int, limit: int, art: Glide) -> None:
-    steps = art.steps if art.steps is not None else 1
-    param = art.param if art.param is not None else 1
-    for row in range(step, min(step + steps, limit)):
-        if row == step:
-            continue
-        grid.put(row, lane, Cell(None, 0, 0x3, param))
+def _write_note(ctx: _Ctx, grid: RGrid, lane: int, step: int, next_step: Optional[int], p: Placement,
+                 slot: int, spec: SampleSpec, step_ticks: int) -> None:
+    codec = ctx.codec
+    note = codec.note(spec, round(p.pitch) if p.pitch is not None else None,
+                       where=f" (step {step}, lane {lane})")
 
+    arts = list(p.arts)
+    if p.strum_ms > 0 and not p.chord:       # 和音の声部（§9.5）: 声部 i を Delay で遅らせる
+        tick_ms = 2500.0 / ctx.bpm
+        ticks = min(step_ticks - 1, round(p.strum_ms / tick_ms))
+        if ticks >= 1 and not any(isinstance(a, Delay) for a in arts):
+            arts.insert(0, Delay(min(ticks, 15)))
+    p = _with_arts(p, arts)
 
-def _write_note(grid: CellGrid, lane: int, step: int, next_step: Optional[int], p: Placement,
-                 inst: CellInstrument, spec: SampleSpec) -> None:
-    n = round(p.pitch) if p.pitch is not None else None
-    arts = p.arts
-    eff = _trigger_effect(arts, spec)
-    vol = None if eff is not None else p.vel
-    effect, param = eff if eff is not None else (0, 0)
-    cell = inst.cell(n, vol=vol, effect=effect, param=param)
-    grid.put(step, lane, cell)
+    cands = _candidates(ctx, p, spec, step_ticks, note)
+    best = min(cands, key=lambda c: c[0]) if cands else None
+    vol = p.vel
+    shifted: set[str] = set()                # トリガー行を取れなかった span 型（次の row へ移す）
+    if codec.exclusive_vol_fx and best is not None:
+        if vol is None or vol == spec.volume:
+            vol = None                       # 既定音量と同じなので書かなくてよい（発音で既定に戻る）
+        elif best[1] in ("vibrato", "tremolo"):
+            shifted.add(best[1])             # 音量を残して、奏法は次の row へ（§9.6 の2）
+            best = None
+        else:
+            vol = None                       # Delay・Glide・Retrig・Cut・Arpeggio・Offset: エフェクトを残す
+    for c in cands:
+        if c is not best and c[1] in ("vibrato", "tremolo"):
+            shifted.add(c[1])
+        elif c is not best:
+            log.debug("articulation %s dropped at step %d lane %d (cell conflict)", c[1], step, lane)
+    fx = best[2] if best is not None else None
+    grid.put(step, lane, RCell(note, slot, vol, fx))
 
     end_step = step + p.dur if p.dur is not None else None
     limit = min(x for x in (next_step, end_step, grid.rows) if x is not None)
 
-    for art in arts:
+    for art in p.arts:
         if isinstance(art, (Vibrato, Tremolo)):
-            _apply_vibrato_tremolo(grid, lane, step, limit, art)
+            kind = "vibrato" if isinstance(art, Vibrato) else "tremolo"
+            mk = codec.vibrato if kind == "vibrato" else codec.tremolo
+            if art.at > 0:
+                _span(ctx, grid, lane, step + art.at, art.steps, limit, mk(art.param), mk(0))
+            elif kind in shifted:
+                _span(ctx, grid, lane, step + 1, art.steps, limit, mk(art.param), mk(0))
+            else:
+                _span(ctx, grid, lane, step + 1, art.steps - 1, limit, mk(0), mk(0))   # 継続は「メモリ継続」の 0
         elif isinstance(art, Arpeggio):
-            _apply_arpeggio(grid, lane, step, limit, art)
+            fxv = codec.arpeggio(art.x, art.y)
+            _span(ctx, grid, lane, step + 1, art.steps - 1, limit, fxv, fxv)   # 0xy に継続の短縮形は無い
         elif isinstance(art, Glide):
-            _apply_glide(grid, lane, step, limit, art)
+            param = art.param if art.param is not None else 1
+            _span(ctx, grid, lane, step + 1, (art.steps if art.steps is not None else 1) - 1, limit,
+                  codec.glide(param), codec.glide(param))
 
     stop_limit = next_step if next_step is not None else grid.rows
     if end_step is not None and end_step < stop_limit and end_step < grid.rows:
-        grid.put(end_step, lane, Cell(None, 0, 0, 0, vol=0))
+        _put_stop(ctx, grid, lane, end_step, stop_limit, ctx.release[slot - 1], step_ticks)
 
 
-def _fill_notes(grid: CellGrid, layout: LaneLayout, placements: list[Placement],
-                 cell_insts: dict[int, CellInstrument], specs: list[SampleSpec],
-                 slot_of: dict) -> None:
+def _put_stop(ctx: _Ctx, grid: RGrid, lane: int, row: int, limit: int, release_s: Optional[float],
+              step_ticks: int) -> None:
+    """lane の音を ``row`` で止める（§9.7）。``release_s`` が無ければ即時に止める。ある場合、XM・IT はキーオフ
+    （エンベロープがリリースする）、MOD・S3M は音量スライド（``Axy``／``Dxy``）を ``release_s`` の間 row ごとに置き、
+    終わりで止める（``limit`` 未満の、空いている row だけ）。"""
+    codec = ctx.codec
+    if release_s is not None and not codec.has_release_env and step_ticks > 1:
+        base = _volume_at(ctx, grid, lane, row)
+        n = max(1, math.ceil(release_s / (step_ticks * 2.5 / ctx.bpm)))
+        if base > 0:
+            per_tick = max(1, min(15, round(base / (n * (step_ticks - 1)))))
+            end = min(row + n, limit, grid.rows)
+            for r in range(row, end):
+                c = grid.get(r, lane)
+                if c.fx is None and c.note is None:
+                    grid.put(r, lane, RCell(fx=codec.volume_slide_down(per_tick)))
+            if end < min(limit, grid.rows) and grid.get(end, lane).is_empty:
+                grid.put(end, lane, codec.stop_cell())
+            return
+    grid.put(row, lane, codec.stop_cell(release_s))
+
+
+def _with_arts(p: Placement, arts: list) -> Placement:
+    import dataclasses
+    return p if tuple(arts) == p.arts else dataclasses.replace(p, arts=tuple(arts))
+
+
+def _fill_notes(ctx: _Ctx, grid: RGrid, sec_plan: "SectionPlan", placements: list[Placement]) -> None:
+    codec = ctx.codec
+    step_ticks = sec_plan.meter.ticks_per_step
     by_lane: dict[int, list[Placement]] = {}
     for p in placements:
         by_lane.setdefault(p.lane, []).append(p)
 
     for lane_idx, events in by_lane.items():
         events.sort(key=lambda p: p.step)
+        lane = ctx.lane_by_index[lane_idx]
         for i, p in enumerate(events):
             next_step = events[i + 1].step if i + 1 < len(events) else None
             if p.kind == "off":
-                grid.put(p.step, lane_idx, Cell(None, 0, 0, 0, vol=0))
+                _put_stop(ctx, grid, lane_idx, p.step, next_step if next_step is not None else grid.rows,
+                          _release_of_inst(ctx, p.inst), step_ticks)
                 continue
-            key = (p.inst, p.chord) if p.chord else (p.inst, ())
-            slot = slot_of.get(key)
+            key = samplesmod.sample_key(codec.fmt, ctx.genre, p, lane)
+            slot = ctx.slot_of.get(key)
             if slot is None:
                 raise PlanError(f"no sample planned for {key} (lane assignment / sample planning disagree)")
-            inst = cell_insts[slot]
-            spec = specs[slot - 1]
-            _write_note(grid, lane_idx, p.step, next_step, p, inst, spec)
+            _write_note(ctx, grid, lane_idx, p.step, next_step, p, slot, ctx.specs[slot - 1], step_ticks)
 
         last = events[-1]
-        if last.kind == "note":
-            key = (last.inst, last.chord) if last.chord else (last.inst, ())
-            slot = slot_of.get(key)
-            if slot is not None and last.dur is None and _looped(specs[slot - 1]):
-                if grid.rows - 1 > last.step:
-                    grid.put(grid.rows - 1, lane_idx, Cell(None, 0, 0, 0, vol=0))
+        if last.kind == "note" and last.dur is None:
+            key = samplesmod.sample_key(codec.fmt, ctx.genre, last, lane)
+            slot = ctx.slot_of.get(key)
+            if slot is not None and _looped(ctx.specs[slot - 1]) and grid.rows - 1 > last.step:
+                # 区間の終わりのループ停止: スライドは次の区間にはみ出せないので、MOD・S3M は即時に止める
+                rel = ctx.release[slot - 1] if codec.has_release_env else None
+                _put_stop(ctx, grid, lane_idx, grid.rows - 1, grid.rows, rel, step_ticks)
 
 
-def _apply_automation(grid: CellGrid, autos: list[AutomationPlacement]) -> None:
-    """``Automation``（§5）を Cell に落とす。MOD の features（target.py）には pan_automation も
-    filter も無いので、"volume" 以外は無視する（§9.8。将来 S3M/XM/IT では使えるようになる）。"""
+def _release_of_inst(ctx: _Ctx, inst_name: str) -> Optional[float]:
+    return ctx.genre.instruments[inst_name].release_s
+
+
+# ============================================================
+# オートメーション（§9.8）
+# ============================================================
+
+def _apply_automation(ctx: _Ctx, grid: RGrid, autos: list[AutomationPlacement]) -> None:
+    codec = ctx.codec
     for a in autos:
-        if a.kind != "volume":
+        if not 0 <= a.step < grid.rows:
             continue
         for lane in a.lanes:
-            if not 0 <= a.step < grid.rows:
-                continue
             c = grid.get(a.step, lane)
-            if c.has_effect:
-                continue   # 効果を使っている行は潰さない（§9.8 と同じ規約）
-            grid.replace(a.step, lane, Cell(c.note, c.sample, 0, 0, vol=max(0, min(64, a.value))))
+            if a.kind == "volume":
+                if codec.exclusive_vol_fx and c.fx is not None:
+                    continue   # 効果を使っている行は潰さない（§9.8）
+                grid.put(a.step, lane, RCell(c.note, c.sample, max(0, min(64, a.value)), c.fx))
+            else:
+                fx = codec.pan(a.value) if a.kind == "pan" else codec.cutoff(a.value)
+                if fx is None or c.fx is not None:
+                    continue   # 表せない形式（MOD のパン、IT 以外のカットオフ）は無視。他の効果は潰さない
+                grid.put(a.step, lane, RCell(c.note, c.sample, c.vol, fx))
 
 
 # ============================================================
 # サイドチェイン（§9.8）
 # ============================================================
 
-def _volume_at(grid: CellGrid, specs: list[SampleSpec], lane: int, row: int) -> int:
+def _volume_at(ctx: _Ctx, grid: RGrid, lane: int, row: int) -> int:
     for r in range(row, -1, -1):
         c = grid.get(r, lane)
         if c.vol is not None:
             return c.vol
-        if c.note is not None and c.sample:
-            return specs[c.sample - 1].volume
+        if c.note is not None and c.note >= 0 and c.sample:
+            return ctx.specs[c.sample - 1].volume
+        if c.note is not None and c.note < 0:
+            return 0           # 止められている
     return 0
 
 
-def _apply_sidechain(grid: CellGrid, genre: "Genre", layout: LaneLayout, sec_score,
-                      specs: list[SampleSpec]) -> None:
+def _apply_sidechain(ctx: _Ctx, grid: RGrid, sec_score) -> None:
+    genre = ctx.genre
     if not genre.mix:
         return
     trigger_steps: dict[str, list[int]] = {}
-    for part_name, events in sec_score.parts.items():
+    for _part, events in sec_score.parts.items():
         for e in events:
             if isinstance(e, NoteEvent):
                 trigger_steps.setdefault(e.inst, []).append(e.step)
@@ -252,54 +351,60 @@ def _apply_sidechain(grid: CellGrid, genre: "Genre", layout: LaneLayout, sec_sco
         steps = sorted({s for trig in rule.triggers for s in trigger_steps.get(trig, ())})
         if not steps:
             continue
-        target_lanes = [l.index for name in rule.targets for l in layout.lanes_of(name)]
+        target_lanes = [l.index for name in rule.targets for l in ctx.layout.lanes_of(name)]
         for lane in target_lanes:
             for t in steps:
                 for row in range(t, min(t + rule.release_steps + 1, grid.rows)):
                     frac = rule.ratio if row == t else rule.ratio * (1 - (row - t) / rule.release_steps)
-                    base = _volume_at(grid, specs, lane, row)
+                    base = _volume_at(ctx, grid, lane, row)
                     if base <= 0:
                         continue
                     ducked = max(0, round(base * (1 - frac)))
                     c = grid.get(row, lane)
-                    if c.has_effect:
+                    if ctx.codec.exclusive_vol_fx and c.fx is not None:
                         continue   # 効果を使っている行は潰さない（ポルタメント等を優先。§9.8）
-                    grid.replace(row, lane, Cell(c.note, c.sample, 0, 0, vol=ducked))
+                    if c.note is not None and c.note < 0:
+                        continue   # 止めるセルの音量は触らない
+                    grid.put(row, lane, RCell(c.note, c.sample, ducked, c.fx))
 
 
 # ============================================================
-# テンポ（§9.9・EXT-5 流用）
+# テンポ（§9.9）
 # ============================================================
 
-_TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（§9.9）
-
-
-def _insert_near_start(grid: CellGrid, param: int, label: str) -> None:
+def _insert_near_start(ctx: _Ctx, grid: RGrid, fx, label: str) -> None:
     limit = min(_TEMPO_SEARCH_ROWS, grid.rows)
     for row in range(limit):
-        if grid.try_insert_command(row, 0x0F, param):
+        if grid.try_insert_command(row, fx, ctx.control):
             return
     raise PlanError(f"no free channel in the first {limit} rows for a {label} command")
 
 
-def _write_tempo(grid: CellGrid, sec_score, song_bpm: int, speed: Optional[int]) -> None:
-    if speed is not None:
-        _insert_near_start(grid, speed, "Speed")
-        _insert_near_start(grid, song_bpm, "Tempo")
+def _write_tempo(ctx: _Ctx, grid: RGrid, sec_score, speed_ticks: Optional[int]) -> None:
+    codec = ctx.codec
+    if speed_ticks is not None:
+        _insert_near_start(ctx, grid, codec.speed(speed_ticks), "Speed")
+        _insert_near_start(ctx, grid, codec.tempo(ctx.bpm), "Tempo")
     for ev in sec_score.tempo:
         if isinstance(ev, TempoEvent) and 0 <= ev.step < grid.rows:
-            grid.try_insert_command(ev.step, 0x0F, ev.bpm)
+            grid.try_insert_command(ev.step, codec.tempo(ev.bpm), ctx.control)
 
 
 # ============================================================
 # pattern への分割（§9.9）
 # ============================================================
 
-def _split_into_patterns(sec_plan: "SectionPlan", grid: CellGrid, budget: int
-                          ) -> list[tuple[Pattern, tuple[int, ...]]]:
-    from ...core.model import ROWS_PER_PATTERN
+def _pattern_rows(codec: Codec, length: int) -> int:
+    """pattern の row 数。MOD・S3M は 64 固定、IT は 32 以上、XM は実際の長さそのまま。"""
+    if codec.fmt in ("mod", "s3m"):
+        return 64
+    if codec.fmt == "it":
+        return max(length, 32)
+    return length
 
-    max_rows = ROWS_PER_PATTERN
+
+def _split_into_patterns(ctx: _Ctx, sec_plan: "SectionPlan", grid: RGrid) -> list[tuple[RGrid, tuple[int, ...]]]:
+    codec, max_rows = ctx.codec, ctx.target.max_rows
     chunks: list[list] = [[]]
     total = 0
     for m in sec_plan.measures:
@@ -309,18 +414,21 @@ def _split_into_patterns(sec_plan: "SectionPlan", grid: CellGrid, budget: int
         chunks[-1].append(m)
         total += m.steps
 
-    out: list[tuple[Pattern, tuple[int, ...]]] = []
+    out: list[tuple[RGrid, tuple[int, ...]]] = []
     for chunk in chunks:
         start = chunk[0].start
         length = sum(m.steps for m in chunk)
-        pat = Pattern(plan=None, strict=False, rows=max_rows, channels=budget)
+        if length > max_rows:
+            raise PlanError(f"{sec_plan.name}: measure of {length} steps exceeds {max_rows} rows per pattern")
+        rows = _pattern_rows(codec, length)
+        pat = RGrid(rows, grid.channels, exclusive=grid.exclusive)
         for r in range(length):
-            for ch in range(budget):
+            for ch in range(grid.channels):
                 cell = grid.get(start + r, ch)
                 if not cell.is_empty:
                     pat.put(r, ch, cell)
-        if length < max_rows:
-            if not pat.try_insert_command(length - 1, 0x0D, 0):
+        if length < rows:
+            if not pat.try_insert_command(length - 1, codec.pattern_break(), ctx.control):
                 raise PlanError(f"{sec_plan.name}: no free channel for pattern break at row {length - 1}")
         out.append((pat, tuple(m.steps for m in chunk)))
     return out

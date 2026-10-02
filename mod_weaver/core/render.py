@@ -29,6 +29,8 @@ from .model import Song
 MAX_CHANNELS = writer.XM_MAX_CHANNELS
 FFMPEG_ENV = "MODWEAVER_FFMPEG"
 BITRATE = "192k"
+NEW_BITRATE = "320k"        # 新しい経路（IT 経由。§12）
+NEW_QUALITY = 0             # LAME の -q 0（最も丁寧な符号化）
 SAMPLE_RATE = 44100
 TIMEOUT_SEC = 600
 TARGET_MEAN_DB = -14.0      # 目標の平均音量（volumedetect の mean_volume、dBFS）
@@ -72,19 +74,31 @@ def check_ffmpeg() -> str:
 
 
 def render_mp3(song: Song, opts) -> bytes:
-    """Song を MP3 のバイト列にする。``opts`` は ``formats.WriteOptions``。"""
-    exe = check_ffmpeg()
+    """Song を MP3 のバイト列にする。``opts`` は ``formats.WriteOptions``（旧経路。XM 経由・192 kbps）。"""
     xm = writer.serialize_xm(song, channel_pans=opts.channel_pans, initial_bpm=opts.initial_bpm)
+    return encode_mp3(xm, ".xm", song.title, BITRATE)
+
+
+def render_mp3_from_it(it_bytes: bytes, title: str) -> bytes:
+    """新しい経路（FRAMEWORK_REDESIGN.md §12）: Target は IT と同じ（64ch・16-bit・44.1 kHz）で作った IT の
+    バイト列を、libopenmpt → libmp3lame（320 kbps・最も丁寧な符号化）で MP3 にする。"""
+    return encode_mp3(it_bytes, ".it", title, NEW_BITRATE, quality=NEW_QUALITY)
+
+
+def encode_mp3(module: bytes, ext: str, title: str, bitrate: str, quality: int = -1) -> bytes:
+    """トラッカーのモジュール（``ext`` は ".xm"・".it" など）を ffmpeg で MP3 にする。音量は2パス（§7.8）。"""
+    exe = check_ffmpeg()
     with tempfile.TemporaryDirectory(prefix="modweaver-") as d:
-        src, dst = Path(d) / "song.xm", Path(d) / "song.mp3"
-        src.write_bytes(xm)
+        src, dst = Path(d) / f"song{ext}", Path(d) / "song.mp3"
+        src.write_bytes(module)
         head = [exe, "-hide_banner", "-nostdin", "-y", "-f", "libopenmpt", "-i", str(src)]
         stats = _run(head[:1] + ["-loglevel", "info"] + head[1:] + ["-af", "volumedetect", "-f", "null", "-"])
         gain = loudness_gain(*_parse_volumedetect(stats.stderr))
         limiter = f"volume={gain:.2f}dB,alimiter=limit={10 ** (LIMIT_DB / 20):.4f}:level=0"
+        codec = ["-c:a", "libmp3lame", "-b:a", bitrate] + (["-compression_level", str(quality)] if quality >= 0 else [])
         proc = _run(head[:1] + ["-loglevel", "error"] + head[1:] + [
-            "-af", limiter, "-ar", str(SAMPLE_RATE), "-c:a", "libmp3lame", "-b:a", BITRATE,
-            "-metadata", f"title={song.title}", "-metadata", "encoder=ModWeaver", str(dst)])
+            "-af", limiter, "-ar", str(SAMPLE_RATE)] + codec + [
+            "-metadata", f"title={title}", "-metadata", "encoder=ModWeaver", str(dst)])
         if not dst.exists():
             raise ExternalToolError(f"ffmpeg failed: {proc.stderr.strip()[:500]}")
         return dst.read_bytes()

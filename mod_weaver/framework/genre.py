@@ -212,8 +212,7 @@ def _validate_declaration(cls: type) -> None:
     _check_no_cycle(cls, part_names)
 
     for name, sec in cls.sections.items():
-        validate_swing(sec.swing, sec.meter)
-    validate_swing(cls.swing, Meter())
+        validate_swing(sec.swing if sec.swing is not None else cls.swing, sec.meter)   # ジャンルの swing は区間の既定
 
     for rule in cls.mix:
         for trig in rule.triggers:

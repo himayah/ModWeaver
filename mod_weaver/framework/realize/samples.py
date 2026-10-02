@@ -5,8 +5,9 @@
 使われた和音の形（``NoteEvent.chord``）ごとに別サンプルが要る。
 
 ``SampleKey = (楽器名, 和音の形, セント, パン)``:
-- セント: MOD 以外で、書かれた音高の小数部と ``Instrument.tune_cents`` から作る変種（再生レートに
-  ``2^(cents/1200)`` を掛ける。MOD は整数の tracker note に丸める）。
+- セント: 書かれた音高の小数部と ``Instrument.tune_cents`` から作る変種。MOD 以外は再生レートに
+  ``2^(cents/1200)`` を掛け（整数セント）、MOD は MOD の finetune（1 単位 12.5 セント、-8..7）を変えた同じ波形の
+  サンプルにする（鍵の3つ目は finetune の単位。音高は整数の tracker note に丸める）。
 - パン: XM だけ。XM は発音のたびにサンプルのパンへ戻るので、lane のパンごとに別のサンプルにする。
 """
 from __future__ import annotations
@@ -25,6 +26,10 @@ if TYPE_CHECKING:
     from ...framework.score import Score
     from ..target import Target
 
+# MOD の finetune の1単位（実プレイヤー libopenmpt で測定: -8 で -100、+7 で +87 セント＝12.5 セント刻み）。
+# 旧 ``core.pitch.FINETUNE_CENTS``（7.8125）は誤り（旧パイプラインの微分音はこのためずれていた。F8 で旧と一緒に消える）
+MOD_FINETUNE_CENTS = 12.5
+
 SampleKey = tuple[str, tuple[int, ...], int, Optional[int]]   # (楽器名, 和音の形, セント, パン)
 
 
@@ -32,8 +37,9 @@ def sample_key(fmt: str, genre: "Genre", p: Placement, lane: Lane) -> SampleKey:
     """発音 ``p``（lane ``lane`` 上）が使うサンプルの鍵。計画（``plan_samples``）と書き込み（tracker）が共用する。"""
     cents = 0
     inst = genre.instruments[p.inst]
-    if fmt != "mod" and inst.is_pitched and p.pitch is not None:
-        cents = round((p.pitch - round(p.pitch)) * 100 + inst.tune_cents)
+    if inst.is_pitched and p.pitch is not None:
+        residual = (p.pitch - round(p.pitch)) * 100 + inst.tune_cents
+        cents = max(-8, min(7, round(residual / MOD_FINETUNE_CENTS))) if fmt == "mod" else round(residual)
     pan = lane.pan if fmt == "xm" else None
     return (p.inst, p.chord if p.chord else (), cents, pan)
 
@@ -58,10 +64,11 @@ def render_for(patch: synth.Patch, target: "Target") -> SampleSpec:
     return spec
 
 
-def _sample_label(inst_name: str, shape: tuple[int, ...], cents: int = 0, pan: Optional[int] = None) -> str:
+def _sample_label(inst_name: str, shape: tuple[int, ...], cents: int = 0, pan: Optional[int] = None,
+                  unit: str = "c") -> str:
     label = inst_name if not shape else f"{inst_name}_{'.'.join(str(s) for s in shape)}"
     if cents:
-        label += f"{cents:+d}c"
+        label += f"{cents:+d}{unit}"
     if pan is not None:
         label += f"@{pan}"
     return label.encode("ascii", "replace").decode("ascii")[:22]
@@ -101,12 +108,14 @@ def plan_samples(genre: "Genre", layout: LaneLayout, score: "Score", target: "Ta
         patch = inst.patch if not shape else synth.chord_patch(inst.patch, shape)
         spec = render_for(patch, target)
         changes: dict = dict(
-            name=_sample_label(inst_name, shape, cents, pan),
+            name=_sample_label(inst_name, shape, cents, pan, "f" if fmt == "mod" else "c"),
             volume=inst.volume if inst.volume is not None else spec.volume,
             pitched=inst.is_pitched,        # Instrument.pitched の上書きを反映する（None は patch のまま）
         )
         if fmt == "mod":
             changes["pan"] = inst.pan if inst.pan is not None else spec.pan
+            if cents:
+                changes["finetune"] = max(-8, min(7, spec.finetune + cents))
         else:
             changes["pan"] = pan if pan is not None else 128
             if cents and spec.rate_hz is not None:

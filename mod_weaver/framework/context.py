@@ -40,6 +40,11 @@ class SectionCtx:
         for m in self.plan.measures:
             yield MeasureCtx(self, m, is_first=m.index == 0, is_last=m.index == n - 1)
 
+    def own_events(self) -> list[Event]:
+        """このパートが区間で既に書いたイベントそのもの（書き換え可）。部品の ``section()`` を呼んだ後に、その結果を
+        加工する（前打音を足す等）ジェネレータのための口。足したら ``step`` の順に並べ直すこと。"""
+        return self._events
+
     # --- 他パートの既出イベント（depends） ---
     def events_of(self, part: str) -> list[Event]:
         if part not in self.part.depends and part != self.part.follow:

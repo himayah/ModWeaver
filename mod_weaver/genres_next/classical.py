@@ -1,5 +1,4 @@
 """classical（旧 genres/classical.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['violin 2', 'viola', 'cello'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
@@ -8,6 +7,8 @@ from ..core.synth_presets import PRESETS
 from ..framework.gens import Lead
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
 from ..framework.plan import Meter
+from ..framework.context import Generator, MeasureCtx
+from ..core.pitch import fold_into_range
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -34,6 +35,50 @@ PROGRESSIONS = (
     ("trio IV-I-V7-I", (C(5, "maj", label="IV"), C(0, "maj", label="I"), C(7, "dom7", label="V7"), C(0, "maj", label="I"))),
     ("coda IV-V7-I-I", (C(5, "maj", label="IV"), C(7, "dom7", label="V7"), C(0, "maj", label="I"), C(0, "maj", label="I"))),
 )
+
+
+VLN2_REGISTER = (17, 28)
+VLA_REGISTER = (10, 21)
+
+
+def _nearest(state: dict, name: str, pcs, register: tuple[int, int], avoid=None) -> int:
+    """直前の音に最も近い構成音（声部の滑らかな進行）。直前の音は区間の state に持つ。"""
+    lo, hi = register
+    cands = [n for n in range(lo, hi + 1) if n % 12 in pcs and n % 12 != avoid] or             [n for n in range(lo, hi + 1) if n % 12 in pcs]
+    prev = state.get(name, (lo + hi) // 2)
+    note = min(cands, key=lambda n: (abs(n - prev), n))
+    state[name] = note
+    return note
+
+
+class InnerVoices(Generator):
+    """vln2・vla: 2・3拍目に和音を刻む（メヌエットの伴奏型）。最後の小節は1拍目に和音を伸ばす（旧 compose_measure）。
+    刻みの切れ目（次の小節の1拍目の前で止める）は dur で書く。"""
+
+    def measure(self, m: MeasureCtx) -> None:
+        final = m.plan.kind == "coda" and m.is_last
+        tones = sorted({t % 12 for t in m.m.chord.chord_tones})
+        upper = _nearest(m.state, "vln2", tones, VLN2_REGISTER)
+        inner = _nearest(m.state, "vla", tones, VLA_REGISTER, avoid=upper % 12)
+        steps = (0,) if final else (4, 8)
+        for step in steps:
+            dur = m.m.steps - 1 - step if (not final and step == steps[-1]) else None
+            m.note(step, "vln2", upper, vel=m.scale_vol(34), dur=dur)
+            m.note(step, "vla", inner, vel=m.scale_vol(34), dur=dur)
+
+
+class Cello(Generator):
+    """vc: 1拍目に低音。トリオは3拍目にも5度（終止の小節は1拍目だけを伸ばす）。"""
+
+    def __init__(self, inst: str) -> None:
+        self.inst = inst
+
+    def measure(self, m: MeasureCtx) -> None:
+        final = m.plan.kind == "coda" and m.is_last
+        chord = m.m.chord
+        m.note(0, self.inst, chord.bass, vel=m.scale_vol(48))
+        if m.plan.section.motifs == "trio" and not final:
+            m.note(8, self.inst, fold_into_range(chord.bass + 7, *m.genre.harmony.registers.bass), vel=m.scale_vol(40))
 
 
 @register_genre
@@ -65,8 +110,8 @@ class ClassicalGenre(Genre):
     parts = (
         Part("lead", Lead("vln1", ScaleRules(leap_probability=0.2, leap_semitones=(3, 4, 5, 7, 8, 12)), LEAD_MOTIFS,
                    vol=46, gate=0.9, vibrato=0x22), pan=128),
-        # TODO: Part("violin 2", <ジェネレータ>, pan=128)  ← 上書きメソッドで鳴らしていた
-        # TODO: Part("viola", <ジェネレータ>, pan=128)  ← 上書きメソッドで鳴らしていた
-        # TODO: Part("cello", <ジェネレータ>, pan=128)  ← 上書きメソッドで鳴らしていた
+        Part("inner", InnerVoices(), pan=128,
+             kit=Kit(groups=(("violin 2", ("vln2",)), ("viola", ("vla",))))),
+        Part("bass", Cello("vc"), pan=128),
     )
     mod_channels = {4: 1}

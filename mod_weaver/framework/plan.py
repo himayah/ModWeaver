@@ -122,7 +122,7 @@ def default_plan(genre: "Genre", rng: random.Random) -> SongPlan:
     sections: dict[str, SectionPlan] = {}
     for name in dict.fromkeys(genre.form):          # 初出順、重複を除く
         sec = genre.sections[name]
-        sections[name] = _plan_section(name, sec, progs, key_pc, harmony, default_parts)
+        sections[name] = _plan_section(name, sec, progs, key_pc, harmony, default_parts, genre.swing)
     order = list(genre.form)
 
     summary = [f"Key         : {PC_NAMES[key_pc]} {harmony.mode}"]
@@ -133,7 +133,7 @@ def default_plan(genre: "Genre", rng: random.Random) -> SongPlan:
 
 
 def _plan_section(name: str, sec: "Section", progs, key_pc: int, harmony,
-                   default_parts: frozenset[str]) -> SectionPlan:
+                   default_parts: frozenset[str], genre_swing: Optional[Swing] = None) -> SectionPlan:
     _pname, specs = progs[sec.prog % len(progs)]
     tonic = (key_pc + sec.key_offset) % 12
     scale = Scale(tonic, MODES[harmony.mode])
@@ -171,4 +171,5 @@ def _plan_section(name: str, sec: "Section", progs, key_pc: int, harmony,
     parts = sec.parts if sec.parts else default_parts
     return SectionPlan(name=name, kind=sec.kind or name, meter=sec.meter, measures=tuple(measures),
                         intensity=sec.intensity, key_offset=sec.key_offset, tonic=tonic, scale=scale,
-                        parts=parts, swing=sec.swing, section=sec, extra={})
+                        parts=parts, swing=sec.swing if sec.swing is not None else genre_swing, section=sec,
+                        extra={})

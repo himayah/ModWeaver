@@ -1,12 +1,12 @@
 """edm（旧 genres/edm.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['fx'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
-from ..framework.gens import Arp, BassLine, Echo, Groove, Lead, Pad, hits
+from ..framework.gens import Arp, BassLine, Buildup, Echo, Groove, Lead, Pad, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section, Sidechain
+from ..framework.context import Generator, MeasureCtx
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -30,6 +30,35 @@ PROGRESSIONS = (
     ("VI-iv-i-VII", (C(8, "maj", label="VI"), C(5, "min", label="iv"), C(0, "min", label="i"), C(10, "maj", label="VII"))),
     ("i-VI-III-VII", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(3, "maj", label="III"), C(10, "maj", label="VII"))),
 )
+
+
+class BuildupDrums(Groove):
+    """通常は打楽器の型。build の区間ではスネアのビルドアップ（4分→8分→16分→連打と加速し、音量が上がる）。"""
+
+    def __init__(self, grooves, **kw) -> None:
+        super().__init__(grooves, **kw)
+        self.buildup = Buildup("snare")
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build":
+            self.buildup.measure(m)
+        else:
+            super().measure(m)
+
+
+class RiserImpact(Generator):
+    """build の最後から2つ目の小節の頭に上昇音（約2秒）、drop の頭に衝撃音。"""
+
+    def __init__(self, riser: str, impact: str, n_measures: int = 4) -> None:
+        self.riser = riser
+        self.impact = impact
+        self.n_measures = n_measures
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build" and m.m.index % self.n_measures == self.n_measures - 2:
+            m.note(0, self.riser, vel=48)
+        elif m.plan.kind == "drop" and m.m.index == 0:
+            m.note(0, self.impact, vel=56)           # ドロップの頭の一撃
 
 
 @register_genre
@@ -56,14 +85,14 @@ class EdmGenre(Genre):
     harmony = Harmony(keys=(5, 7), mode="aeolian", progressions=PROGRESSIONS, n_progressions=2)
     sections = {
         "intro": Section(intensity=0.6, parts=frozenset({"pad", "drums"}), groove="intro"),
-        "build": Section(prog=1, intensity=0.8, parts=frozenset({"fx", "pad"})),
+        "build": Section(prog=1, intensity=0.8, parts=frozenset({"fx", "pad", "drums"})),
         "drop": Section(intensity=1.0, parts=frozenset({"bass", "drums", "pad", "lead", "fx", "arp"})),
         "break": Section(prog=1, intensity=0.5, parts=frozenset({"pad"})),
         "outro": Section(intensity=0.5, parts=frozenset({"pad", "drums"}), groove="intro"),
     }
     form = ("intro", "build", "drop", "drop", "break", "build", "drop", "drop", "outro")
     parts = (
-        Part("drums", Groove(GROOVES), pan=128,
+        Part("drums", BuildupDrums(GROOVES), pan=128,
              kit=Kit(groups=(("kick", ("kick",)), ("clap/hat", ("clap", "hat", "snare"))),
                      priority={"snare": 3, "clap": 2},
                      single_priority={"kick": 4, "clap": 3, "hat": 1, "snare": 4},
@@ -72,7 +101,7 @@ class EdmGenre(Genre):
         Part("pad", Pad("pad", vol=34), pan=88),
         Part("lead", Lead("lead", ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
                    vol=46, gate=0.7), pan=168),
-        # TODO: Part("fx", <ジェネレータ>, pan=128, min_channels=6)  ← 上書きメソッドで鳴らしていた
+        Part("fx", RiserImpact("riser", "impact"), pan=128, min_channels=6),
         Part("lead echo", Echo(delay=3, ratio=0.45), follow="lead", pan=96, min_channels=8),
         Part("arp", Arp("pluck", register=(24, 35), steps=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15), vol=28), pan=160, min_channels=8),
     )

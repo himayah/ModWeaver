@@ -1,5 +1,4 @@
 """industrial（旧 genres/industrial.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['pipe'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
@@ -7,6 +6,8 @@ from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
 from ..framework.gens import BassLine, Fx, Groove, Lead, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
+from ..core.pitch import fold_into_range
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -33,6 +34,29 @@ PROGRESSIONS = (
     ("i-bVI-bVII-i", (C(0, "min", label="i"), C(8, "maj", label="bVI"), C(10, "maj", label="bVII"), C(0, "min", label="i"))),
     ("i-iv-bII-i", (C(0, "min", label="i"), C(5, "min", label="iv"), C(1, "maj", label="bII"), C(0, "min", label="i"))),
 )
+
+
+# 金属パイプのリフ（16分の位置と、和音の構成音の並びの番号）。区間ごとに1つ選んで繰り返す
+RIFFS = (((0, 0), (3, 0), (6, 1), (10, 0), (12, 2)), ((0, 0), (2, 1), (6, 0), (8, 2), (11, 1)),
+         ((0, 0), (4, 0), (7, 2), (10, 1), (14, 0)))
+PIPE_REGISTER = (12, 23)
+
+
+class PipeRiff(Generator):
+    """金属パイプのリフ: 区間ごとに選んだ1小節の型を、和音の構成音で繰り返す（旧 begin_pattern＋extra_measure）。"""
+
+    def __init__(self, inst: str) -> None:
+        self.inst = inst
+
+    def section(self, ctx) -> None:
+        riff = ctx.rng.choice(RIFFS)
+        for m in ctx.measures():
+            chord = m.m.chord
+            pcs = sorted({t % 12 for t in chord.chord_tones}, key=lambda pc: (pc - chord.bass) % 12)
+            for step, idx in riff:
+                if step < m.m.steps:
+                    m.note(step, self.inst, fold_into_range(pcs[idx % len(pcs)], *PIPE_REGISTER),
+                           vel=m.scale_vol(40 if step == 0 else 34))
 
 
 @register_genre
@@ -69,7 +93,7 @@ class IndustrialGenre(Genre):
                      priority={"snare": 2, "clang": 2},
                      group_pan={"metal": 170})),
         Part("bass", BassLine("bass", kind="pulse16", vol=44), pan=128),
-        # TODO: Part("pipe", <ジェネレータ>, pan=84)  ← 上書きメソッドで鳴らしていた
+        Part("pipe", PipeRiff("pipe"), pan=84),
         Part("lead", Lead("lead", ScaleRules(leap_probability=0.2, leap_semitones=(1, 3, 5, 7)), LEAD_MOTIFS,
                    vol=40, gate=0.7), pan=150),
         Part("fx", Fx("noise", every=2, vol=22), pan=100),

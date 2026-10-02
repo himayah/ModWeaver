@@ -139,3 +139,21 @@ def test_midi_note_number_matches_the_pitch_the_player_actually_sounds(key):
         expected = 440.0 * 2 ** ((midi - 69) / 12)
         got = fft_freq(audio, RATE, i * ROW_S + 0.25, 0.8, expected)
         assert abs(cents_between(got, expected)) <= TOLERANCE_CENTS["it"], (key, t, got, expected)
+
+
+@pytest.mark.parametrize("ft", [-8, -3, 2, 7])
+def test_mod_finetune_variant_shifts_the_pitch_by_12_5_cents_per_step(ft):
+    """MOD の微分音（finetune の変種。``samples.sample_key``）の刻みは 12.5 セント（実プレイヤーで測定。旧
+    ``core.pitch.FINETUNE_CENTS`` の 7.8125 は誤り）。"""
+    import dataclasses
+
+    patch = PRESETS["keys_organ"]
+    target = resolve("mod", 4, make_genre(), seed=1)
+    base = render_for(patch, target)
+    spec = dataclasses.replace(base, finetune=ft)
+    notes = [patch.rate_note, patch.rate_note + 7]
+    audio = decode_f32(serialize(_song("mod", spec, notes)), ".mod", RATE)
+    for i, t in enumerate(notes):
+        expected = base.sounding_hz * 2 ** ((t - patch.rate_note) / 12 + ft * 12.5 / 1200)
+        got = fft_freq(audio, RATE, i * ROW_S + 0.25, 0.8, expected)
+        assert abs(cents_between(got, expected)) <= 9.0, (ft, t, got, expected)

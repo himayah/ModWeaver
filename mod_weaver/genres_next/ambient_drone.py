@@ -1,5 +1,4 @@
 """ambient-drone（旧 genres/ambient_drone.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['drone', 'fifth', 'upper', 'swell'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.model import ChordSpec, GmVoice

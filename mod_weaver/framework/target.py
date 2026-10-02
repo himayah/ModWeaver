@@ -10,7 +10,7 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
-from ..errors import PlanError
+from ..errors import ChannelCountError, PlanError
 
 if TYPE_CHECKING:
     from .genre import Genre
@@ -76,7 +76,7 @@ def _mod_budget(genre: "Genre", channels_request: Optional[int], seed: int) -> i
         raise PlanError(f"{genre.id}: mod_channels must not be empty")
     if channels_request is not None:
         if channels_request not in choices:
-            raise PlanError(f"--channels {channels_request} not supported by {genre.id} (choices: {choices})")
+            raise ChannelCountError(f"--channels {channels_request} not supported by {genre.id} (choices: {choices})")
         return channels_request
     rng = random.Random(f"{seed}:{genre.id}:channels")
     weights = [genre.mod_channels.get(c, 1) for c in choices]
@@ -88,7 +88,7 @@ def _tracker_budget(fmt: str, genre: "Genre", channels_request: Optional[int]) -
     cap = min(fmt_max, genre.channel_cap) if genre.channel_cap else fmt_max
     if channels_request is not None:
         if not 1 <= channels_request <= cap:
-            raise PlanError(f"--channels {channels_request} not supported by format {fmt!r} "
+            raise ChannelCountError(f"--channels {channels_request} not supported by format {fmt!r} "
                              f"(1..{cap} for {genre.id})")
         return channels_request
     return cap
@@ -100,7 +100,7 @@ def resolve(fmt: str, channels_request: Optional[int], genre: "Genre", seed: int
         raise PlanError(f"unknown format {fmt!r}. choices: {', '.join(_FEATURES)}")
     if fmt == "midi":
         if channels_request is not None:
-            raise PlanError("--channels is not supported for --format midi")
+            raise ChannelCountError("--channels is not supported for --format midi")
         return Target(format="midi", kind="midi", budget=16, sample=None, note_range=_NOTE_RANGE["midi"],
                       max_rows=0, max_patterns=0, max_orders=0, features=_FEATURES["midi"])
 

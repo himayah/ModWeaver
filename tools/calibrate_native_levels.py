@@ -26,16 +26,19 @@ from mod_weaver.framework.realize.tracker import realize  # noqa: E402
 from mod_weaver.framework.target import resolve  # noqa: E402
 from tests.realplayer import ffmpeg_with_openmpt  # noqa: E402
 
-SEEDS = range(1, 9)
+SEEDS = range(1, 6)
 OUT = ROOT / "mod_weaver" / "framework" / "levels.py"
 HEADER = (ROOT / "mod_weaver" / "framework" / "levels.py").read_text(encoding="utf-8").split("PEAK_DB")[0]
 
 
 def genres() -> dict:
+    """新しい枠組みの全ジャンル（``genres_next/``）。F7 で march ほか C グループが入るまで、試験移植の march も測る。"""
     from march import MarchToy
-    from pop import PopToy
-    from racing_breaks import RacingBreaksToy
-    return {g.id: g for g in (PopToy(), RacingBreaksToy(), MarchToy())}
+    from mod_weaver.framework import registry
+    registry.discover("mod_weaver.genres_next")
+    out = {gid: cls() for gid, cls in registry.GENRE_REGISTRY.items()}
+    out.setdefault("march", MarchToy())
+    return out
 
 
 def peak_db(exe: str, data: bytes, ext: str) -> float:

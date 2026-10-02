@@ -107,11 +107,12 @@ def test_tune_cents_makes_a_variant_with_scaled_playback_rate(fmt):
     assert not any("+" in s.name and "c" in s.name for s in plain.samples)
 
 
-def test_mod_ignores_cents():
-    """MOD は整数の tracker note に丸める（§16.5）ので、セントの変種は作らない。"""
-    genre = _toy_with_tune(30.0)
+def test_mod_uses_finetune_variants_for_cents():
+    """MOD は整数の tracker note に丸めた上で、残りを finetune（1 単位 12.5 セント）の変種サンプルにする。"""
+    genre = _toy_with_tune(30.0)                    # 30 セント ≒ finetune +2（25 セント）
     plan = resolve_plan(genre, seed=1)
     score = compose(genre, plan, seed=1, features=frozenset())
     rs = realize(genre, score, plan, resolve("mod", 8, genre, seed=1))
-    assert not any("+30c" in s.name for s in rs.samples)
-    assert any("+30c" in s.name for s in _build(genre, "s3m", 1, None)[0].samples)
+    lead = next(s for s in rs.samples if s.name.startswith("lead+2f"))
+    plain = next(s for s in _build(_toy_with_tune(0.0), "mod", 1, 8)[0].samples if s.name == "lead")
+    assert lead.finetune == plain.finetune + 2 and lead.data == plain.data

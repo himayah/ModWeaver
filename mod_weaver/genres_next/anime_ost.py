@@ -1,5 +1,4 @@
 """anime-ost（旧 genres/anime_ost.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['strings/brass'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

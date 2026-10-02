@@ -66,6 +66,7 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
     if not score.order:
         raise PlanError(f"{genre.id}: empty song (score.order is empty)")
     ticks_set = {s.plan.meter.ticks_per_step for s in score.sections.values()}
+    any_swing = any(s.plan.swing is not None for s in score.sections.values())
     first_section = score.order[0]
 
     section_grids: dict[str, RGrid] = {}
@@ -76,8 +77,9 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
         _fill_notes(ctx, grid, sec_plan, placements)
         _apply_automation(ctx, grid, autos)
         _apply_sidechain(ctx, grid, sec_score)
-        write_speed = name == first_section or len(ticks_set) > 1   # 区間ごとに Speed が違うときだけ毎区間に書く
-        _write_tempo(ctx, grid, sec_score, sec_plan.meter.ticks_per_step if write_speed else None)
+        # 区間ごとに Speed が違う（スウィングを含む）ときだけ毎区間の先頭に書く。スウィングの区間は全 row に書く
+        write_speed = name == first_section or len(ticks_set) > 1 or any_swing
+        _write_tempo(ctx, grid, sec_score, sec_plan.meter.ticks_per_step if write_speed else None, sec_plan.swing)
         section_grids[name] = grid
 
     patterns: list[RGrid] = []
@@ -387,14 +389,48 @@ def _insert_near_start(ctx: _Ctx, grid: RGrid, fx, label: str) -> None:
     raise PlanError(f"no free channel in the first {limit} rows for a {label} command")
 
 
-def _write_tempo(ctx: _Ctx, grid: RGrid, sec_score, speed_ticks: Optional[int]) -> None:
+def _write_tempo(ctx: _Ctx, grid: RGrid, sec_score, speed_ticks: Optional[int], swing=None) -> None:
     codec = ctx.codec
     if speed_ticks is not None:
-        _insert_near_start(ctx, grid, codec.speed(speed_ticks), "Speed")
+        if swing is None:
+            _insert_near_start(ctx, grid, codec.speed(speed_ticks), "Speed")
         _insert_near_start(ctx, grid, codec.tempo(ctx.bpm), "Tempo")
+    if swing is not None:
+        _write_swing(ctx, grid, swing)
     for ev in sec_score.tempo:
         if isinstance(ev, TempoEvent) and 0 <= ev.step < grid.rows:
             grid.try_insert_command(ev.step, codec.tempo(ev.bpm), ctx.control)
+
+
+def _make_room(ctx: _Ctx, grid: RGrid, row: int) -> bool:
+    """全チャンネルが埋まった row に、row コマンドを書ける場所を1つ作る（旧 ``make_room_for_row_commands``）。
+    番号の大きいチャンネルから、①発音もボリュームも無い効果だけのセル（ビブラートの継続など）を消し、②MOD では
+    効果の無い発音の音量を外す（その音はサンプルの既定音量で鳴る）。作れたら True。"""
+    for ch in reversed(range(grid.channels)):
+        c = grid.get(row, ch)
+        if c.note is None and not c.sample and c.vol is None and c.fx is not None:
+            grid.put(row, ch, RCell())
+            return True
+    if ctx.codec.exclusive_vol_fx:
+        for ch in reversed(range(grid.channels)):
+            c = grid.get(row, ch)
+            if c.note is not None and c.note >= 0 and c.fx is None and c.vol is not None:
+                grid.put(row, ch, RCell(c.note, c.sample))
+                return True
+    return False
+
+
+def _write_swing(ctx: _Ctx, grid: RGrid, swing) -> None:
+    """スウィング（§9.9）: 偶数 step を ``long``、奇数 step を ``short`` tick の Speed にする（全 row に書く）。
+    表示 BPM どおりに鳴らすには全 row に要るので、場所が無い row は作る。それでも作れなければその row だけ飛ばす
+    （直前の Speed が続く。DEBUG ログ）。"""
+    for row in range(grid.rows):
+        fx = ctx.codec.speed(swing.long if row % 2 == 0 else swing.short)
+        if grid.try_insert_command(row, fx, ctx.control):
+            continue
+        if _make_room(ctx, grid, row) and grid.try_insert_command(row, fx, ctx.control):
+            continue
+        log.debug("swing: no room for a Speed command at row %d", row)
 
 
 # ============================================================

@@ -27,6 +27,20 @@ new_registry.discover("mod_weaver.genres_next")
 profiles.discover("mod_weaver.genres")
 IDS = sorted(new_registry.GENRE_REGISTRY)
 
+# F6 で移植するジャンル（A: 宣言だけ 13・B: パートの上書きあり 26）。``discover()`` は壊れたモジュールを警告だけで飛ばすので、
+# 登録が黙って抜けないようにここで数える。
+PORTED_F6 = {
+    "cool", "dreamy", "focus", "hiphop", "house", "lofi-chill", "lofi-hiphop", "melancholic", "neo-soul", "pop",
+    "rnb-soul", "synthwave", "warm",
+    "acoustic-ssw", "ambient", "ambient-drone", "anime-ost", "bossa-nova", "calm", "chiptune", "cinematic", "city-pop",
+    "classical", "dark-tense", "edm", "energetic", "folk", "gamelan", "indie-rock", "industrial", "jazz", "jpop-80s",
+    "jrock-90s", "jrpg", "racing-breaks", "rock", "techno", "trailer", "uplifting",
+}
+
+
+def test_every_f6_genre_is_registered():
+    assert PORTED_F6 <= set(IDS), sorted(PORTED_F6 - set(IDS))
+
 # 旧の編成から意図して変えたもの（§15.1: 一致しない場合は ladder の結果を採用してよいが、差を書く）
 # 並びだけが違う（lane の楽器・パンは同じ）ものを記録する。理由: 旧版は打楽器の論理チャンネルが離れていた（例: 6番目に
 # tom／shaker）が、新しい編成は打楽器を1つの drums パートにまとめるので打楽器の lane が先頭にまとまる。MOD はパンが
@@ -190,3 +204,87 @@ def test_no_unported_override_is_left_behind():
     root = pathlib.Path(__file__).resolve().parents[2] / "mod_weaver" / "genres_next"
     left = [f.name for f in sorted(root.glob("*.py")) if "TODO" in f.read_text(encoding="utf-8")]
     assert not left, left
+
+
+# ============================================================
+# ジャンル固有の性質（旧 tests/profiles/test_stage3_genres.py を Score・Realizer の言葉で書き直したもの）
+# ============================================================
+
+@pytest.mark.parametrize("gid", IDS)
+def test_only_participating_parts_have_events(gid):
+    """区間で鳴らさないと宣言したパート（と、その follow）には音が出ない。"""
+    genre = _genre(gid)
+    _plan, score = _score(genre, 3)
+    by_name = {p.name: p for p in genre.parts}
+    for name, sec in score.sections.items():
+        playing = set(sec.plan.parts)
+        for part in genre.parts:
+            if part.follow is not None:
+                continue
+        for pname, events in sec.parts.items():
+            if not any(isinstance(e, NoteEvent) for e in events):
+                continue
+            root = pname
+            while by_name[root].follow is not None:
+                root = by_name[root].follow
+            assert root in playing or pname in playing or sec.plan.section.tags, (gid, name, pname)
+
+
+@pytest.mark.parametrize("gid", IDS)
+def test_tempo_is_one_of_the_choices_and_seed_changes_only_declared_things(gid):
+    genre = _genre(gid)
+    plan, score = _score(genre, 7)
+    assert plan.bpm in genre.tempo_choices
+    assert _skeleton(_score(genre, 7)[1]) == _skeleton(score)
+
+
+@pytest.mark.parametrize("gid", IDS)
+def test_mod_channel_count_is_chosen_by_seed_and_unsupported_counts_are_rejected(gid):
+    from mod_weaver.errors import ChannelCountError
+
+    genre = _genre(gid)
+    chosen = {resolve("mod", None, genre, seed).budget for seed in range(1, 61)}
+    assert chosen == set(genre.mod_channels)
+    with pytest.raises(ChannelCountError):
+        resolve("mod", 5, genre, 1)
+
+
+def test_classical_is_four_measures_of_three_four_with_a_pattern_break():
+    genre = _genre("classical")
+    plan, score = _score(genre, 1)
+    for sec in score.sections.values():
+        assert sec.plan.steps == 48 and len(sec.plan.measures) == 4 and sec.plan.meter.signature == (3, 4)
+    rs = realize(genre, score, plan, resolve("mod", 4, genre, 1))
+    for pat in rs.patterns:
+        assert pat.rows == 64 and any(pat.get(47, c).fx == ("D", 0) for c in range(pat.channels))
+
+
+@pytest.mark.parametrize("gid", ["rock", "energetic"])
+def test_tom_fills_sound(gid):
+    """rock・energetic のフィルのタムが音高付きで鳴る（旧版は一時期、音量だけのセルで無音だった）。"""
+    genre = _genre(gid)
+    _plan, score = _score(genre, 1)
+    toms = [e for s in score.sections.values() for ev in s.parts.values() for e in ev
+            if isinstance(e, NoteEvent) and e.inst == "tom"]
+    assert toms and all(e.pitch is not None for e in toms)
+
+
+def test_swing_sets_speed_on_every_row_in_every_format():
+    """スウィングの Speed が全 row に入る（空きの無い row を飛ばすと表示 BPM からずれる）。"""
+    genre = _genre("jazz")
+    for seed in (1, 2, 3):
+        plan, score = _score(genre, seed)
+        for fmt, ch in (("mod", 4), ("s3m", None), ("xm", None), ("it", None)):
+            rs = realize(genre, score, plan, resolve(fmt, ch, genre, seed))
+            speed = "F" if fmt in ("mod", "xm") else "A"
+            for i, pat in enumerate(rs.patterns):
+                missing = [r for r in range(8 * 8) if r < pat.rows and not any(
+                    pat.get(r, c).fx is not None and pat.get(r, c).fx[0] == speed and pat.get(r, c).fx[1] < 32
+                    for c in range(pat.channels))]
+                # 先頭の pattern break（空の row を使う D00・C00）の後ろは見ない
+                assert not [r for r in missing if r < 64], (fmt, seed, i, missing[:5])
+
+
+def test_last_chorus_modulates_where_declared():
+    for gid in ("pop", "jrock-90s"):
+        assert any(s.key_offset for s in _genre(gid).sections.values()), gid

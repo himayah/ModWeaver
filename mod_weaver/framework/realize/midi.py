@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 PPQ = 480
 TICK = PPQ // 24                  # 1 tracker tick = 20 MIDI tick
 DRUM_CHANNEL = 9
+DRUM_KEY = -9999                  # (パート, DRUM_KEY) ＝ そのパートの打楽器の音のチャンネル
 MELODIC_CHANNELS = tuple(c for c in range(16) if c != DRUM_CHANNEL)
 UNPITCHED_NOTE = 60               # 音高を持たない非ドラム音色の発音 note
 BEND_CENTER = 8192
@@ -319,15 +320,14 @@ def _assign_channels(genre: "Genre", voices_by_part: dict[str, list[_Voice]]):
     melodic_groups = 0
     plans = []
     for name in parts:
-        vs = voices_by_part[name]
-        insts = {v.inst for v in vs}
-        drums = {genre.instruments[i].gm.is_drum for i in insts}
-        if drums == {True}:
-            chan[(name, 0)] = DRUM_CHANNEL
-            ranges[name] = BEND_RANGE_DEFAULT
+        all_vs = voices_by_part[name]
+        is_drum = {i: genre.instruments[i].gm.is_drum for i in {v.inst for v in all_vs}}
+        if any(is_drum.values()):
+            chan[(name, DRUM_KEY)] = DRUM_CHANNEL     # 打楽器の音は ch10。同じパートの旋律の音（効果音など）は別のチャンネル
+        vs = [v for v in all_vs if not is_drum[v.inst]]
+        ranges[name] = BEND_RANGE_DEFAULT
+        if not vs:
             continue
-        if True in drums:
-            raise PlanError(f"{genre.id}: part {name!r} mixes drum and melodic instruments")
         glide = any(v.glide_from is not None for v in vs)
         ranges[name] = BEND_RANGE_GLIDE if glide else BEND_RANGE_DEFAULT
         cents = sorted({round(100 * _bend_semis(v.midi)) for v in vs})
@@ -368,7 +368,7 @@ def _write(genre, score, info: _Info, conductor, voices_by_part, automations, se
         tracks[name] = ev
         ev.append((0, CTRL, _meta(0x03, name.encode("ascii", "replace"))))
         groups = sorted(g for (n, g) in chan if n == name)
-        single = len(groups) == 1
+        single = len([g for g in groups if g != DRUM_KEY]) <= 1
         state: dict[int, dict] = {}
         for g in groups:
             ch = chan[(name, g)]
@@ -382,11 +382,13 @@ def _write(genre, score, info: _Info, conductor, voices_by_part, automations, se
         # 同じチャンネル・同じ音高の重なりを避ける（止まらない音を作らない）
         placed: list[tuple[_Voice, int, int]] = []
         for v in sorted(vs, key=lambda v: (v.start, v.midi)):
-            g = round(100 * _bend_semis(v.midi)) if not single else 0
-            ch = chan[(name, g)]
-            note = max(0, min(127, round(v.midi)))
-            if ch == DRUM_CHANNEL:
+            if genre.instruments[v.inst].gm.is_drum:
+                ch = chan[(name, DRUM_KEY)]
                 note = int(round(v.midi))
+            else:
+                g = round(100 * _bend_semis(v.midi)) if not single else 0
+                ch = chan[(name, g)]
+                note = max(0, min(127, round(v.midi)))
             placed.append((v, ch, note))
         nxt: dict[tuple[int, int], int] = {}
         ends: dict[int, int] = {}

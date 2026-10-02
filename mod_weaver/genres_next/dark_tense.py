@@ -1,11 +1,11 @@
 """dark-tense（旧 genres/dark_tense.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['braam', 'fx'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
 from ..framework.gens import BassLine, Echo, Groove, Layer, Pad, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -26,6 +26,31 @@ PROGRESSIONS = (
     ("i-bII-i-V", (C(0, "min", label="i"), C(1, "maj", label="bII"), C(0, "min", label="i"), C(7, "maj", label="V"))),
     ("i-VI-iv-V", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(5, "min", label="iv"), C(7, "maj", label="V"))),
 )
+
+
+class Braam(Generator):
+    """2小節ごとの「ブラーム」（"lead" を鳴らす区間だけ。旧 extra_measure）。"""
+
+    def __init__(self, inst: str) -> None:
+        self.inst = inst
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.m.index % 2 == 0:
+            m.note(0, self.inst, m.m.chord.bass, vel=m.scale_drum(52))
+
+
+class RiserImpact(Generator):
+    """build の3小節目に上昇音、climax の頭に衝撃音。"""
+
+    def __init__(self, riser: str, impact: str) -> None:
+        self.riser = riser
+        self.impact = impact
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build" and m.m.index == 2:
+            m.note(0, self.riser, vel=44)
+        if m.plan.kind == "climax" and m.m.index == 0:
+            m.note(0, self.impact, vel=58)
 
 
 @register_genre
@@ -52,8 +77,8 @@ class DarkTenseGenre(Genre):
     sections = {
         "intro": Section(intensity=0.4, parts=frozenset({"pad", "drums"}), groove="tick"),
         "build": Section(intensity=0.6, parts=frozenset({"fx", "pad", "bass", "drums"}), groove="tick"),
-        "pulse": Section(prog=1, intensity=0.8, parts=frozenset({"pad", "bass", "drums", "lead"})),
-        "climax": Section(intensity=1.0, parts=frozenset({"bass", "drums", "pad", "lead", "fx"})),
+        "pulse": Section(prog=1, intensity=0.8, parts=frozenset({"pad", "bass", "drums", "braam"})),
+        "climax": Section(intensity=1.0, parts=frozenset({"bass", "drums", "pad", "braam", "fx"})),
         "collapse": Section(intensity=0.4, parts=frozenset({"pad"})),
     }
     form = ("intro", "build", "pulse", "build", "climax", "collapse")
@@ -64,9 +89,9 @@ class DarkTenseGenre(Genre):
                      group_pan={"tick": 176})),
         Part("bass", BassLine("bass", kind="pulse16", vol=46), pan=128),
         Part("pad", Pad("str", vol=34, chordal=False), pan=72),
-        # TODO: Part("braam", <ジェネレータ>, pan=110)  ← 上書きメソッドで鳴らしていた
-        # TODO: Part("fx", <ジェネレータ>, pan=150, min_channels=6)  ← 上書きメソッドで鳴らしていた
-        Part("choir", Layer("choir", vol=26, chordal=True), follow="lead", pan=96, min_channels=8),
+        Part("braam", Braam("braam"), pan=110),
+        Part("fx", RiserImpact("riser", "impact"), pan=150, min_channels=6),
+        Part("choir", Layer("choir", vol=26, chordal=True), follow="braam", pan=96, min_channels=8),
         Part("braam echo", Echo(delay=4, ratio=0.45), follow="braam", pan=160, min_channels=8),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}

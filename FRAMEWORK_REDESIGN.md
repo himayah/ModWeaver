@@ -1164,7 +1164,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | F3 TrackerRealizer（MOD）（**完了**） | lanes・ladder・セル化・音の終わり・ミックス・row コマンド・pattern。MOD の writer の対応。試験的に pop（A）・racing-breaks（B）・march（C）を移植 | §9・§10.1 | 3ジャンルが MOD の全予算で生成・検査に通る。§9.3 の計算例のテスト。基準の曲と聴き比べて問題が無い。**結果: `mod_weaver/framework/realize/`（lanes.py・samples.py・tracker.py）を実装。pop・racing-breaks は 4/6/8ch、march は現行どおり 4ch 専用で全て生成・検査（0 ERROR）が通る（seed 1〜5 で確認）。ladder の結果が現行 ARRANGEMENTS のチャンネル数と一致（§16.5）。`output/f3-trial/*.mod` を生成済み、ユーザーの試聴待ち。詳細・設計の隙間は §16.5** |
 | F4 S3M・XM・IT・MP3（**完了**） | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る。**結果: 3ジャンル × S3M・XM・IT（MOD は F3 と同じ経路に載せ替え）で I2・I3・I5・I6 が通り、I4（実音）は全プリセットのうち測れる34音色 × 4形式で通る（許容は XM・IT 7 セント、MOD 9、S3M 12。理由は §16.6）。MP3 は IT 経由 320 kbps。§13.4 の F4 の実測項目は Glide を除き完了。`output/f4-trial/` に試聴用を生成済み（ユーザーの試聴待ち）。詳細・設計の隙間は §16.6** |
 | F5 MIDI（**実装完了・GM 音源での試聴待ち**） | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり。**結果: `framework/realize/midi.py`・`core/native_midi.py`。3ジャンルが検査（ERROR 無し）・決定性・長さ（Score の時間軸と tick 単位で一致）を満たし、音高の式は実プレイヤーで測った実音と一致する（34音色）。この環境に GM 音源が無いので実際に鳴らしての確認は未実施（`output/f5-trial/*.mid` を生成済み）。詳細は §16.7** |
-| F6 A・B の移植 | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの） |
+| F6 A・B の移植（**実装完了・試聴待ち**） | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの）。**結果: A 13・B 26（試験の pop・racing-breaks を含む）の計 39 ジャンルを `mod_weaver/genres_next/` に移植し、`tests/framework/test_ported_genres_all.py`（I1・I2・I3・全パートが鳴る・編成の対応表・折り畳みの優先度・旧版のジャンル別テストの書き直し）と `tests/realplayer/test_ported_genres_real_player.py`（I5・I6）が通る。旧版との差と、F6 で足したフレームワークの機能は §16.8** |
 | F7 C の移植 | 11ジャンル（march を除く） | §15.4 | 同上 |
 | F8 仕上げ | engine・cli を新しい経路だけにし、旧コード（§2.4 の「捨てる」）を削除。音量の実測（`calibrate_levels.py`）、出力の基準（`golden.json`。§13.2）、`listen_samples.py`、GUI、README、DESIGN.md への統合と DESIGN_HISTORY.md への経緯の記録、本書の削除 | §14 | 全テスト（realplayer を含む）が通る。全ジャンルを試聴し、ユーザーの確認を得てから main にマージ |
 
@@ -1396,6 +1396,77 @@ S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker
 - **検査（`native_midi.verify`）**: 旧検査（読める・EOT・note on/off の対応・テンポ）に、PPQ 480、velocity・ノート範囲、
   メロディのチャンネルの program 指定、ドラムの音域（27..87）、**同時発音数が GM1 の保証する 24 を超えたら WARN** を加えた。
 - **まだ無いもの**: GM 音源で鳴らしての聴感の確認（この環境に音源が無い）。`Tremolo`（CC1 とは別の表現が無いので無視）。
+
+### 16.8 F6 の実装で埋めた設計の隙間
+
+**置き場所（§16.1 からの変更）**: 移植したジャンルは旧 `mod_weaver/genres/` を置き換えず、**`mod_weaver/genres_next/`**
+に置いた。理由は2つ: ①編成の対応表のテスト（§15.1）が旧クラスと新クラスを同じプロセスで読む必要がある、②旧パイプライン
+（CLI・GUI・engine）が移行の間も動いたままで、旧版の出力と比べ続けられる。F8 で旧 `genres/` を削除し、`genres_next/` を
+`genres/` に改名する（`git mv`）。**engine・CLI の新旧の呼び分けは作っていない**（§16.1 の「一時的な分岐」は F8 でまとめて）。
+新しいジャンルは `framework.registry.discover("mod_weaver.genres_next")` で登録され、`native.serialize(realize(...))`・
+`realize_midi(...)` を直接呼んで書き出せる。
+
+**変換ツール `tools/port_band_genre.py`**: 旧 `BandProfile` のクラス属性（KIT・CHORD_KITS・CHANNELS・ARRANGEMENTS・SECTIONS・
+GROOVES・各 Spec・SIDECHAIN …）を読み、§15.1 の表のとおりに新しい `Genre` の宣言を書き出す。A の 13 ジャンルは
+無修正で通り、**編成・パン・折り畳みの優先度が旧と一致する**（`house` を除く。下）。B は骨格だけをツールが作り、上書き
+していたメソッド（§15.3）を手で書いた。ツールが残した `TODO` が1つでもあるとテストが落ちる
+（`test_no_unported_override_is_left_behind`）。ジャンルを足すときの出発点にも使える。
+
+**B の手書き部分の書き方**（§15.3 の方針どおり。乱数の消費順は変わる＝D9）:
+
+- 区間の `parts` に混ぜていた役割の名前（`"kime"`・`"spic"`・`"fanfare"`・`"counter"`・`"hits"`・`"build"`・`"toms"`・`"clean"`）は
+  `Section.tags` に移した。同じチャンネルを共有する役割は1つの Part にして `Kit` で lane を宣言し（anime-ost の
+  `strings`＝spic＋brass、jrock-90s の `guitars`＝歪み＋クリーン、classical の `inner`＝vln2＋vla、jrpg・trailer の drums）、
+  ジェネレータが `m.plan.section.tags` を読む。
+- パートをまたぐ編集は `finalize_section`（`score.mute` → `score.add`）: anime-ost の決め、jazz の coda のフェルマータ、
+  trailer の final の余韻。旧版の `buf.replace`（他のパートの特定の row だけを置き換える）は、該当する楽器・step だけを
+  取り除いて足す形にした。
+- 区間をまたぐ状態は `ctx.state`（classical の声部の滑らかな進行、jrpg のゼクエンツ）。`plan()` の上書きは
+  `default_plan()` の結果の `SectionPlan.extra` に値を足す（indie-rock の disco・gamelan の音律と balungan）。
+- 音が出た後に加工するものは `SectionCtx.own_events()`（**新設**。部品の `section()` を呼んだ後に自分のイベントを書き換える）:
+  folk の前打音、jrpg のゼクエンツ。
+- 旧版の `finalize_pattern`（D00 の空き作り）・`_silence`（区間頭の停止）・`inst.off()` は書かない（Realizer の責任）。
+
+**旧版との違い（意図したもの）**:
+
+| ジャンル | 違い |
+|:---|:---|
+| house・energetic・rock | 打楽器の論理チャンネルが離れていた（shaker・tom が6番目）が、新しい編成は打楽器を1つの `drums` パートにまとめるので、打楽器の lane が先頭にまとまる。楽器・パンは同じ。**MOD はパンがチャンネル番号で固定（L R R L）なので、ステレオの配置が少しずれる** |
+| jrock-90s | 歪みギターとクリーンギターを1つの `guitars` パート（`Kit`）にした。lead gtr との並びが入れ替わる（楽器・パンは同じ）。4ch で2本が1チャンネルに畳まれる挙動は保たれる |
+| dark-tense | 旧版は区間の目印 `"lead"` で braam・choir の鳴る区間を決めていたので、パートを実在の `braam` に付け替えた（`choir` は `braam` に付き従う） |
+| gamelan | ketuk を打楽器の型から外し、**colotomic パートの kit（kenong/ketuk の lane）に移した**（旧版の物理チャンネルが「クノンと同じ」だったため）。音律は小数の音高で書き、MOD の finetune の変種は Realizer が作る |
+| chiptune | `channel_cap = 4`（厚くしないことがジャンルの性格）。ジャンプ音を打楽器の kit に入れた |
+| edm・uplifting | `build` の区間にも `drums` を入れ、ドラムのジェネレータがスネアのビルドアップを鳴らす（旧版は他のチャンネルのスネアを extra_measure が打楽器のチャンネルに書いていた） |
+| racing-breaks | F3 の試験移植の写し間違い2件を直した（パートの並びが pad → lead の順、折り畳み時の優先度に ohat・ride が抜けていた） |
+
+**F6 で足したフレームワークの機能**（いずれも §16.4〜§16.7 の続き）:
+
+- **MOD の微分音（finetune の変種）**: 書かれた音高の小数部と `tune_cents` から finetune（-8..7）を求め、同じ波形で finetune だけ
+  違うサンプルにする（`samples.sample_key`）。**実プレイヤーで finetune の刻みを測ると 12.5 セント（-8 で -100、+7 で +87）で、
+  旧 `core.pitch.FINETUNE_CENTS = 7.8125` は誤り**だった（旧パイプラインの maqam・gamelan の微分音は、残差が大きいほど
+  最大で 20 セント以上ずれて出力されていた）。新しい Realizer は `samples.MOD_FINETUNE_CENTS = 12.5` を使う。旧定数は旧版の
+  テストが依存するので触らず、F8 で旧と一緒に消える。
+- **スウィング（トラッカー）**: F3 から未実装だったものを実装した（§16.6 の「まだ無いもの」を回収）。スウィングのある区間は偶数 step を
+  `long`・奇数 step を `short` の Speed にして**全 row** に書く（制御チャンネル優先。場所が無い row は旧版と同じ手順
+  `_make_room` で作る）。スウィングがある曲は、全区間の先頭に Speed を明示する。
+- `Genre.swing` は、自前の `swing` を持たない区間の既定として `default_plan()` が適用する（それまでは宣言だけで使われておらず、
+  検証も既定の拍子と比べて誤って落ちていた）。検証は区間ごとの拍子で行う。
+- `SectionCtx.pitch_for(inst, pitch)`: 音程の無い楽器（vocal chop・効果音）に部品集が音高を渡さないための補助
+  （旧版は黙って無視していた。`ctx.note()` は厳格な検査のまま）。
+- **MIDI**: 打楽器と旋律の楽器が混在するパート（chiptune のジャンプ音）は、打楽器の音を ch10、他を旋律のチャンネルに分ける。
+- `--channels` が範囲外のときは `ChannelCountError`（終了コード 2。設計書 §9.2 のとおり。それまでは `PlanError` だった）。
+- 音量の較正表（`framework/levels.py`）を全39ジャンル＋march 分に作り直した（`tools/calibrate_native_levels.py`）。
+
+**検査**（`tests/framework/test_ported_genres_all.py`・`tests/realplayer/test_ported_genres_real_player.py`）:
+I1（骨格の不変）・I2（決定性）・I3（MOD の全予算、S3M・XM・IT の既定と `min(mod_channels)`、MIDI）・全パートが鳴る・
+**編成の対応表**（旧 `ARRANGEMENTS` の各編成と、新しい ladder の lane の数・楽器・パンが一致。差は `LAYOUT_DIFFS` に理由つきで記録）・
+**折り畳みの優先度**（同じ lane に畳まれた打楽器の2つのうち残る方が旧と同じ）・旧 `test_stage3_genres.py` の書き直し
+（区間で鳴らさないパートが鳴らない・テンポ・seed によるチャンネル数の選択と範囲外の拒否・classical の 3/4・タムのフィル・
+スウィングが全 row に入る）・I5・I6。**設計書 §15.1 の「畳んだ結果の (楽器, row) の集合の一致」は、乱数の消費順が変わる
+（D9）ため同じ seed でも打点が一致しないので、優先度の表そのものの一致で代えた。**
+
+**まだ無いもの**: engine・CLI・GUI・`--json` への接続（F8）。§15.5 の opt-in（フィルタのスイープ・Tremolo・release_s・double・
+12ch 以上の追加パート）は、試聴で基準と比べてから。実際に聴いての確認（`output/f6-trial/`）。
 
 ---
 

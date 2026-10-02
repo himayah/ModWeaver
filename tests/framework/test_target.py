@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from mod_weaver.errors import PlanError
+from mod_weaver.errors import ChannelCountError, PlanError
 from mod_weaver.framework import target
 
 
@@ -21,7 +21,7 @@ def test_mod_budget_honors_explicit_channels_request():
 
 
 def test_mod_budget_rejects_unsupported_channels():
-    with pytest.raises(PlanError):
+    with pytest.raises(ChannelCountError):
         target.resolve("mod", 5, _FakeGenre(), seed=1)
 
 
@@ -48,12 +48,12 @@ def test_it_budget_respects_channel_cap():
 
 
 def test_channels_request_out_of_range_for_tracker_format_raises():
-    with pytest.raises(PlanError):
+    with pytest.raises(ChannelCountError):
         target.resolve("s3m", 99, _FakeGenre(), seed=1)
 
 
 def test_midi_rejects_channels_request():
-    with pytest.raises(PlanError):
+    with pytest.raises(ChannelCountError):
         target.resolve("midi", 8, _FakeGenre(), seed=1)
 
 

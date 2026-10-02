@@ -1,5 +1,4 @@
 """chiptune（旧 genres/chiptune.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 論理チャンネル ['pulse 2'] を鳴らすパートが宣言に無い（上書きメソッドで鳴らす）
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
@@ -7,6 +6,9 @@ from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
 from ..framework.gens import BassLine, Groove, Lead, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
+from ..core.pitch import CHORD_QUALITIES
+from ..framework.score import Arpeggio
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -34,6 +36,31 @@ PROGRESSIONS = (
     ("I-bVII-IV-I", (C(0, "maj", label="I"), C(10, "maj", label="bVII"), C(5, "maj", label="IV"), C(0, "maj", label="I"))),
     ("IV-V-iii-vi", (C(5, "maj", label="IV"), C(7, "maj", label="V"), C(4, "min", label="iii"), C(9, "min", label="vi"))),
 )
+
+
+JUMP_STEP = 12                                 # 区間の最後の小節でジャンプ音を鳴らす step
+
+
+class PulseChord(Generator):
+    """パルス波の和音: 和音の変わり目と 8 step 目に鳴らし直し、その間 Arpeggio で（1 step の中で3音を切り替える）。
+    旧版は 0xy と音量が同じセルに書けないので、鳴らし直す音は既定音量だった（vel=None）。"""
+
+    def __init__(self, inst: str) -> None:
+        self.inst = inst
+
+    def measure(self, m: MeasureCtx) -> None:
+        q = CHORD_QUALITIES[m.m.quality]
+        for step in range(0, m.m.steps, 8):
+            m.note(step, self.inst, m.m.chord.harmony, arts=(Arpeggio(q[1], q[2], steps=min(8, m.m.steps - step)),))
+
+
+class ChipDrums(Groove):
+    """ノイズチャンネルの打楽器の型に、区間の終わりのジャンプ音を足す。"""
+
+    def measure(self, m: MeasureCtx) -> None:
+        super().measure(m)
+        if m.plan.section.fill and m.is_last:
+            m.note(JUMP_STEP, "jump", vel=40)
 
 
 @register_genre
@@ -67,10 +94,11 @@ class ChiptuneGenre(Genre):
     parts = (
         Part("lead", Lead("lead", ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7, 12)), LEAD_MOTIFS,
                    vol=42, gate=0.8, vibrato=0x33), pan=128),
-        # TODO: Part("pulse 2", <ジェネレータ>, pan=128)  ← 上書きメソッドで鳴らしていた
+        Part("arp", PulseChord("arp"), pan=128),
         Part("bass", BassLine("bass", kind="octave8", vol=54), pan=128),
-        Part("drums", Groove(GROOVES), pan=128,
-             kit=Kit(groups=(("noise", ("kick", "snare", "hat")),),
+        Part("drums", ChipDrums(GROOVES), pan=128,
+             kit=Kit(groups=(("noise", ("kick", "snare", "hat", "jump")),),
                      priority={"snare": 3, "kick": 2})),
     )
     mod_channels = {4: 1}
+    channel_cap = 4          # 厚くしないことがジャンルの性格（どの形式でも4チャンネル）

@@ -1,5 +1,4 @@
 """jazz（旧 genres/jazz.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 上書きメソッドの移植: compose_measure
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
@@ -8,6 +7,8 @@ from ..core.synth_presets import PRESETS
 from ..framework.gens import BassLine, Comp, Groove, Lead, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
 from ..framework.plan import Meter, Swing
+from ..core.pitch import CHORD_QUALITIES
+from ..framework.score import NoteEvent
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -32,6 +33,24 @@ METER = Meter(8, 2, (4, 4))
 PROGRESSIONS = (
     ("i11 vamp", (C(0, "quartal", label="i11"), C(0, "quartal", label="i11"), C(0, "quartal", label="i11"), C(2, "quartal", label="ii11"))),
 )
+
+
+FERMATA = 6                                    # coda でこの小節の頭に最後の長い和音を置き、以降は余韻だけ
+
+
+def place_fermata(sec, score) -> None:
+    """coda: 前半は head の素材、FERMATA の小節で全員が長い和音を伸ばして終わる（旧 compose_measure の上書き）。
+    トランペットは最後の小節の4 step 目で止める。"""
+    if sec.kind != "coda":
+        return
+    fer, last = sec.measures[FERMATA], sec.measures[-1]
+    score.mute(tuple(score.parts), fer.start, sec.steps)
+    chord = fer.chord
+    score.add("drums", NoteEvent(fer.start, "ride", None, 40))
+    score.add("bass", NoteEvent(fer.start, "bass", chord.bass, 50))
+    score.add("comp", NoteEvent(fer.start, "piano", chord.harmony, 42, chord=CHORD_QUALITIES[fer.quality]))
+    score.add("lead", NoteEvent(fer.start, "tpt", chord.chord_tones[len(chord.chord_tones) // 2], 40,
+                                  dur=last.start + 4 - fer.start))
 
 
 @register_genre
@@ -69,4 +88,7 @@ class JazzGenre(Genre):
                    vol=46, gate=0.95, vibrato=0x23), pan=128),
     )
     swing = Swing(14, 10)
+
+    def finalize_section(self, sec, score, rng) -> None:
+        place_fermata(sec, score)
     mod_channels = {4: 1}

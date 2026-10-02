@@ -1,5 +1,4 @@
 """indie-rock（旧 genres/indie_rock.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 上書きメソッドの移植: drums, plan
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
@@ -7,6 +6,7 @@ from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
 from ..framework.gens import Arp, BassLine, Comp, Echo, Groove, Layer, Lead, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.plan import SongPlan, default_plan
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -34,6 +34,11 @@ PROGRESSIONS = (
     ("I-iii-IV-iv", (C(0, "maj", label="I"), C(4, "min", label="iii"), C(5, "maj", label="IV"), C(5, "min", label="iv"))),
     ("vi-IV-I-V", (C(9, "min", label="vi"), C(5, "maj", label="IV"), C(0, "maj", label="I"), C(7, "maj", label="V"))),
 )
+
+
+def disco_groove(sp) -> str:
+    """ダンス寄りの曲（plan() が決める）では main の型を disco に差し替える。"""
+    return "disco" if sp.extra.get("disco") and sp.section.groove == "main" else sp.section.groove
 
 
 @register_genre
@@ -68,7 +73,7 @@ class IndieRockGenre(Genre):
     }
     form = ("intro", "verse", "chorus", "verse", "chorus", "bridge", "chorus", "outro")
     parts = (
-        Part("drums", Groove(GROOVES), pan=128,
+        Part("drums", Groove(GROOVES, groove_name=disco_groove), pan=128,
              kit=Kit(groups=(("kick/snare", ("kick", "snare")), ("hat", ("hat", "tamb", "crash"))),
                      priority={"snare": 2, "crash": 3},
                      single_priority={"kick": 3, "snare": 4, "hat": 1, "tamb": 1, "crash": 2},
@@ -82,3 +87,10 @@ class IndieRockGenre(Genre):
         Part("organ", Layer("organ", vol=26), follow="lead", pan=160, min_channels=8),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}
+
+    def plan(self, rng) -> SongPlan:
+        base = default_plan(self, rng)
+        disco = rng.random() < 0.5            # 半数の seed でダンス寄りの4つ打ち
+        for sp in base.sections.values():
+            sp.extra = dict(sp.extra, disco=disco)
+        return base

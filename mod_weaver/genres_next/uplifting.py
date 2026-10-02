@@ -1,12 +1,12 @@
 """uplifting（旧 genres/uplifting.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
-# TODO(F6): 上書きメソッドの移植: extra_measure
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
 from ..core.synth_presets import PRESETS
-from ..framework.gens import Arp, BassLine, Echo, Groove, Layer, Lead, Pad, hits
+from ..framework.gens import Arp, BassLine, Buildup, Echo, Groove, Layer, Lead, Pad, hits
 from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section, Sidechain
+from ..framework.context import Generator, MeasureCtx
 from ..framework.registry import register_genre
 
 C = ChordSpec
@@ -33,6 +33,20 @@ PROGRESSIONS = (
 )
 
 
+class BuildupDrums(Groove):
+    """通常は打楽器の型。build の区間ではスネアのビルドアップ（4分→8分→16分→連打と加速し、音量が上がる）。"""
+
+    def __init__(self, grooves, **kw) -> None:
+        super().__init__(grooves, **kw)
+        self.buildup = Buildup("snare")
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build":
+            self.buildup.measure(m)
+        else:
+            super().measure(m)
+
+
 @register_genre
 class UpliftingGenre(Genre):
     id = "uplifting"
@@ -57,14 +71,14 @@ class UpliftingGenre(Genre):
     harmony = Harmony(keys=(2, 4, 5), mode="ionian", progressions=PROGRESSIONS, n_progressions=2)
     sections = {
         "intro": Section(intensity=0.5, parts=frozenset({"drums", "arp"})),
-        "build": Section(prog=1, intensity=0.7, parts=frozenset({"pad", "arp"})),
+        "build": Section(prog=1, intensity=0.7, parts=frozenset({"pad", "arp", "drums"})),
         "drop": Section(intensity=1.0, parts=frozenset({"bass", "drums", "pad", "lead", "arp"})),
         "break": Section(prog=1, intensity=0.5, parts=frozenset({"pad", "drums", "arp"}), groove="break"),
         "outro": Section(intensity=0.5, parts=frozenset({"drums", "arp"})),
     }
     form = ("intro", "build", "drop", "drop", "break", "build", "drop", "drop", "outro")
     parts = (
-        Part("drums", Groove(GROOVES), pan=128,
+        Part("drums", BuildupDrums(GROOVES), pan=128,
              kit=Kit(groups=(("kick", ("kick",)), ("clap/hat", ("clap", "ohat", "snare"))),
                      priority={"snare": 3, "clap": 2},
                      single_priority={"kick": 4, "clap": 3, "ohat": 1, "snare": 4},

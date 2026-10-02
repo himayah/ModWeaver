@@ -22,4 +22,4 @@ class Arp(Generator):
             tones = tones + tones[-2:0:-1]
         for i, row in enumerate(r for r in self.steps if r < m.m.steps):
             vol = m.scale_vol(self.vol if i % 4 == 0 else max(1, self.vol - 6))
-            m.note(row, self.inst, tones[i % len(tones)], vel=vol)
+            m.note(row, self.inst, m.pitch_for(self.inst, tones[i % len(tones)]), vel=vol)

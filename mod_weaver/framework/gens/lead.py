@@ -51,4 +51,4 @@ class Lead(Generator):
         for e in events:
             dur = max(1, round(e.dur * self.gate))
             arts = (Vibrato(self.vibrato, at=2),) if (self.vibrato and e.dur >= 6) else ()
-            m.note(e.row, inst, e.note, vel=e.vol, dur=dur, arts=arts)
+            m.note(e.row, inst, m.pitch_for(inst, e.note), vel=e.vol, dur=dur, arts=arts)

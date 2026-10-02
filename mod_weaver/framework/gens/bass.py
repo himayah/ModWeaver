@@ -17,7 +17,7 @@ class BassLine(Generator):
     def measure(self, m: MeasureCtx) -> None:
         register = m.genre.harmony.registers.bass
         for row, note, vol in _bass_line(self.kind, m.m.chord, m.m.steps, register, m.rng, self.vol):
-            m.note(row, self.inst, note, vel=m.scale_vol(vol))
+            m.note(row, self.inst, m.pitch_for(self.inst, note), vel=m.scale_vol(vol))
 
 
 def _bass_line(kind: str, chord, steps: int, register: tuple[int, int], rng, vol: int

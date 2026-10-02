@@ -20,8 +20,9 @@ class Layer(Generator):
             return
         chord = m.m.chord
         if self.chordal:
-            m.note(0, self.inst, chord.harmony, vel=m.scale_vol(self.vol), chord=CHORD_QUALITIES[m.m.quality])
+            m.note(0, self.inst, m.pitch_for(self.inst, chord.harmony), vel=m.scale_vol(self.vol),
+                   chord=CHORD_QUALITIES[m.m.quality] if m.pitch_for(self.inst, 0) is not None else ())
         else:
             pcs = sorted({t % 12 for t in chord.chord_tones}, key=lambda pc: (pc - chord.harmony) % 12)
             note = fold_into_range(pcs[1] if len(pcs) > 1 else pcs[0], *self.register)
-            m.note(0, self.inst, note, vel=m.scale_vol(self.vol))
+            m.note(0, self.inst, m.pitch_for(self.inst, note), vel=m.scale_vol(self.vol))

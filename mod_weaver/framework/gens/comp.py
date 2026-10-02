@@ -27,13 +27,14 @@ class Comp(Generator):
             intervals = CHORD_QUALITIES[m.m.quality]
             for row, accent in rows:
                 vol = m.scale_vol(self.vol if accent else max(1, self.vol - 10))
-                m.note(row, self.inst, chord.harmony, vel=vol, chord=intervals, strum_ms=self.strum_ms,
+                m.note(row, self.inst, m.pitch_for(self.inst, chord.harmony), vel=vol,
+                       chord=intervals if m.pitch_for(self.inst, 0) is not None else (), strum_ms=self.strum_ms,
                        arts=wobble_arts)
         else:
             tones = arp_tones(chord, m.genre.harmony.registers.harmony)
             for i, (row, accent) in enumerate(rows):
                 vol = m.scale_vol(self.vol if accent else max(1, self.vol - 10))
-                m.note(row, self.inst, tones[i % len(tones)], vel=vol, arts=wobble_arts)
+                m.note(row, self.inst, m.pitch_for(self.inst, tones[i % len(tones)]), vel=vol, arts=wobble_arts)
 
 
 def _comp_rows(kind: str, steps: int, rng) -> list[tuple[int, bool]]:

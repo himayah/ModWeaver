@@ -89,6 +89,12 @@ class SectionCtx:
         if not pitched and pitch is not None:
             raise PlanError(f"{self.part.name}: {inst!r} is not pitched but pitch={pitch!r}")
 
+    def pitch_for(self, inst: str, pitch: Optional[float]) -> Optional[float]:
+        """音程の無い楽器（vocal chop・効果音など）には音高を渡せない（``note()`` は厳格に検査する）ので、部品集が
+        「旋律・和音の音高を鳴らすつもりで音程の無い楽器を指定されたとき」に音高を落とすための補助。旧版は黙って
+        無視していた（``Instrument.cell`` が ``pitched=False`` で ``n`` を捨てる）。"""
+        return pitch if self.genre.instruments[inst].is_pitched else None
+
     def _check_arts(self, arts: tuple[Articulation, ...]) -> None:
         limit = self._max_ticks()
         for a in arts:

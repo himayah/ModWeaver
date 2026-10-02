@@ -48,7 +48,9 @@ class _Ctx:
         self.control: Optional[int] = control[0] if control else None
 
 
-def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target") -> RealizedSong:
+def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", *,
+            level: bool = True) -> RealizedSong:
+    """``level=False`` は音量の底上げをしない（``tools/calibrate_native_levels.py`` が測るため）。"""
     if target.kind != "tracker":
         raise PlanError(f"TrackerRealizer cannot realize format {target.format!r}")
     fmt = "it" if target.format == "mp3" else target.format
@@ -97,11 +99,16 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target") 
     if len(order) > target.max_orders:
         raise PlanError(f"{genre.id}: order length {len(order)} exceeds {target.format}'s limit {target.max_orders}")
 
-    return RealizedSong(
+    rs = RealizedSong(
         format=fmt, title=genre.title, samples=specs, patterns=patterns, order=order,
         channel_pans=tuple(l.pan for l in layout.lanes), initial_bpm=plan.bpm, instrument_names=inst_names,
         sample_release=release, measure_rows=tuple(measure_rows),
         rows_per_measure=score.sections[first_section].plan.meter.steps)
+    if level:
+        from ...core import native_level
+        from ..levels import PEAK_DB
+        rs = native_level.lift(rs, PEAK_DB.get(genre.id))
+    return rs
 
 
 def realize_mod(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target"

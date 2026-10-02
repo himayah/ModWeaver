@@ -1356,8 +1356,14 @@ S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker
   F6 の前に入れる。入れるときは、スウィングのある曲では全区間の先頭に Speed を明示すること（直前の区間の Speed が残らないように）。
 - `Glide` の period 計算と拡張音域の速さ（§13.4 の表）、MOD の finetune 変種（微分音）、`Offset` の IT `SAx`。いずれも該当する
   ジャンルの移植（F7）で。
-- 音量の底上げ（§9.10・`level.py`）と実測値（`PEAK_DB`）は F8。F4 の時点では持ち上げずに、**全形式で最大振幅が −3.4 dBFS 以下**
-  （3ジャンル・MOD 4/8ch・S3M・XM・IT。I6 の −0.5 dBFS に対して余裕がある）。IT の mix volume は 48 のまま。
+- **音量の底上げ（§9.10）は F4 の後に前倒しで実装した**（ユーザーの指摘: MP3 に比べて他形式が小さい）。`core/native_level.py`
+  （音量の値を一律に倍 ＋ S3M・IT のマスター音量。旧 `level.py` の `RealizedSong` 版）、実測表 `framework/levels.py`
+  （形式＋チャンネル数ごとの最悪の最大振幅。鍵が無いチャンネル数は同形式の最悪値で代用）、較正ツール
+  `tools/calibrate_native_levels.py`。`realize(level=True)` が既定で持ち上げる。**効果は形式で違う**: S3M・IT は
+  マスター音量（127/128 まで）で約 −2〜−3.5 dBFS まで上がった（以前は −4〜−6）。**XM と MOD は上がらない**（XM −4〜−5、
+  MOD 8ch −7〜−8、MOD 4ch −3.5 前後）: ヘッダのマスター音量が無く、音量の値は最大の発音（kick・bass が 59〜61）が
+  すでに上限 64 に近く、サンプル波形の最大値も 0.9〜0.95 で余裕がほぼ無いため。MP3 は ffmpeg の平均音量合わせ＋リミッタ
+  （平均 −14 dB）を通るので、ピークだけを揃える他形式より大きく聞こえる。全ジャンルの実測表は F8（表は今は3ジャンルだけ）。
 - 旧 `engine`・`cli`・`formats.py` の登録簿への接続（`--format` から新しい経路を呼ぶこと）は F8。F4 の時点で新経路は
   `native.serialize(realize(...))` を直接呼ぶ。
 

@@ -154,7 +154,8 @@ def _plan_section(name: str, sec: "Section", progs, key_pc: int, harmony,
             if m >= n_measures:
                 break
             k = min(per, n_measures - m)
-            chord = voice(spec, tonic, scale, harmony.registers, mode_by_quality=harmony.mode_by_quality or None)
+            chord = voice(spec, tonic, scale, harmony.registers, arp=harmony.arp,
+                          mode_by_quality=harmony.mode_by_quality or None)
             chords.extend([chord] * k)
             qualities.extend([spec.quality] * k)
             offsets.extend(range(k))

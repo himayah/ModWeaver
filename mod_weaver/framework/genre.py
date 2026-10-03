@@ -55,6 +55,7 @@ class Harmony:
     progressions: tuple[tuple[str, tuple[ChordSpec, ...]], ...] = ()
     n_progressions: int = 2
     fixed: bool = False               # True なら選ばず宣言順に全部使う
+    arp: bool = False                 # True なら ChordDef.arp（0xy 用の第3音・第5音のオフセット）を求める
 
     def __post_init__(self) -> None:
         if not self.progressions:

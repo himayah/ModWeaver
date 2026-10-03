@@ -18,7 +18,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tests" / "framework" / "realize" / "genres"))
 
 from mod_weaver.core import native, native_level  # noqa: E402
 from mod_weaver.framework.compose import compose, resolve_plan  # noqa: E402
@@ -32,12 +31,10 @@ HEADER = (ROOT / "mod_weaver" / "framework" / "levels.py").read_text(encoding="u
 
 
 def genres() -> dict:
-    """新しい枠組みの全ジャンル（``genres_next/``）。F7 で march ほか C グループが入るまで、試験移植の march も測る。"""
-    from march import MarchToy
+    """新しい枠組みの全ジャンル（``genres_next/``）。"""
     from mod_weaver.framework import registry
     registry.discover("mod_weaver.genres_next")
     out = {gid: cls() for gid, cls in registry.GENRE_REGISTRY.items()}
-    out.setdefault("march", MarchToy())
     return out
 
 

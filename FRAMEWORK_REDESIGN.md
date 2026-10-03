@@ -999,7 +999,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | XM の relative note・finetune による再生レート、拡張音域の音高 | I4 の仕組みで、音域の端の音を含めて測る | **確認済み**。Amiga 周波数表のまま、relative_note（-24..+24 半音）・finetune（-128..127 の全域）・XM note（1..96 の全域）を振り、FFT（窓 1 秒、放物線補間）で測定。67 点中、音域の上端（XM note 96）と finetune の極値付近で最大 5.7 セントの誤差、残りは 3 セント未満。**全点が I4 の許容 7 セント以内**（放物線補間を使った自前の測定スクリプトは `tests/realplayer` の既存のゼロ交差法より精度が高い。本番の検査 I4 もこの精度の測定に変える） |
 | S3M の C2Spd・IT の C5Speed を任意の値にしたときの音高 | 同上 | **IT で確認済み**（C5Speed 100〜65535、IT note 0..119 の全域で測定。最大誤差 2.1 セント）。S3M の C2Spd は IT の C5Speed と同じ関数（`s3m.c2spd`）を使っているので同じ結果が見込まれるが、**S3M は F4 で測った（§16.6 の「S3M の音高」）**。**設計への影響はない注意点が1件**: C5Speed を実用上あり得ない値（100 Hz 相当。本設計の `rate_hz` は常に `dsp.sample_rate()×oversample` 由来で実用域は約 4 kHz〜300 kHz）にすると、libopenmpt 側の下限処理と見られる挙動で意図しない高さが出た。実用域（4 kHz 以上）では再現しないので設計を変える必要はないが、F4 で IT・S3M の検査器に「C5Speed/C2Spd の実用下限（例 1 kHz）を下回ったら警告」を足すことを検討する |
 | `Tremolo` の深さが形式間で一致するか | 長い音にトレモロを掛け、振幅の変動を比べる | **F4 で測定済み**。MOD・XM は一致。**S3M・IT は深さが正確に半分**（深さのニブル 2〜15 で比例）。`encode.Codec.tremolo` が S3M・IT の深さを 2 倍（上限 15）にして合わせる。MOD の深さ 8 以上は S3M・IT で頭打ち |
-| 拡張音域の `Glide` の速さ | 1オクターブのグライドの到達時間 | **未測定のまま F7 へ持ち越し**。Realizer はまだ直前の period を知らず `Glide.param` 無指定を最小速度にしている（§16.5）ので、測っても使える入力が無い。`Glide` を使う最初のジャンル（trap）を移植する F7 で、period の計算と一緒に測る |
+| 拡張音域の `Glide` の速さ | 1オクターブのグライドの到達時間 | **F7 で測定済み**。速さ 1 につき tick あたり「Amiga 換算の period（クロック ÷ 再生レート）」が 1 動く（MOD・S3M・XM・IT で同じ。S3M・IT は period の単位が 4 倍だがスライドも 4 倍）。1 オクターブ・7 半音のグライドが指定の step 数で届くことを 4 形式で確認した（誤差 0.12 秒以内。`tests/realplayer/test_glide_real_player.py`）。MOD の note は 0..35 の範囲なので「拡張音域」の外挿は要らない。詳細は §16.9 |
 | XM・IT のエンベロープ（リリース）の時間 | キーオフから無音までの時間 | **F4 で測定済み**。点 `(0,64)`（サステイン）と `(release_s ÷ (2.5/BPM) tick, 0)` で、キーオフから振幅が 5% に落ちるまでが `release_s` に ±0.02 秒で一致（0.12・0.36・0.72 秒）。tick の換算は曲の**初期テンポ**で行うので、途中でテンポが変わる曲では長さがずれる |
 | IT の `Zxx` が既定のマクロで効くか | 白色雑音にカットオフを掛けて帯域を測る | **F4 で確認済み**。`Z127`→`Z32` で重心周波数が 10.8 kHz → 3.2 kHz → 1.6 kHz → 0.8 kHz と単調に下がる（埋め込みマクロは不要） |
 | IT の pattern の最小 row 数 | 16 row の pattern を書いて libopenmpt と OpenMPT で開く | **F4 で測定済み（libopenmpt のみ）**。12・16 row の pattern も正しい長さで再生できる。ただし IT の仕様の下限は 32 row なので、書き出しは設計どおり 32 row に詰めて最後の実際の row に `C00` を置く（OpenMPT・Schism での確認はしていない） |
@@ -1165,7 +1165,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 | F4 S3M・XM・IT・MP3（**完了**） | writer・parser・検査器の拡張、Realizer の形式ごとの表現、IT 経由の MP3 | §9.6〜9.7・§10・§12 | 3ジャンルで I3〜I6 が通る。**結果: 3ジャンル × S3M・XM・IT（MOD は F3 と同じ経路に載せ替え）で I2・I3・I5・I6 が通り、I4（実音）は全プリセットのうち測れる34音色 × 4形式で通る（許容は XM・IT 7 セント、MOD 9、S3M 12。理由は §16.6）。MP3 は IT 経由 320 kbps。§13.4 の F4 の実測項目は Glide を除き完了。`output/f4-trial/` に試聴用を生成済み（ユーザーの試聴待ち）。詳細・設計の隙間は §16.6** |
 | F5 MIDI（**実装完了・GM 音源での試聴待ち**） | `MidiRealizer` | §11 | 3ジャンルの MIDI が検査に通り、DAW（または GM 音源）で鳴らして意図どおり。**結果: `framework/realize/midi.py`・`core/native_midi.py`。3ジャンルが検査（ERROR 無し）・決定性・長さ（Score の時間軸と tick 単位で一致）を満たし、音高の式は実プレイヤーで測った実音と一致する（34音色）。この環境に GM 音源が無いので実際に鳴らしての確認は未実施（`output/f5-trial/*.mid` を生成済み）。詳細は §16.7** |
 | F6 A・B の移植（**実装完了・試聴待ち**） | 37ジャンル（試験の2つを除く） | §15.1〜15.3 | I1〜I3、編成の対応表のテスト、ジャンル固有の文法のテスト（Score で書き直したもの）。**結果: A 13・B 26（試験の pop・racing-breaks を含む）の計 39 ジャンルを `mod_weaver/genres_next/` に移植し、`tests/framework/test_ported_genres_all.py`（I1・I2・I3・全パートが鳴る・編成の対応表・折り畳みの優先度・旧版のジャンル別テストの書き直し）と `tests/realplayer/test_ported_genres_real_player.py`（I5・I6）が通る。旧版との差と、F6 で足したフレームワークの機能は §16.8** |
-| F7 C の移植 | 11ジャンル（march を除く） | §15.4 | 同上 |
+| F7 C の移植（**実装完了・試聴待ち**） | 12ジャンル（試験の march を本番に昇格した分を含む） | §15.4 | 同上。**結果: 12 ジャンルを `mod_weaver/genres_next/` に移植し、全 51 ジャンルが新しい枠組みに載った。F6 の共通検査（I1〜I3・全パートが鳴る・I5・I6）に加えて、ジャンル固有の性質（`tests/framework/test_ported_genres_c.py`）、`Glide` の速さを 4 形式の実プレイヤーで測る検査（`tests/realplayer/test_glide_real_player.py`）が通る。F7 で足したフレームワークの機能と旧版との差は §16.9** |
 | F8 仕上げ | engine・cli を新しい経路だけにし、旧コード（§2.4 の「捨てる」）を削除。音量の実測（`calibrate_levels.py`）、出力の基準（`golden.json`。§13.2）、`listen_samples.py`、GUI、README、DESIGN.md への統合と DESIGN_HISTORY.md への経緯の記録、本書の削除 | §14 | 全テスト（realplayer を含む）が通る。全ジャンルを試聴し、ユーザーの確認を得てから main にマージ |
 
 ### 16.3 作業量の見積もり
@@ -1240,8 +1240,7 @@ Score から直接 SMF を作る。トラッカー用の lane・ladder は使わ
 - **`Glide` の速度が指定なしのときの既定値**: `Glide.param` が `None` のとき、本来は直前の音の
   period から `automation.portamento_param()` で計算すべきだが、Score 層は period を持たない
   （lane に実際に割り当てるまで前の tracker note が決まらない）。F3 時点でどのジャンルも `Glide` を
-  使わないため、最小値（1）を既定にするだけに留めた（trap の808グライド等、実際に使うジャンルが
-  出る F7 までに、lane 割当後の前後関係から計算するよう直す）。
+  使わないため、最小値（1）を既定にするだけに留めた。**F7 で解決した（§16.9: lane 割当後に直前の音から計算する）**。
 - **`follow` 先を持たないジェネレータ（`Echo` 等）の lane は `insts=()` になる**。`Echo` は
   自分の楽器を持たず、写した元のイベントの楽器名をそのまま使うため、lane 構築時に `Part.gen.inst`
   を引けない。実際の発音は `Placement.inst`（イベントごとの実際の楽器名）で解決するので実害は無いが、
@@ -1355,7 +1354,7 @@ S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker
 - **スウィング（§9.9）**: F3 から未実装（`SectionPlan.swing` を Realizer が読んでいない）。最初のスウィングのジャンルを移植する
   F6 の前に入れる。入れるときは、スウィングのある曲では全区間の先頭に Speed を明示すること（直前の区間の Speed が残らないように）。
 - `Glide` の period 計算と拡張音域の速さ（§13.4 の表）、MOD の finetune 変種（微分音）、`Offset` の IT `SAx`。いずれも該当する
-  ジャンルの移植（F7）で。
+  ジャンルの移植（F7）で。**→ Glide は F7（§16.9）、finetune 変種は F6（§16.8）で入れた。**
 - **音量の底上げ（§9.10）は F4 の後に前倒しで実装した**（ユーザーの指摘: MP3 に比べて他形式が小さい）。`core/native_level.py`
   （音量の値を一律に倍 ＋ S3M・IT のマスター音量。旧 `level.py` の `RealizedSong` 版）、実測表 `framework/levels.py`
   （形式＋チャンネル数ごとの最悪の最大振幅。鍵が無いチャンネル数は同形式の最悪値で代用）、較正ツール
@@ -1467,6 +1466,64 @@ I1（骨格の不変）・I2（決定性）・I3（MOD の全予算、S3M・XM�
 
 **まだ無いもの**: engine・CLI・GUI・`--json` への接続（F8）。§15.5 の opt-in（フィルタのスイープ・Tremolo・release_s・double・
 12ch 以上の追加パート）は、試聴で基準と比べてから。実際に聴いての確認（`output/f6-trial/`）。
+
+---
+
+### 16.9 F7 の実装で埋めた設計の隙間
+
+**置き場所**: 12 ジャンルとも `mod_weaver/genres_next/`（F6 と同じ。F8 で `genres/` に改名）。試験の march は
+`tests/framework/realize/genres/` から `genres_next/march.py` に昇格した（F3 の試験用のクラス名 `MarchToy` は `MarchGenre`。
+`tools/calibrate_native_levels.py`・`test_all_formats.py`・`test_ported_genres.py` の march の特別扱いは外した）。suspense の2ジャンルの
+共通部分（音色・和声・語彙）は `genres_next/_suspense.py`（`_` 始まりなので `discover()` はジャンルとして読まない）。
+`tools/port_band_genre.py`（変換ツール）は C には使えない（旧版が `BandProfile` ではない）ので、旧 `genres/<id>.py` と旧テストを見ながら手で書いた。
+
+**共通の書き方**: 和声が手組み・不揃いのジャンル（march・nostalgic・minimalism・free-jazz・maqam・suspense の2つ）は `harmony=None` とし、
+`plan()` を上書きして `SectionPlan`・`MeasurePlan` を直接組む（`kind`・`quality` は表示用で Realizer は読まない）。dropout・anvil・スタブ・
+クラスターの和音のような「曲ごとに乱数で決まる計画」は `plan()` が決めて `SectionPlan.extra` に置き、各パートが読む。同じ文法の区間が
+曲の中に2つある場合（suspense-chase の A1・A2）は、区間名を分けて `Section.kind` を共通にする（`a1`・`a2`、`kind="a"`）。
+持続音を止める無音は、その楽器の持ち主のパートが `off` を書く（他のパートの lane は書けない）。旧版の `finalize_pattern`・`_silence`・
+`inst.off()` による「区間末の消音」「区間頭の停止」は書かない（Realizer の責任。ループ音色は区間の終わりで止まる）。**区間は音を持ち越さない**ので、
+旧版が pattern をまたいで鳴らし続けていた持続音（suspense-slow の shock の最初の小節の drone）は、区間の頭で鳴らし直す。
+
+**F7 で足したフレームワークの機能**:
+
+- **`Glide` の実装（Realizer。§5.3・§13.4）**: `tracker._resolve_glide`。同じ lane の直前の音について、(1) 鳴り終わっていれば（ワンショットの
+  再生時間 ＝ フレーム数 ÷ 再生レートが、音の間隔より短い／明示の `dur` が尽きた／消音がある）`Glide` を外して普通の発音にする、
+  (2) 鳴っていて `Glide.param` が無指定なら、直前の音の period から目標の period まで `steps × (row の tick 数 − 1)` 個の tick（スライドは
+  row の最初の tick には掛からない）で届く速さを `3xx`/`Gxx` に書く。速さは **Amiga 換算の period の差 ÷ tick 数**
+  （Amiga 換算の period ＝ `dsp.CLOCK` ÷ 再生レート。MOD は period 表、他は `rate_hz × 2^((note − 基準) / 12)`）。1 が tick あたり period 1
+  という対応は、MOD・S3M・XM・IT の4形式を libopenmpt で測って確かめた（S3M・IT は period の単位が 4 倍だが `Gxx` のスライドも 4 倍で相殺する）。
+  最初のノートの発音のとき（前の音が無い）は何もしない。MIDI は従来どおり「直前の音が鳴っているときだけ」ピッチベンド（§16.7）。
+- **`gens/tempo.py` の `tempo_curve(ctx, start_bpm, end_bpm, start_step, end_step, kind)`**（free-jazz のルバート）: 旧 `automation.TempoCurve`
+  と同じ式（`linear`・`ease_in`・`ease_out`）で、BPM が変わる step にだけ `ctx.tempo()` を呼ぶ。音を鳴らさないパートを置くと lane を食うので、
+  free-jazz は先頭のパート（piano）が区間のテンポカーブも書く。
+- **`Harmony.arp`**: `True` なら `voice(arp=True)` で `ChordDef.arp`（`0xy` 用の第3音・第5音のオフセット）を求める（`default_plan()` が渡す）。
+  swing-jazz のコンピングの刺し。
+
+**旧版との違い（意図したもの）**:
+
+| ジャンル | 違い |
+|:---|:---|
+| nostalgic | 旧版の挙動 Q1〜Q7（アウトロの row 0 がテンポセルで上書きされる、テンポセルがイントロだけ音なし、など）は保たない（D9）。Q5（サビの旋律のオクターブ頭打ち）と、曲名・テンポの候補・進行のプール・旋律の規則は同じ。Q4 の未使用の flute は楽器から外した。pad のフェードアウトは `Automation(volume)` の 3 点（18・8・0）。ドラム・ベース・pad・旋律のパンは旧 MOD の LRRL ではなく、パートごとの値（ドラム 128・ベース 128・pad 80・旋律 176） |
+| suspense-slow・chase | 編成・優先度（anvil＞swoosh＞heart、pizz が優先）は旧と同じ。heart・anvil・swoosh・pizz の消音（`put_oneshot_off`）は書かない（ワンショットは自然に鳴り終わる）。swoosh の開始 step と anvil の余韻の長さは `ctx.step_seconds()` から（旧 `swoosh_start_row`・`anvil_clear_row` と同じ式） |
+| swing-jazz | ウォーキングベースの終止が「現在の和音の根音」から「次の和音の根音」（`MeasurePlan.next_chord`）に変わった（§15.4 の指定。リズムチェンジの小節ごとの進行がつながって聞こえる）。ドラム tacet の intro は音楽上の意味があるので残し、row 0 に空きを残す工夫（コンピングを裏拍に置く）は音楽上そのまま残るが、目的は無くなった |
+| maqam | 中立 3 度・中立 7 度は、旧版の finetune の派生楽器（`oud_n3`・`oud_n7`）ではなく、書かれた音高の小数部（350・1050 セント → x.5）で表す。MOD の finetune の刻みを 12.5 セントとして求める（旧 7.8125 は誤り。§16.8）ので、旧版より正確に ±50 セントで出る。S3M・XM・IT は微分音を C5Speed・相対ノートで直接出す |
+| free-jazz | `--tempo` は開始 BPM（96 から外れた値は、カーブ全体を 開始 BPM ÷ 96 倍に相似拡大。`tempo_range` は旧と同じ値）。テンポの変化は piano のパートが `tempo_curve` で書く。クラスターの和音は旧と同じ規則（`plan()` で乱数）だが、乱数の消費順が変わるので同じ seed でも別の和音になる |
+| orchestral | `SampleSpec.pan`・`finetune` による定位・デチューンは `Part.pan`（30・80・150・190・210・100・160・128）と `Instrument(tune_cents=+37.5, volume=44)`（finetune 3 × 12.5 セント）で表す。brass（horn・trumpet。trumpet が優先）と perc（timpani・cymbal。cymbal が優先）は Kit の優先度 |
+| minimalism | 乱数を使わない（旧と同じ）。woodblock の step 1 のアクセントは残した（フェイズ音楽の周期の一部）。16 区間・各 1 小節 48 step |
+| prog-rock | `Section.measure_steps`（14・14・10／10×6／16×4）で小節ごとの step 数を宣言。gtr の `PROG_GTR_POWER` はパワーコード込みの音色なので、和音（`(0, 7, 12)`）にはしない。crash は march の crash を 0.6 秒に短縮した派生（旧版と同じ） |
+| trap | 808 のグライドは `Glide(steps=1)`。先行音が鳴り終わっていれば発音に変わる規則と速さの計算が Realizer に入った（旧版は trap だけが自前で period を追跡していた）。旧版は MOD 専用の period で追跡していたが、新版は 4 形式で同じ規則 |
+| future-bass | サイドチェインは `Genre.mix`（kick・clap をトリガ）。vocal chop は `Offset(i / 6)`（旧 `9xx` の param は `sample_offset_param` で割合から求めていた） |
+| march | F3 の試験移植のまま昇格（変更なし） |
+
+**検査**: `tests/framework/test_ported_genres_all.py`（全 51 ジャンルが対象。**`PORTED_F7`・「51 ジャンルが揃っている」の検査を追加**。編成の対応表と折り畳みの優先度は旧 `BandProfile` のあるジャンルだけ）、
+`tests/framework/test_ported_genres_c.py`（C のジャンル固有: minimalism の位相ずれ・D00、free-jazz のルバートの連続性と相似拡大、orchestral の 8ch 専用・trumpet の優先・cymbal、maqam の x.5 の音高と finetune 変種・usul・coda、march の構造とスネアロール、nostalgic の音域とフェード、suspense の無音・anvil・スタブ・衝撃の直前 8 step、swing-jazz のスウィングと次の和音への終止、prog-rock の変拍子、trap の Retrig とグライド、future-bass のサイドチェインとスライス）、
+`tests/framework/realize/test_glide.py`（速さの式と、先行音が鳴っているかの判定）、
+`tests/realplayer/test_glide_real_player.py`（4 形式 × 7・12 半音のグライドが指定の step 数で届く）、
+`tests/realplayer/test_ported_genres_real_player.py`（I5・I6 を全 51 ジャンルに。**I5 の期待長は、テンポの変化（free-jazz）を含めて計算するようにした**）。
+試聴用の MOD・MIDI・MP3 は `output/f7-trial/`（git の管理外）。音量の較正表（`framework/levels.py`）は全 51 ジャンルで作り直した。
+
+**まだ無いもの**: engine・CLI・GUI・`--json` への接続（F8）。試聴でのユーザーの確認（`output/f7-trial/`。特に maqam の中立音程・trap の 808 グライド・free-jazz のルバート・swing-jazz の終止・suspense の無音の位置）。
 
 ---
 

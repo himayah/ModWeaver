@@ -21,6 +21,7 @@ from mod_weaver.framework.realize.midi import realize_midi
 from mod_weaver.framework.realize.tracker import realize, realize_mod
 from mod_weaver.framework.score import Automation, NoteEvent, NoteOff
 from mod_weaver.framework.target import resolve
+from mod_weaver.profiles.band_common import BandProfile
 from mod_weaver.profiles.registry import PROFILE_REGISTRY
 
 new_registry.discover("mod_weaver.genres_next")
@@ -38,8 +39,21 @@ PORTED_F6 = {
 }
 
 
+# F7 で移植するジャンル（C: 個別実装 12）。
+PORTED_F7 = {
+    "nostalgic", "suspense-slow", "suspense-chase", "march", "swing-jazz", "prog-rock", "trap", "future-bass",
+    "maqam", "free-jazz", "minimalism", "orchestral",
+}
+PORTED = PORTED_F6 | PORTED_F7
+
+
 def test_every_f6_genre_is_registered():
     assert PORTED_F6 <= set(IDS), sorted(PORTED_F6 - set(IDS))
+
+
+def test_every_f7_genre_is_registered_and_all_51_are_ported():
+    assert PORTED_F7 <= set(IDS), sorted(PORTED_F7 - set(IDS))
+    assert set(IDS) == PORTED and len(IDS) == 51, sorted(set(IDS) ^ PORTED)
 
 # 旧の編成から意図して変えたもの（§15.1: 一致しない場合は ladder の結果を採用してよいが、差を書く）
 # 並びだけが違う（lane の楽器・パンは同じ）ものを記録する。理由: 旧版は打楽器の論理チャンネルが離れていた（例: 6番目に
@@ -149,7 +163,7 @@ def _old_arrangements(gid):
     return out
 
 
-@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY])
+@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY and issubclass(PROFILE_REGISTRY[g], BandProfile)])
 def test_ladder_matches_the_old_arrangement(gid):
     genre = _genre(gid)
     old = _old_arrangements(gid)
@@ -173,7 +187,7 @@ def test_ladder_matches_the_old_arrangement(gid):
             assert [l.pan for l in lanes] == list(pans), (gid, n, [l.pan for l in lanes], pans)
 
 
-@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY])
+@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY and issubclass(PROFILE_REGISTRY[g], BandProfile)])
 def test_folded_drum_priorities_match_the_old_ones(gid):
     """同じ lane に畳まれた打楽器の2つが同じ row に来たとき、どちらが残るかが旧と同じ（優先度の表の写し間違いの検出）。"""
     genre = _genre(gid)

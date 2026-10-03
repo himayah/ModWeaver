@@ -9,7 +9,8 @@ from .fx import Fx
 from .layer import Layer
 from .lead import Lead
 from .pad import Pad
+from .tempo import tempo_curve
 
 __all__ = [
-    "Arp", "BassLine", "Buildup", "Comp", "Groove", "Hit", "hits", "Echo", "Fx", "Layer", "Lead", "Pad",
+    "Arp", "BassLine", "Buildup", "Comp", "Groove", "Hit", "hits", "Echo", "Fx", "Layer", "Lead", "Pad", "tempo_curve",
 ]

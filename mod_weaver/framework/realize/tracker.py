@@ -10,9 +10,11 @@ import logging
 import math
 from typing import TYPE_CHECKING, Optional
 
+from ...core import dsp
 from ...core import groove as groovemod
 from ...core.model import SampleSpec
 from ...core.native import RCell, RealizedSong, RGrid, to_mod_song
+from ...core.pitch import PERIODS
 from ...errors import PlanError
 from ..score import Arpeggio, Cut, Delay, Glide, NoteEvent, Offset, Retrig, TempoEvent, Tremolo, Vibrato
 from . import lanes as lanesmod
@@ -267,6 +269,64 @@ def _put_stop(ctx: _Ctx, grid: RGrid, lane: int, row: int, limit: int, release_s
     grid.put(row, lane, codec.stop_cell(release_s))
 
 
+def _note_freq(codec: Codec, spec: SampleSpec, note: int) -> float:
+    """tracker note で鳴るサンプルの再生レート（Hz）。MOD は period 表（Paula のクロック ÷ period。``dsp.sample_rate()`` は
+    合成時の基準レートで別物）、他の形式は基準ノートで ``rate_hz``、1 半音ごとに 2^(1/12)。"""
+    if codec.fmt == "mod":
+        return dsp.CLOCK / PERIODS[max(0, min(len(PERIODS) - 1, note))]
+    return spec.rate_hz * 2 ** ((note - codec.n_ref) / 12)
+
+
+def _glide_param(codec: Codec, prev_spec: SampleSpec, prev_note: int, spec: SampleSpec, note: int,
+                 active_ticks: int) -> int:
+    """直前の音の period から目標の period まで ``active_ticks`` 個の tick で届く ``3xx``/``Gxx`` の速さ。
+
+    スライドは row の最初の tick には掛からない（MOD・S3M・XM・IT 共通）ので、``active_ticks`` は ``steps × (row の tick 数 − 1)``。
+    速さ 1 につき tick あたり「Amiga 換算の period（クロック ÷ 2 ÷ 再生レート）」が 1 動くことを、4 形式とも実プレイヤーで
+    測って確かめた（S3M・IT は period の単位が 4 倍だがスライドも 4 倍なので換算は同じ。
+    ``tests/realplayer/test_glide_real_player.py``）。"""
+    delta = abs(dsp.CLOCK / _note_freq(codec, prev_spec, prev_note) - dsp.CLOCK / _note_freq(codec, spec, note))
+    return max(1, min(255, round(delta / max(1, active_ticks))))
+
+
+def _prev_sounding(ctx: _Ctx, prev: Optional[Placement], prev_spec: Optional[SampleSpec], prev_note: Optional[int],
+                   p: Placement, step_ticks: int) -> bool:
+    """``p`` の発音の時点で、同じ lane の直前の音がまだ鳴っているか（鳴り終わっていれば滑らせる音が無い。§5.3）。"""
+    if prev is None or prev.kind != "note" or prev_spec is None or prev_note is None:
+        return False
+    if prev.dur is not None and prev.step + prev.dur <= p.step:
+        return False
+    if _looped(prev_spec):
+        return True
+    elapsed = (p.step - prev.step) * step_ticks * 2.5 / ctx.bpm
+    return elapsed < _frames(prev_spec) / _note_freq(ctx.codec, prev_spec, prev_note)
+
+
+def _resolve_glide(ctx: _Ctx, lane, prev: Optional[Placement], p: Placement, step_ticks: int) -> Placement:
+    """``Glide`` を実際の速さに直す。直前の音が鳴り終わっていれば ``Glide`` を外して普通の発音にする。
+    ``Glide.param`` を明示してあればそのまま使う（鳴り終わっていたときの扱いは同じ）。"""
+    glide = next((a for a in p.arts if isinstance(a, Glide)), None)
+    if glide is None:
+        return p
+    codec = ctx.codec
+    prev_spec = prev_note = None
+    if prev is not None and prev.kind == "note":
+        prev_slot = ctx.slot_of.get(samplesmod.sample_key(codec.fmt, ctx.genre, prev, lane))
+        if prev_slot is not None:
+            prev_spec = ctx.specs[prev_slot - 1]
+            prev_note = codec.note(prev_spec, round(prev.pitch) if prev.pitch is not None else None)
+    if not _prev_sounding(ctx, prev, prev_spec, prev_note, p, step_ticks):
+        return _with_arts(p, [a for a in p.arts if a is not glide])
+    if glide.param is not None:
+        return p
+    slot = ctx.slot_of[samplesmod.sample_key(codec.fmt, ctx.genre, p, lane)]
+    spec = ctx.specs[slot - 1]
+    note = codec.note(spec, round(p.pitch) if p.pitch is not None else None)
+    steps = glide.steps if glide.steps is not None else 1
+    param = _glide_param(codec, prev_spec, prev_note, spec, note, steps * (step_ticks - 1))
+    return _with_arts(p, [Glide(glide.steps, param) if a is glide else a for a in p.arts])
+
+
 def _with_arts(p: Placement, arts: list) -> Placement:
     import dataclasses
     return p if tuple(arts) == p.arts else dataclasses.replace(p, arts=tuple(arts))
@@ -288,6 +348,7 @@ def _fill_notes(ctx: _Ctx, grid: RGrid, sec_plan: "SectionPlan", placements: lis
                 _put_stop(ctx, grid, lane_idx, p.step, next_step if next_step is not None else grid.rows,
                           _release_of_inst(ctx, p.inst), step_ticks)
                 continue
+            p = _resolve_glide(ctx, lane, events[i - 1] if i > 0 else None, p, step_ticks)
             key = samplesmod.sample_key(codec.fmt, ctx.genre, p, lane)
             slot = ctx.slot_of.get(key)
             if slot is None:

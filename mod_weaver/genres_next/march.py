@@ -1,6 +1,6 @@
-"""march を新フレームワークへ試験移植したもの（FRAMEWORK_REDESIGN.md §15.1・§15.4 のグループC）。
+"""march（旧 genres/march.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-F3 の試験移植その3（いちばん作り込みが要るもの）。旧 ``mod_weaver/genres/march.py``（``MarchProfile``）は
+F3 の試験移植を F7 で本番に昇格した。旧 ``mod_weaver/genres/march.py``（``MarchProfile``）は
 ``GenreProfile`` の素の機構を直接使う個別実装で、1 つの「区間ぶんの文法」関数が drums・tuba・harm・picc の
 4 チャンネルすべてを同時に書いていた。新フレームワークは1パート=1ジェネレータなので、その文法を
 ``MarchDrums``・``MarchTuba``・``MarchHarm``・``MarchPicc`` の4つに分けて書き直す（§15.4 の想定どおり、
@@ -15,15 +15,16 @@ from __future__ import annotations
 import random
 from typing import Optional
 
-from mod_weaver.core.composer import MelodyGenerator, NoteEvent as OldNoteEvent, RhythmMotif, ScaleRules
-from mod_weaver.core.harmony import Registers, voice
-from mod_weaver.core.model import ChordSpec, GmVoice
-from mod_weaver.core.pitch import MODES, Scale, fold_into_range
-from mod_weaver.core.synth_presets import PRESETS
-from mod_weaver.framework.context import Generator, MeasureCtx, SectionCtx
-from mod_weaver.framework.genre import Genre, Instrument, Kit, Part, Section
-from mod_weaver.framework.plan import Meter, MeasurePlan, SectionPlan, SongPlan
-from mod_weaver.framework.score import Arpeggio, Vibrato
+from ..core.composer import MelodyGenerator, NoteEvent as OldNoteEvent, RhythmMotif, ScaleRules
+from ..core.harmony import Registers, voice
+from ..core.model import ChordSpec, GmVoice
+from ..core.pitch import MODES, Scale, fold_into_range
+from ..core.synth_presets import PRESETS
+from ..framework.context import Generator, MeasureCtx, SectionCtx
+from ..framework.genre import Genre, Instrument, Kit, Part, Section
+from ..framework.plan import Meter, MeasurePlan, SectionPlan, SongPlan
+from ..framework.registry import register_genre
+from ..framework.score import Arpeggio, Vibrato
 
 C = ChordSpec
 
@@ -286,8 +287,10 @@ GM_VOICES = {
 }
 
 
-class MarchToy(Genre):
+@register_genre
+class MarchGenre(Genre):
     id = "march"
+    category = "style"
     display_name = "Military March"
     description = "行進曲。Oom-Pah とスネアロール、ファンファーレ、トリオへの転調"
     description_en = "Military march: oom-pah and snare rolls, fanfares, modulation into the trio"

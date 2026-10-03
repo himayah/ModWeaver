@@ -1,58 +1,34 @@
-"""prog-rock: 変拍子プログレ / マスロック（DESIGN.md §6.7）。
+"""prog-rock（旧 genres/prog_rock.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-主リフの拍子サイクルは 7/8 + 7/8 + 5/8（合計 19/8。``rows_per_measure`` 既定16の16分格子で
-14+14+10=38 row）。1 pattern = リフサイクル1回（38 row）＋ ``D00`` 自動挿入（EXT-2。
-``ChordSlot.rows`` オーバーライド＋``variable_meter=True``）。E aeolian のモーダルなリフに対し、
-``chorus`` セクションだけ 4/4（16 row×4 measure=64、割り込み無し）へ戻り「変拍子↔直進」の対比を作る。
+主リフの拍子サイクルは 7/8 + 7/8 + 5/8（16分格子で 14+14+10 = 38 step の3小節）。E aeolian のモーダルなリフに対し、
+``chorus`` だけ 4/4（16 step × 4 小節）へ戻り「変拍子↔直進」の対比を作る。小節ごとの step 数は ``Section.measure_steps``、
+リフの動機は ``m.steps`` で引く。
 """
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass, field
-from typing import Any, Optional
 
-from ..core import synth, synth_presets
-from ..core.composer import MelodyGenerator, RhythmMotif, ScaleRules, articulate
-from ..core.harmony import Registers, voice
-from ..core.model import (
-    Cell,
-    ChannelRole,
-    ChordSlot,
-    ChordSpec,
-    MeasureBuffer,
-    MeasureCtx,
-    Pattern,
-    PatternCtx,
-    PatternPlan,
-    RngStreams,
-    SampleSpec,
-    SongPlan,
-)
-from ..core.pitch import MODES, Scale
-from ..core.midi import GmVoice
-from ..profiles.base import GenreProfile
-from ..profiles.registry import register_profile
-
-# ============================================================
-# 音域・調・進行（DESIGN.md §6.7）
-# ============================================================
+from ..core.composer import MelodyGenerator, RhythmMotif, ScaleRules
+from ..core.harmony import Registers
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth import OneShot
+from ..core.synth_presets import PRESETS
+from ..framework.context import Generator, MeasureCtx, SectionCtx
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.registry import register_genre
 
 KEY_PC = 4                                    # E
 BASS_REG = (0, 11)                            # bass_dist（shift=-12 → t=12..23）
 GTR_REG = (12, 23)                            # gtr_power の根音（chord.harmony）
 LEAD_REG = (24, 35)                           # lead_gtr（chorus 専用）
-REGISTERS = Registers(bass=BASS_REG, harmony=GTR_REG, melody=LEAD_REG)
 
-I_CHORD = ChordSpec(0, "min", label="i")       # Em
+I_CHORD = ChordSpec(0, "min", label="i")         # Em
 BVII_CHORD = ChordSpec(10, "maj", label="bVII")  # D
 BVI_CHORD = ChordSpec(8, "maj", label="bVI")     # C
 
-LEAD_RULES = ScaleRules(
-    step_choices=(-1, 1, -2, 2), leap_probability=0.30, leap_semitones=(3, 5, 7),
-    leap_recovery=True, dissonance_weight=0.05,
-)
-
-RIFF_MOTIFS: dict[int, RhythmMotif] = {
+LEAD_RULES = ScaleRules(step_choices=(-1, 1, -2, 2), leap_probability=0.30, leap_semitones=(3, 5, 7),
+                         leap_recovery=True, dissonance_weight=0.05)
+RIFF_MOTIFS = {
     14: RhythmMotif((0, 2, 4, 6, 8, 10, 12)),   # 7/8（7 eighth）
     10: RhythmMotif((0, 2, 4, 6, 8)),           # 5/8（5 eighth）
 }
@@ -62,193 +38,111 @@ LEAD_MOTIFS = (
     RhythmMotif((0, 4, 6, 8, 12, 14)),
 )
 
-
-def _scale() -> Scale:
-    return Scale(KEY_PC, MODES["aeolian"])
-
-
-def riff_slots() -> list[ChordSlot]:
-    """7/8 + 7/8 + 5/8（14+14+10=38 row）。i - bVII - bVI。"""
-    scale = _scale()
-    return [
-        ChordSlot(voice(spec, KEY_PC, scale, REGISTERS), measures=1, rows=rows)
-        for spec, rows in ((I_CHORD, 14), (BVII_CHORD, 14), (BVI_CHORD, 10))
-    ]
-
-
-def breakdown_slots() -> list[ChordSlot]:
-    """5/8 のみ ×6（60 row）。bVI と i を交互に。"""
-    scale = _scale()
-    seq = (BVI_CHORD, I_CHORD, BVI_CHORD, I_CHORD, BVI_CHORD, I_CHORD)
-    return [ChordSlot(voice(spec, KEY_PC, scale, REGISTERS), measures=1, rows=10) for spec in seq]
-
-
-def chorus_slots() -> list[ChordSlot]:
-    """4/4 ×4（16×4=64 row。break 不要）。i - bVII - bVI - bVII。"""
-    scale = _scale()
-    seq = (I_CHORD, BVII_CHORD, BVI_CHORD, BVII_CHORD)
-    return [ChordSlot(voice(spec, KEY_PC, scale, REGISTERS), measures=1, rows=16) for spec in seq]
-
-
-def progression_summary() -> str:
-    riff = " - ".join(s.chord.label for s in riff_slots())
-    chorus = " - ".join(s.chord.label for s in chorus_slots())
-    return f"riff(7/8+7/8+5/8): {riff}  |  chorus(4/4x4): {chorus}"
-
-
-# ============================================================
-# sample 番号 / ChannelPlan（DESIGN.md §6.7）
-# ============================================================
-
-KICK, SNARE, CRASH, BASS, GTR, LEAD = 1, 2, 3, 4, 5, 6
-SAMPLE_KEYS = ("kick", "snare", "crash", "bass", "gtr", "lead")
-
-CH_DRUM, CH_BASS, CH_GTR, CH_LEAD = 0, 1, 2, 3
-
-CHANNEL_PLAN = (
-    ChannelRole("drums", frozenset({KICK, SNARE, CRASH}), {CRASH: 3, SNARE: 2, KICK: 1}),
-    ChannelRole("bass", frozenset({BASS})),
-    ChannelRole("gtr", frozenset({GTR})),
-    ChannelRole("lead", frozenset({LEAD})),
+# 進行（0: リフ i - bVII - bVI、1: ブレイクダウン bVI と i を交互に、2: コーラス i - bVII - bVI - bVII）
+PROGRESSIONS = (
+    ("riff", (I_CHORD, BVII_CHORD, BVI_CHORD)),
+    ("breakdown", (BVI_CHORD, I_CHORD, BVI_CHORD, I_CHORD, BVI_CHORD, I_CHORD)),
+    ("chorus", (I_CHORD, BVII_CHORD, BVI_CHORD, BVII_CHORD)),
 )
+RIFF_STEPS = (14, 14, 10)      # 7/8 + 7/8 + 5/8
+BREAKDOWN_STEPS = (10,) * 6    # 5/8 ×6
+CHORUS_STEPS = (16,) * 4       # 4/4 ×4
+BAND = frozenset({"drums", "bass", "gtr"})
 
 
 # ============================================================
-# 音色合成（core/synth.py の Patch 方式。core/synth_presets.py 参照）
+# ジャンル内のジェネレータ
 # ============================================================
 
-def build_prog_rock_samples() -> dict[str, SampleSpec]:
-    """挿入順 = sample 番号（1..6）。crash は march の crash を短縮して流用（新規合成不要）。"""
-    crash = dataclasses.replace(synth_presets.MARCH_CRASH_CYMBAL, finish=synth_presets.OneShot(0.6))
-    return {
-        "kick": synth.render(synth_presets.PROG_KICK),
-        "snare": synth.render(synth_presets.PROG_SNARE),
-        "crash": synth.render(crash),
-        "bass": synth.render(synth_presets.PROG_BASS_DIST),
-        "gtr": synth.render(synth_presets.PROG_GTR_POWER),
-        "lead": synth.render(synth_presets.PROG_LEAD_GTR),
-    }
+class ProgDrums(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "chorus":              # 4/4 の直進ロック・ビート
+            for step in (0, 8):
+                m.note(step, "kick", vel=58)
+            for step in (4, 12):
+                m.note(step, "snare", vel=52)
+        else:                                    # リフの各 eighth にキック、真ん中（偶数 step）にスネア
+            for step in RIFF_MOTIFS[m.m.steps].rows:
+                m.note(step, "kick", vel=56)
+            mid = m.m.steps // 2
+            m.note(mid - mid % 2, "snare", vel=50)
+        if m.m.index == 0:
+            m.note(0, "crash", vel=64)           # Kit の優先度でキックに勝つ
 
 
-# ============================================================
-# state
-# ============================================================
-
-@dataclass
-class ProgState:
-    lead_prev: Optional[int] = None
-    extra: dict[str, Any] = field(default_factory=dict)
+class ProgGuitar(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        for step in RIFF_MOTIFS[m.m.steps].rows:
+            m.note(step, "gtr", m.m.chord.harmony, vel=60 if step == 0 else 46)
 
 
-# ============================================================
-# プロファイル本体
-# ============================================================
-
-GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
-    "kick": GmVoice(drum_note=36),
-    "snare": GmVoice(drum_note=38),
-    "crash": GmVoice(drum_note=49),
-    "bass": GmVoice(program=34),
-    "gtr": GmVoice(program=30),
-    "lead": GmVoice(program=29),
-}
+class ProgBass(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        chord = m.m.chord
+        if m.plan.kind == "chorus":
+            for step in (0, 4, 8, 12):
+                m.note(step, "bass", chord.bass, vel=50)
+            return
+        for step in RIFF_MOTIFS[m.m.steps].rows:
+            m.note(step, "bass", chord.bass, vel=54 if step == 0 else 42)
 
 
-@register_profile
-class ProgRockProfile(GenreProfile):
+class ChorusLead(Generator):
+    """4/4 の直進コーラスに載るリードギター（LEAD_MOTIFS、標準16分格子）。"""
+
+    def section(self, ctx: SectionCtx) -> None:
+        ctx.state["gen"] = MelodyGenerator(LEAD_RULES, LEAD_REG, ctx.plan.scale, ctx.rng, base_vol=52)
+        ctx.state["prev"] = None
+        super().section(ctx)
+
+    def measure(self, m: MeasureCtx) -> None:
+        motif = m.rng.choice(LEAD_MOTIFS)
+        events, m.state["prev"] = m.state["gen"].bar(motif, m.m.chord, m.state["prev"], rows=16, base_vol=52,
+                                                      cadence=m.is_last)
+        for e in events:
+            m.note(e.row, "lead", e.note, vel=e.vol, dur=max(1, round(e.dur * 0.85)))
+
+
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+
+@register_genre
+class ProgRockGenre(Genre):
     id = "prog-rock"
+    category = "style"
     display_name = "Prog Rock"
     description = "変拍子プログレ／マスロック。7/8+7/8+5/8 のリフ、4/4 のコーラスとの対比"
     description_en = "Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus"
     title = "Prog Rock"
-    default_filename = "ProgRock.mod"
     tempo_choices = (132, 136, 140, 144, 148)
-    rows_per_measure = 16                 # ChordSlot.rows で measure ごとに上書きする（EXT-2）
-    channel_plan = CHANNEL_PLAN
-    gm_voices = GM_VOICES
-    tempo_policy = "engine"
-    rng_mode = "streams"
-    strict_buffers = True
-    variable_meter = True                 # EXT-2: リフパターンは38/60 row（<64）で D00 break
 
-    grammar = {
-        "intro": "_riff_light", "outro": "_riff_light",
-        "verse": "_riff_full", "breakdown": "_riff_full",
-        "chorus": "_chorus",
+    instruments = {
+        "kick": _inst("prog_kick", GmVoice(drum_note=36)),
+        "snare": _inst("prog_snare", GmVoice(drum_note=38)),
+        "crash": _inst("march_crash_cymbal", GmVoice(drum_note=49), finish=OneShot(0.6)),   # march の crash を短縮
+        "bass": _inst("prog_bass_dist", GmVoice(program=34)),
+        "gtr": _inst("prog_gtr_power", GmVoice(program=30)),
+        "lead": _inst("prog_lead_gtr", GmVoice(program=29)),
     }
-
-    def build_samples(self) -> dict[str, SampleSpec]:
-        return build_prog_rock_samples()
-
-    # ------------------------------------------------------------ 計画
-    def plan(self, rng: RngStreams) -> SongPlan:
-        bpm = rng.plan.choice(list(self.tempo_choices))
-        patterns = [
-            PatternPlan("intro", riff_slots(), intensity=0.5),
-            PatternPlan("verse", riff_slots(), intensity=0.8),
-            PatternPlan("chorus", chorus_slots(), intensity=0.9),
-            PatternPlan("breakdown", breakdown_slots(), intensity=0.6),
-            PatternPlan("outro", riff_slots(), intensity=0.4),
-        ]
-        order = [0, 1, 1, 2, 1, 3, 2, 4]
-        return SongPlan(bpm=bpm, patterns=patterns, order=order, key_pc=KEY_PC, summary=[progression_summary()])
-
-    def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> ProgState:
-        st = ProgState()
-        if pctx.kind == "chorus":
-            st.extra["lead_gen"] = MelodyGenerator(LEAD_RULES, LEAD_REG, _scale(), rng.melody, base_vol=52)
-        return st
-
-    def compose_measure(self, mctx: MeasureCtx, state: ProgState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        getattr(self, self.grammar[mctx.pattern.kind])(mctx, state, rng, buf)
-
-    def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: ProgState, rng: RngStreams) -> None:
-        # lead_gtr（ループ音色）は次 pattern へ鳴り続けないよう消音する
-        pattern.put(pattern.rows - 1, CH_LEAD, Cell(None, 0, vol=0))
-
-    # ------------------------------------------------------------ 共通の部品
-    @staticmethod
-    def _riff_motif(measure_rows: int) -> RhythmMotif:
-        return RIFF_MOTIFS[measure_rows]
-
-    @staticmethod
-    def _gtr_bass(buf: MeasureBuffer, ins, chord, motif: RhythmMotif) -> None:
-        for row in motif.rows:
-            accent = row == 0
-            buf.put(row, CH_GTR, ins["gtr"].cell(chord.harmony, vol=60 if accent else 46))
-            buf.put(row, CH_BASS, ins["bass"].cell(chord.bass, vol=54 if accent else 42))
-
-    # ------------------------------------------------------------ 各 pattern の文法
-    def _riff_light(self, mctx: MeasureCtx, st: ProgState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """ドラム tacet（intro/outro）。row 0 に2チャンネル分の空きを残す。"""
-        motif = self._riff_motif(mctx.measure_rows)
-        self._gtr_bass(buf, mctx.instruments, mctx.chord, motif)
-
-    def _riff_full(self, mctx: MeasureCtx, st: ProgState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, motif = mctx.instruments, self._riff_motif(mctx.measure_rows)
-        self._gtr_bass(buf, ins, mctx.chord, motif)
-        for row in motif.rows:
-            buf.put(row, CH_DRUM, ins["kick"].cell(vol=56))
-        mid = mctx.measure_rows // 2
-        mid -= mid % 2
-        buf.put(mid, CH_DRUM, ins["snare"].cell(vol=50))
-        if mctx.measure_idx == 0:
-            buf.put(0, CH_DRUM, ins["crash"].cell(vol=64))
-
-    def _chorus(self, mctx: MeasureCtx, st: ProgState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """4/4 の直進ロック・ビート＋リードギターのメロディ（LEAD_MOTIFS、標準16分格子）。"""
-        ins, chord = mctx.instruments, mctx.chord
-        for row in (0, 8):
-            buf.put(row, CH_DRUM, ins["kick"].cell(vol=58))
-        for row in (4, 12):
-            buf.put(row, CH_DRUM, ins["snare"].cell(vol=52))
-        if mctx.measure_idx == 0:
-            buf.put(0, CH_DRUM, ins["crash"].cell(vol=64))
-        for row in (0, 4, 8, 12):
-            buf.put(row, CH_BASS, ins["bass"].cell(chord.bass, vol=50))
-        gen: MelodyGenerator = st.extra["lead_gen"]
-        motif = rng.melody.choice(LEAD_MOTIFS)
-        events, st.lead_prev = gen.bar(
-            motif, chord, st.lead_prev, rows=16, base_vol=52, cadence=mctx.is_last,
-        )
-        articulate(buf, CH_LEAD, events, ins["lead"], gate=0.85)
+    harmony = Harmony(keys=(KEY_PC,), mode="aeolian", progressions=PROGRESSIONS, fixed=True,
+                       registers=Registers(bass=BASS_REG, harmony=GTR_REG, melody=LEAD_REG))
+    sections = {
+        "intro": Section(prog=0, measure_steps=RIFF_STEPS, intensity=0.5, parts=frozenset({"bass", "gtr"})),
+        "verse": Section(prog=0, measure_steps=RIFF_STEPS, intensity=0.8, parts=BAND),
+        "chorus": Section(prog=2, measure_steps=CHORUS_STEPS, intensity=0.9, parts=frozenset({"drums", "bass", "lead"})),
+        "breakdown": Section(prog=1, measure_steps=BREAKDOWN_STEPS, intensity=0.6, parts=BAND),
+        "outro": Section(prog=0, measure_steps=RIFF_STEPS, intensity=0.4, parts=frozenset({"bass", "gtr"})),
+    }
+    form = ("intro", "verse", "verse", "chorus", "verse", "breakdown", "chorus", "outro")
+    parts = (
+        Part("drums", ProgDrums(), pan=128,
+             kit=Kit(groups=(("drums", ("kick", "snare", "crash")),), priority={"crash": 3, "snare": 2, "kick": 1})),
+        Part("bass", ProgBass(), pan=128),
+        Part("gtr", ProgGuitar(), pan=96),
+        Part("lead", ChorusLead(), pan=176),
+    )
+    mod_channels = {4: 1}

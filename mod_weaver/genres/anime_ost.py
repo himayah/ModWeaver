@@ -1,145 +1,156 @@
-"""anime-ost: アニメの劇伴風（DESIGN.md §6.16.28）。B6（6ch）: 刻むストリングスとジャズの和声、ブラスの決め。
-
-主題はサックス（A）とヴァイオリン（B）が持ち替え、クライマックスはブラスが歌う（``lead_key``）。ブラスの「決め」は
-イントロ・ブレイク・最後に、ピアノの和音・クラッシュと同時に鳴らす。"""
+"""anime-ost（旧 genres/anime_ost.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
-from ..core.model import ChordSpec
-from ..core.pitch import fold_into_range
-from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, EchoSpec, Fold, LayerSpec, LeadSpec, Section, _scale_vol, hits,
-    keep, preset,
-)
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import BassLine, Comp, Echo, Groove, Layer, Lead, hits
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
+from ..core.pitch import CHORD_QUALITIES, fold_into_range
+from ..framework.score import NoteEvent
+from ..framework.registry import register_genre
 
 C = ChordSpec
-# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
-CH_KS, CH_CYM, CH_BASS, CH_PIANO, CH_LEAD, CH_STR, CH_X_LEAD_ECHO, CH_X_VIOLIN_LINE = range(8)
 
-MAIN = (hits("kick", (0, 10), 56) + hits("snare", (4, 12), 46) + hits("snare", (7, 15), 22, 0.5)
-        + hits("ride", (0, 4, 6, 8, 12, 14), 30))
-BREAK = (hits("kick", (0, 3, 6, 10), 58) + hits("snare", (4, 12), 52) + hits("snare", (9, 13, 14, 15), 36, 0.8)
-         + hits("ride", (0, 6, 8, 14), 30))
-FILL = hits("snare", (8, 10, 12, 13, 14, 15), 48)
-CRASH = hits("crash", (0,), 56)
+
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+GROOVES = {
+    "main": hits("kick", (0, 10), 56) + hits("snare", (4, 12), 46) + hits("snare", (7, 15), 22, 0.5) + hits("ride", (0, 4, 6, 8, 12, 14), 30),
+    "break": hits("kick", (0, 3, 6, 10), 58) + hits("snare", (4, 12), 52) + hits("snare", (9, 13, 14, 15), 36, 0.8) + hits("ride", (0, 6, 8, 14), 30),
+    "fill": hits("snare", (8, 10, 12, 13, 14, 15), 48),
+    "crash": hits("crash", (0,), 56),
+}
+LEAD_MOTIFS = {
+    "verse": (RhythmMotif(rows=(0, 3, 6, 8, 12)), RhythmMotif(rows=(0, 2, 4, 6, 10)), RhythmMotif(rows=(0, 4, 6, 8, 10, 14))),
+    "climax": (RhythmMotif(rows=(0, 6, 8)), RhythmMotif(rows=(0, 4, 8, 12)), RhythmMotif(rows=(0, 3, 6, 12))),
+}
+PROGRESSIONS = (
+    ("i-iv-VII-III", (C(0, "m7", label="im7"), C(5, "m7", label="ivm7"), C(10, "dom7", label="VII7"), C(3, "maj7", label="IIImaj7"))),
+    ("iim7b5-V7-i", (C(2, "m7b5", label="iim7b5"), C(7, "dom7", label="V7"), C(0, "m7", label="im7"), C(0, "m7", label="im7"))),
+    ("VImaj7-V7-i", (C(8, "maj7", label="VImaj7"), C(7, "dom7", label="V7"), C(0, "m7", label="im7"), C(0, "m7", label="im7"))),
+)
+
+
 KIME = (0, 3, 6)                               # 決めのリズム（16分の 3+3）
 SPIC_ACCENTS = (0, 3, 6, 8, 11, 14)
-
-LEAD_MOTIFS = {
-    "verse": (RhythmMotif((0, 3, 6, 8, 12)), RhythmMotif((0, 2, 4, 6, 10)), RhythmMotif((0, 4, 6, 8, 10, 14))),
-    "climax": (RhythmMotif((0, 6, 8)), RhythmMotif((0, 4, 8, 12)), RhythmMotif((0, 3, 6, 12))),
-}
-BAND = frozenset({"drums", "bass", "comp"})
 LEAD_BY_SECTION = {"b": "vln", "climax": "brass"}
 
 
-@register_profile
-class AnimeOstProfile(BandProfile):
+class SpicStrings(Generator):
+    """刻むスピッカート（旧 extra_measure）。"spic" の印の区間だけ。"kime" の印の区間の偶数小節は決め
+    （place_kime が finalize_section で置く）なので鳴らさない。"""
+
+    def __init__(self, inst: str) -> None:
+        self.inst = inst
+
+    def measure(self, m: MeasureCtx) -> None:
+        tags = m.plan.section.tags
+        if "spic" not in tags or ("kime" in tags and m.m.index % 2 == 0):
+            return
+        root = fold_into_range(m.m.chord.bass, 12, 23)
+        tones = [root, root, fold_into_range(m.m.chord.bass + 7, 12, 23), root + 12 if root + 12 <= 30 else root]
+        for step in range(min(16, m.m.steps)):
+            vol = m.scale_vol(40 if step in SPIC_ACCENTS else 26)
+            m.note(step, self.inst, tones[(step // 2) % len(tones)] if step % 2 == 0 else root, vel=vol)
+
+
+def _drop(score, part: str, pred) -> None:
+    score.parts[part] = [e for e in score.parts.get(part, []) if not pred(e)]
+
+
+def place_kime(sec, score) -> None:
+    """ブラス・ピアノ（和音のある区間だけ）・ベース・キック・クラッシュの決め（16分の 3+3）。他のパートより優先して
+    置き換える（旧 _kime の buf.replace）。outro の最後の小節は、他のパートを全部止めて決めだけで終わる
+    （3つ目のブラスを伸ばす）。"""
+    if "kime" not in sec.section.tags:
+        return
+    chord_parts = tuple(score.parts)
+    last = len(sec.measures) - 1
+
+    def sv(v: int) -> int:
+        return max(1, min(64, round(v * (0.55 + 0.45 * sec.intensity))))
+
+    for m in sec.measures:
+        final = sec.name == "outro" and m.index == last
+        if not (m.index % 2 == 0 or final):
+            continue
+        if final:
+            score.mute(chord_parts, m.start, m.start + m.steps)
+        chord = m.chord
+        top = fold_into_range(chord.harmony + 7, 14, 26)
+        for row in KIME:
+            at = m.start + row
+            if not final:
+                score.mute(("comp", "bass"), at, at + 1)
+                _drop(score, "drums", lambda e, at=at: isinstance(e, NoteEvent) and e.step == at
+                      and e.inst in ("kick", "snare"))
+            dur = 2 if (not final and row == KIME[-1]) else None
+            score.add("strings", NoteEvent(at, "brass", top, sv(50), dur=dur))
+            if "comp" in sec.parts:
+                score.add("comp", NoteEvent(at, "piano", chord.harmony, sv(46), chord=CHORD_QUALITIES[m.quality]))
+            score.add("bass", NoteEvent(at, "bass", chord.bass, sv(54)))
+            score.add("drums", NoteEvent(at, "kick", None, 56))
+        if not final:
+            _drop(score, "drums", lambda e, at=m.start: isinstance(e, NoteEvent) and e.step == at
+                  and e.inst in ("ride", "crash"))
+        score.add("drums", NoteEvent(m.start, "crash", None, 56))
+
+
+@register_genre
+class AnimeOstGenre(Genre):
     id = "anime-ost"
     category = "style"
     display_name = "Anime Soundtrack"
     description = "アニメ劇伴風。刻むストリングスとジャズの和声、ブラスの決め"
     description_en = "Anime soundtrack style: driving strings with jazz harmony and brass hits"
     title = "Anime Soundtrack"
-    default_filename = "AnimeOST.mod"
     tempo_choices = (120, 126, 132, 138, 144, 150)
 
-    KIT = (
-        ("kick", preset("prog_kick")), ("snare", preset("swing_brush_snare")), ("ride", preset("swing_ride")),
-        ("crash", preset("march_crash_cymbal")), ("bass", preset("swing_walk_bass")),
-        ("sax", preset("swing_sax_lead")), ("vln", preset("orch_violin")), ("brass", preset("march_brass_section")),
-        ("spic", preset("str_spiccato", volume=40)),
-    )
-    CHORD_KITS = {"piano": (preset("keys_piano", volume=42), 0.0)}
-    CHANNELS = (
-        ChannelDef("kick/snare", ("kick", "snare"), (("snare", 2),), pan=128),
-        ChannelDef("ride/crash", ("ride", "crash"), (("crash", 2),), pan=170),
-        ChannelDef("bass", ("bass",), pan=128),
-        ChannelDef("piano", ("piano",), pan=88),
-        ChannelDef("lead", ("sax", "vln", "brass"), pan=150),
-        ChannelDef("strings/brass", ("spic", "brass"), (("brass", 2),), pan=64),
-        ChannelDef("lead echo", ("sax", "vln", "brass",), pan=96),
-        ChannelDef("violin line", ("vln",), pan=160),
-    )
-    DRUM_CHANNEL = {"kick": CH_KS, "snare": CH_KS, "ride": CH_CYM, "crash": CH_CYM}
-    KEYS = (2, 7)
-    MODE = "aeolian"
-    PROGRESSIONS = (
-        ("i-iv-VII-III", (C(0, "m7", label="im7"), C(5, "m7", label="ivm7"), C(10, "dom7", label="VII7"),
-                          C(3, "maj7", label="IIImaj7"))),
-        ("iim7b5-V7-i", (C(2, "m7b5", label="iim7b5"), C(7, "dom7", label="V7"), C(0, "m7", label="im7"),
-                         C(0, "m7", label="im7"))),
-        ("VImaj7-V7-i", (C(8, "maj7", label="VImaj7"), C(7, "dom7", label="V7"), C(0, "m7", label="im7"),
-                         C(0, "m7", label="im7"))),
-    )
-    N_PROGRESSIONS = 3
-    SECTIONS = {
-        "intro": Section("intro", prog=0, intensity=0.8, parts=BAND | {"spic", "kime"}, crash=True),
-        "a": Section("a", prog=0, intensity=0.75, parts=BAND | {"lead"}, fill=True),
-        "b": Section("b", prog=1, intensity=0.85, parts=BAND | {"lead", "spic"}, fill=True),
-        "break": Section("break", prog=2, intensity=0.9, parts=frozenset({"drums", "bass", "kime"}), groove="break",
-                         crash=True),
-        "climax": Section("climax", prog=2, intensity=1.0, parts=BAND | {"lead", "spic"}, crash=True,
-                          lead_motifs="climax"),
-        "outro": Section("outro", prog=0, intensity=0.9, parts=BAND | {"spic", "kime"}),
+    instruments = {
+        "kick": _inst("prog_kick", GmVoice(drum_note=36)),
+        "snare": _inst("swing_brush_snare", GmVoice(drum_note=38)),
+        "ride": _inst("swing_ride", GmVoice(drum_note=51)),
+        "crash": _inst("march_crash_cymbal", GmVoice(drum_note=49)),
+        "bass": _inst("swing_walk_bass", GmVoice(program=32)),
+        "sax": _inst("swing_sax_lead", GmVoice(program=65)),
+        "vln": _inst("orch_violin", GmVoice(program=48)),
+        "brass": _inst("march_brass_section", GmVoice(program=61)),
+        "spic": _inst("str_spiccato", GmVoice(program=48), volume=40),
+        "piano": _inst("keys_piano", GmVoice(program=0), volume=42),
     }
-    FORM = ("intro", "a", "b", "break", "a", "b", "climax", "outro")
-    GROOVES = {"main": MAIN, "break": BREAK, "fill": FILL, "crash": CRASH}
-    BASS = BassSpec("bass", CH_BASS, kind="walking", vol=54)
-    COMP = CompSpec("piano", CH_PIANO, kind="charleston", vol=40)
-    LEAD = LeadSpec("sax", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7)), LEAD_MOTIFS,
-                    vol=46, gate=0.85, vibrato=0x23)
-
-    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
-    LAYERS = (LayerSpec("vln", CH_X_VIOLIN_LINE, follow="lead", vol=26, register=(19, 31)),)
-    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
-        4: (Fold("drums", ("kick/snare", "ride/crash"), (("snare", 4), ("kick", 3), ("crash", 2))),
-            *keep("bass", "piano", "lead")),
-        6: keep("kick/snare", "ride/crash", "bass", "piano", "lead", "strings/brass"),
-        8: keep("kick/snare", "ride/crash", "bass", "piano", "lead", "strings/brass", "lead echo", "violin line"),
+    harmony = Harmony(keys=(2, 7), mode="aeolian", progressions=PROGRESSIONS, n_progressions=3)
+    sections = {
+        "intro": Section(intensity=0.8, parts=frozenset({"bass", "drums", "comp", "strings"}), crash=True, tags=frozenset({"kime", "spic"})),
+        "a": Section(intensity=0.75, parts=frozenset({"lead", "bass", "drums", "comp"}), fill=True),
+        "b": Section(prog=1, intensity=0.85, parts=frozenset({"bass", "drums", "comp", "strings", "lead"}), fill=True, tags=frozenset({"spic"})),
+        "break": Section(prog=2, intensity=0.9, parts=frozenset({"strings", "bass", "drums"}), groove="break", crash=True, tags=frozenset({"kime"})),
+        "climax": Section(prog=2, intensity=1.0, parts=frozenset({"bass", "drums", "comp", "strings", "lead"}), crash=True, motifs="climax", tags=frozenset({"spic"})),
+        "outro": Section(intensity=0.9, parts=frozenset({"bass", "drums", "comp", "strings"}), tags=frozenset({"kime", "spic"})),
     }
-    def lead_key(self, sec):
-        return LEAD_BY_SECTION.get(sec.kind, "sax")
+    form = ("intro", "a", "b", "break", "a", "b", "climax", "outro")
+    parts = (
+        Part("drums", Groove(GROOVES), pan=128,
+             kit=Kit(groups=(("kick/snare", ("kick", "snare")), ("ride/crash", ("ride", "crash"))),
+                     priority={"snare": 2, "crash": 2},
+                     single_priority={"kick": 3, "snare": 4, "ride": 1, "crash": 2},
+                     group_pan={"ride/crash": 170})),
+        Part("bass", BassLine("bass", kind="walking", vol=54), pan=128),
+        Part("comp", Comp("piano", kind="charleston", vol=40), pan=88),
+        Part("lead", Lead("sax", ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7)), LEAD_MOTIFS,
+                   vol=46, gate=0.85, vibrato=0x23, inst_for=lambda sp: LEAD_BY_SECTION.get(sp.kind, "sax")), pan=150),
+        Part("strings", SpicStrings("spic"), pan=64, min_channels=6,
+             kit=Kit(groups=(("strings/brass", ("spic", "brass")),), priority={"brass": 2})),
+        Part("lead echo", Echo(delay=3, ratio=0.45), follow="lead", pan=96, min_channels=8),
+        Part("violin line", Layer("vln", vol=26, register=(19, 31)), follow="lead", pan=160, min_channels=8),
+    )
+    mod_channels = {4: 1, 6: 2, 8: 1}
 
-    def compose_measure(self, mctx, st, rng, buf):
-        sec = self.SECTIONS[mctx.pattern.kind]
-        if sec.kind == "outro" and mctx.is_last:
-            self._kime(mctx, sec, buf, final=True)           # 最後は決めで終わる
-            return
-        super().compose_measure(mctx, st, rng, buf)
-
-    def extra_measure(self, mctx, sec, st, rng, buf):
-        ins = mctx.instruments
-        m = mctx.measure_idx
-        if "kime" in sec.parts and m % 2 == 0:
-            self._kime(mctx, sec, buf)
-        elif "spic" in sec.parts:
-            spic = ins["spic"]
-            root = fold_into_range(mctx.chord.bass, 12, 23)
-            tones = [root, root, fold_into_range(mctx.chord.bass + 7, 12, 23), root + 12 if root + 12 <= 30 else root]
-            for row in range(16):
-                vol = _scale_vol(40 if row in SPIC_ACCENTS else 26, sec)
-                buf.put(row, CH_STR, spic.cell(tones[(row // 2) % len(tones)] if row % 2 == 0 else root, vol=vol))
-        elif m == 0:
-            buf.put(0, CH_STR, ins["brass"].off())
-
-    def _kime(self, mctx, sec, buf, *, final: bool = False) -> None:
-        """ブラス・ピアノ（和音のある区間だけ）・ベース・キック・クラッシュの決め（16分の 3+3。最後は3つ目を伸ばす）。
-        他のパートより優先して置き換える。"""
-        ins = mctx.instruments
-        chord = mctx.chord
-        brass = ins["brass"]
-        piano = ins[self._chord_key("piano", mctx)]
-        top = fold_into_range(chord.harmony + 7, 14, 26)
-        for i, row in enumerate(KIME):
-            buf.replace(row, CH_STR, brass.cell(top, vol=_scale_vol(50, sec)))
-            if "comp" in sec.parts:
-                buf.replace(row, CH_PIANO, piano.cell(chord.harmony, vol=_scale_vol(46, sec)))
-            buf.replace(row, CH_BASS, ins["bass"].cell(chord.bass, vol=_scale_vol(54, sec)))
-            buf.replace(row, CH_KS, ins["kick"].cell(vol=56))
-        buf.replace(0, CH_CYM, ins["crash"].cell(vol=56))
-        if not final:
-            buf.replace(KIME[-1] + 2, CH_STR, brass.off())
-        else:
-            buf.replace(0, CH_LEAD, brass.off())
+    def finalize_section(self, sec, score, rng) -> None:
+        place_kime(sec, score)

@@ -1,10 +1,9 @@
-"""F6〜F7 で移植したジャンル（``mod_weaver/genres_next/``）の共通検査（FRAMEWORK_REDESIGN.md §13.1・§15.1）。
+"""F6〜F7 で移植したジャンル（``mod_weaver/genres/``）の共通検査（FRAMEWORK_REDESIGN.md §13.1・§15.1）。
 
 - I1 骨格の不変・I2 決定性・I3 全予算 × 全形式で生成でき検査に ERROR が無い（MIDI を含む）。
 - 全パートが鳴る（宣言したパートが、どの区間でも鳴らないままになっていない。移植の取りこぼしの検出）。
-- 編成の対応表（§15.1）: 旧 ``ARRANGEMENTS`` の各編成と、新しい ladder の lane の並び・楽器・パン・畳んだときの優先順位。
-  旧クラスを読むので、旧 ``mod_weaver/genres/`` が残っている間だけ動く（F8 で旧を消すときに、この表を「新しい編成の期待値」
-  のテストに書き換える）。
+- 編成の対応表（§15.1）: 旧 ``ARRANGEMENTS`` の各編成（``port_layouts.LAYOUTS``。旧実装を消す前に旧クラスから生成して固定した
+  もの）と、新しい ladder の lane の並び・楽器・パン・畳んだときの優先順位。
 """
 from __future__ import annotations
 
@@ -12,7 +11,6 @@ import dataclasses
 
 import pytest
 
-from mod_weaver import profiles
 from mod_weaver.core import native
 from mod_weaver.framework import registry as new_registry
 from mod_weaver.framework.compose import compose, resolve_plan
@@ -21,11 +19,9 @@ from mod_weaver.framework.realize.midi import realize_midi
 from mod_weaver.framework.realize.tracker import realize, realize_mod
 from mod_weaver.framework.score import Automation, NoteEvent, NoteOff
 from mod_weaver.framework.target import resolve
-from mod_weaver.profiles.band_common import BandProfile
-from mod_weaver.profiles.registry import PROFILE_REGISTRY
+from tests.framework.port_layouts import LAYOUTS
 
-new_registry.discover("mod_weaver.genres_next")
-profiles.discover("mod_weaver.genres")
+new_registry.discover("mod_weaver.genres")
 IDS = sorted(new_registry.GENRE_REGISTRY)
 
 # F6 で移植するジャンル（A: 宣言だけ 13・B: パートの上書きあり 26）。``discover()`` は壊れたモジュールを警告だけで飛ばすので、
@@ -143,41 +139,25 @@ def test_generates_and_verifies_in_every_format(gid):
     assert a == native.serialize(realize(genre, score2, plan2, resolve("it", None, genre, 1)))
 
 
-# ---- 編成の対応表（旧との比較）----
+# ---- 編成の対応表（旧 ``ARRANGEMENTS`` から固定した期待値 ``port_layouts.LAYOUTS`` との比較）----
 
-_QUALITY_SUFFIXES = {"maj", "min", "m7", "maj7", "dom7", "sus4", "sus2", "m9", "maj9", "dim", "aug", "7", "9",
-                     "add9", "m6", "6", "7sus4", "dom9", "dim7", "m7b5", "mmaj7", "m11", "maj13", "13", "11"}
-
-
-def _base(name: str) -> str:
-    head, _, tail = name.rpartition("_")
-    return head if head and tail in _QUALITY_SUFFIXES else name
+def _expected(gid):
+    return LAYOUTS[gid]
 
 
-def _old_arrangements(gid):
-    old = PROFILE_REGISTRY[gid]
-    out = {}
-    for n, (phys, pans, sources, _gains, _to_phys) in sorted(old._arr.items()):
-        out[n] = [(sorted({_base(old._sample_keys[s - 1]) for s in r.allowed}),
-                   {_base(old._sample_keys[s - 1]): pr for s, pr in r.priority.items()}) for r in phys], pans
-    return out
-
-
-@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY and issubclass(PROFILE_REGISTRY[g], BandProfile)])
-def test_ladder_matches_the_old_arrangement(gid):
+@pytest.mark.parametrize("gid", sorted(LAYOUTS))
+def test_ladder_matches_the_recorded_arrangement(gid):
     genre = _genre(gid)
-    old = _old_arrangements(gid)
-    if not old:      # 編成を選ばない旧ジャンル（論理チャンネル＝物理チャンネル）
-        pytest.skip("fixed channel plan")
     _plan, score = _score(genre, 1)
-    for n, (roles, pans) in old.items():
+    for n, (roles, pans) in _expected(gid).items():
         layout = lanesmod.compute_layout(genre, score, n)
         lanes = [l for l in layout.lanes if l.role != "control"]
         if (gid, n) in LAYOUT_DIFFS:      # 並びだけ違う: 楽器とパンの組が同じ集合になる
             pairs = sorted((tuple(sorted(l.insts)), l.pan) for l in lanes if l.insts)
             assert len(lanes) == len(roles), (gid, n)
             for insts, pan in pairs:
-                assert any(set(insts) <= set(names) and (pans is None or pan in pans) for names, _ in roles),                     (gid, n, insts, pan)
+                assert any(set(insts) <= set(names) and (pans is None or pan in pans) for names, _ in roles), \
+                    (gid, n, insts, pan)
             continue
         assert len(lanes) == len(roles), (gid, n, [l.insts for l in lanes], [r[0] for r in roles])
         for lane, (names, _prio) in zip(lanes, roles):
@@ -187,13 +167,12 @@ def test_ladder_matches_the_old_arrangement(gid):
             assert [l.pan for l in lanes] == list(pans), (gid, n, [l.pan for l in lanes], pans)
 
 
-@pytest.mark.parametrize("gid", [g for g in IDS if g in PROFILE_REGISTRY and issubclass(PROFILE_REGISTRY[g], BandProfile)])
-def test_folded_drum_priorities_match_the_old_ones(gid):
+@pytest.mark.parametrize("gid", sorted(LAYOUTS))
+def test_folded_drum_priorities_match_the_recorded_ones(gid):
     """同じ lane に畳まれた打楽器の2つが同じ row に来たとき、どちらが残るかが旧と同じ（優先度の表の写し間違いの検出）。"""
     genre = _genre(gid)
-    old = _old_arrangements(gid)
     _plan, score = _score(genre, 1)
-    for n, (roles, _pans) in old.items():
+    for n, (roles, _pans) in _expected(gid).items():
         layout = lanesmod.compute_layout(genre, score, n)
         lanes = [l for l in layout.lanes if l.role == "kit"]
         old_kit = [r for r in roles if len(r[0]) > 1 and any(k in genre.instruments and genre.instruments[k].gm.is_drum
@@ -209,15 +188,6 @@ def test_folded_drum_priorities_match_the_old_ones(gid):
                     new_win = a if lane.priority.get(a, 1) >= lane.priority.get(b, 1) else b
                     old_win = a if ref[1].get(a, 1) >= ref[1].get(b, 1) else b
                     assert new_win == old_win, (gid, n, a, b, lane.priority, ref[1])
-
-
-def test_no_unported_override_is_left_behind():
-    """変換ツール（tools/port_band_genre.py）が残した TODO（上書きメソッドの未移植）が無い。"""
-    import pathlib
-
-    root = pathlib.Path(__file__).resolve().parents[2] / "mod_weaver" / "genres_next"
-    left = [f.name for f in sorted(root.glob("*.py")) if "TODO" in f.read_text(encoding="utf-8")]
-    assert not left, left
 
 
 # ============================================================

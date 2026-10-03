@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "genres"))
 
-from mod_weaver.genres_next.march import MarchGenre as MarchToy  # noqa: E402
+from mod_weaver.genres.march import MarchGenre as MarchToy  # noqa: E402
 from pop import PopToy  # noqa: E402
 from racing_breaks import RacingBreaksToy  # noqa: E402
 

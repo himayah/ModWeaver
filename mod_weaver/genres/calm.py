@@ -1,62 +1,79 @@
-"""calm: 穏やかなピアノとパッド（DESIGN.md §6.16.2）。A4（4ch、Amiga 互換）: ピアノの8分の分散和音、パッド、低音、まばらなベル。"""
+"""calm（旧 genres/calm.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
-from ..core.model import ChordSpec
-from ..profiles.band_common import ArpSpec, BandProfile, BassSpec, ChannelDef, PadSpec, Section, preset
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import Arp, BassLine, Pad
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
+from ..framework.registry import register_genre
 
 C = ChordSpec
-CH_PIANO, CH_PAD, CH_BELL, CH_BASS = range(4)
+
+
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+PROGRESSIONS = (
+    ("Imaj7-IVmaj7", (C(0, "maj7", label="Imaj7"), C(5, "maj7", label="IVmaj7"))),
+    ("Imaj7-vi7", (C(0, "maj7", label="Imaj7"), C(9, "m7", label="vi7"))),
+    ("IVmaj7-Vsus4", (C(5, "maj7", label="IVmaj7"), C(7, "sus4", label="Vsus4"))),
+)
+
+
 BELL_REGISTER = (24, 35)
 
 
-@register_profile
-class CalmProfile(BandProfile):
+class CalmBell(Generator):
+    """ベル: 4小節に1〜2音（1・3小節目の弱拍に、確率で）。旧 extra_measure（"fx" の区間だけ鳴る）。"""
+
+    def __init__(self, inst: str, register: tuple[int, int]) -> None:
+        self.inst = inst
+        self.register = register
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.m.index % 2:
+            return
+        if m.rng.random() < (0.9 if m.m.index == 0 else 0.45):
+            lo, hi = self.register
+            pcs = {c % 12 for c in m.m.chord.chord_tones}
+            tones = [t for t in range(lo, hi + 1) if t % 12 in pcs]
+            step = m.rng.choice((4, 6, 10, 12))
+            m.note(step, self.inst, m.rng.choice(tones), vel=round(30 * m.plan.intensity + 10))
+
+
+@register_genre
+class CalmGenre(Genre):
     id = "calm"
     category = "mood"
     display_name = "Calm / Relaxed"
     description = "落ち着き。低いテンポで柔らかいパッドとピアノの分散和音"
     description_en = "Calm and relaxed: soft pads and slow piano arpeggios"
     title = "Calm Evening"
-    default_filename = "Calm.mod"
     tempo_choices = (68, 70, 72, 74, 76, 78)
 
-    KIT = (
-        ("piano", preset("keys_piano")), ("bass", preset("bass_finger")), ("bell", preset("keys_bell")),
-    )
-    CHORD_KITS = {"pad": (preset("pad_warm"), 0.0)}
-    CHANNELS = (
-        ChannelDef("piano", ("piano",)),
-        ChannelDef("pad", ("pad",)),
-        ChannelDef("bell", ("bell",)),
-        ChannelDef("bass", ("bass",)),
-    )
-    KEYS = (0, 5, 7)
-    MODE = "lydian"
-    ARP_REGISTER = (12, 27)
-    # 和音は2小節ごと（2和音の進行を 4小節の pattern に当てる）
-    PROGRESSIONS = (
-        ("Imaj7-IVmaj7", (C(0, "maj7", label="Imaj7"), C(5, "maj7", label="IVmaj7"))),
-        ("Imaj7-vi7", (C(0, "maj7", label="Imaj7"), C(9, "m7", label="vi7"))),
-        ("IVmaj7-Vsus4", (C(5, "maj7", label="IVmaj7"), C(7, "sus4", label="Vsus4"))),
-    )
-    SECTIONS = {
-        "intro": Section("intro", prog=0, intensity=0.3, parts=frozenset({"pad", "arp"})),
-        "a": Section("a", prog=0, intensity=0.5, parts=frozenset({"pad", "arp", "bass", "fx"})),
-        "b": Section("b", prog=1, intensity=0.6, parts=frozenset({"pad", "arp", "bass", "fx"})),
-        "outro": Section("outro", prog=0, intensity=0.2, parts=frozenset({"pad", "arp"})),
+    instruments = {
+        "piano": _inst("keys_piano", GmVoice(program=0)),
+        "bass": _inst("bass_finger", GmVoice(program=33)),
+        "bell": _inst("keys_bell", GmVoice(program=9)),
+        "pad": _inst("pad_warm", GmVoice(program=89)),
     }
-    FORM = ("intro", "a", "b", "a", "outro")
-    BASS = BassSpec("bass", CH_BASS, kind="whole", vol=34)
-    PAD = PadSpec("pad", CH_PAD, vol=30)
-    ARP = ArpSpec("piano", CH_PIANO, rows=tuple(range(0, 16, 2)), vol=40, pattern="updown")
-
-    def extra_measure(self, mctx, sec, st, rng, buf):
-        """ベル: 4小節に1〜2音（1・3小節目の弱拍に、確率で）。"""
-        if "fx" not in sec.parts or mctx.measure_idx % 2:
-            return
-        if rng.melody.random() < (0.9 if mctx.measure_idx == 0 else 0.45):
-            lo, hi = BELL_REGISTER
-            tones = [t for t in range(lo, hi + 1) if t % 12 in {c % 12 for c in mctx.chord.chord_tones}]
-            row = rng.melody.choice((4, 6, 10, 12))
-            buf.put(row, CH_BELL, mctx.instruments["bell"].cell(rng.melody.choice(tones), vol=round(30 * sec.intensity + 10)))
+    harmony = Harmony(keys=(0, 5, 7), mode="lydian", progressions=PROGRESSIONS, n_progressions=2)
+    sections = {
+        "intro": Section(intensity=0.3, parts=frozenset({"pad", "arp"})),
+        "a": Section(intensity=0.5, parts=frozenset({"fx", "pad", "bass", "arp"})),
+        "b": Section(prog=1, intensity=0.6, parts=frozenset({"fx", "pad", "bass", "arp"})),
+        "outro": Section(intensity=0.2, parts=frozenset({"pad", "arp"})),
+    }
+    form = ("intro", "a", "b", "a", "outro")
+    parts = (
+        Part("arp", Arp("piano", register=(12, 27), steps=(0, 2, 4, 6, 8, 10, 12, 14), vol=40, pattern="updown"), pan=128),
+        Part("pad", Pad("pad", vol=30), pan=128),
+        Part("fx", CalmBell("bell", BELL_REGISTER), pan=128),
+        Part("bass", BassLine("bass", kind="whole", vol=34), pan=128),
+    )
+    mod_channels = {4: 1}

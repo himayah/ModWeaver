@@ -1,78 +1,75 @@
-"""hiphop: ブーンバップ・ヒップホップ（DESIGN.md §6.16.19）。B4（4ch、Amiga 互換）: ブーンバップのビート、ベース、
-ピアノの和音ループ、フックのホーン。ラップ向けの構成（verse は旋律を置かず余白を残す）。"""
+"""hiphop（旧 genres/hiphop.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
-from ..core import groove
 from ..core.composer import RhythmMotif, ScaleRules
-from ..core.model import ChordSpec
-from ..profiles.band_common import (
-    BandProfile, BassSpec, ChannelDef, CompSpec, Fold, LayerSpec, LeadSpec, Section, hits, keep, preset,
-)
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import BassLine, Comp, Groove, Layer, Lead, hits
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.plan import Meter, Swing
+from ..framework.registry import register_genre
 
 C = ChordSpec
-CH_DRUMS, CH_HAT, CH_BASS, CH_LOOP, CH_HORN, CH_X_STR = range(6)   # 6 番目は 6ch の編成だけ
-
-BOOMBAP = (hits("kick", (0, 7, 10), 60) + hits("snare", (4, 12), 52)
-           + hits("hat", range(0, 16, 2), 22) + hits("kick", (15,), 44, 0.3))
-SPARSE = hits("kick", (0, 10), 56) + hits("snare", (4, 12), 48)
-# ホーンのスタブ（短い決めの動機。hook は同じ pattern を再利用するので毎回同じ決めになる）
-LEAD_MOTIFS = {"hook": (RhythmMotif((0, 3, 6)), RhythmMotif((0, 3, 10)), RhythmMotif((0, 6, 8, 11)))}
-BEAT = frozenset({"drums", "bass", "comp"})
 
 
-@register_profile
-class HiphopProfile(BandProfile):
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+GROOVES = {
+    "main": hits("kick", (0, 7, 10), 60) + hits("snare", (4, 12), 52) + hits("hat", (0, 2, 4, 6, 8, 10, 12, 14), 22) + hits("kick", (15,), 44, 0.3),
+    "sparse": hits("kick", (0, 10), 56) + hits("snare", (4, 12), 48),
+}
+LEAD_MOTIFS = {
+    "hook": (RhythmMotif(rows=(0, 3, 6)), RhythmMotif(rows=(0, 3, 10)), RhythmMotif(rows=(0, 6, 8, 11))),
+}
+PROGRESSIONS = (
+    ("i-VI", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(0, "min", label="i"), C(8, "maj", label="VI"))),
+    ("i-iv", (C(0, "min", label="i"), C(5, "min", label="iv"), C(0, "min", label="i"), C(5, "min", label="iv"))),
+    ("im7-bVImaj7", (C(0, "m7", label="im7"), C(0, "m7", label="im7"), C(8, "maj7", label="bVImaj7"), C(8, "maj7", label="bVImaj7"))),
+)
+
+
+@register_genre
+class HiphopGenre(Genre):
     id = "hiphop"
     display_name = "Hip Hop (Boom Bap)"
     description = "ヒップホップ。ラップが乗る余白を残したブーンバップのビートとサンプル風ループ"
     description_en = "Hip hop: boom-bap beats and sample-style loops that leave room for rap"
     title = "Boom Bap Cypher"
-    default_filename = "Hiphop.mod"
     tempo_choices = (86, 88, 90, 92, 94, 96)
 
-    KIT = (
-        ("kick", preset("drum_boombap_kick")), ("snare", preset("drum_boombap_snare")),
-        ("hat", preset("nostalgic_hihat")), ("bass", preset("bass_finger")), ("horn", preset("march_brass_horn")),
-    )
-    CHORD_KITS = {"loop": (preset("keys_piano", volume=42), 0.0), "str": (preset("orch_violin", volume=30), 0.0)}
-    CHANNELS = (
-        ChannelDef("kick/snare", ("kick", "snare"), (("snare", 3), ("kick", 2)), pan=128),
-        ChannelDef("hat", ("hat",), pan=164),
-        ChannelDef("bass", ("bass",), pan=128),
-        ChannelDef("loop", ("loop",), pan=84),
-        ChannelDef("horn", ("horn",), pan=172),
-        ChannelDef("strings", ("str",), pan=100),
-    )
-    DRUM_CHANNEL = {"kick": CH_DRUMS, "snare": CH_DRUMS, "hat": CH_HAT}
-    KEYS = (9, 4, 2, 7)
-    MODE = "aeolian"
-    # 1〜2小節の短調ループを曲全体で固定する（サンプルを繰り返す作り方）
-    PROGRESSIONS = (
-        ("i-VI", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(0, "min", label="i"), C(8, "maj", label="VI"))),
-        ("i-iv", (C(0, "min", label="i"), C(5, "min", label="iv"), C(0, "min", label="i"), C(5, "min", label="iv"))),
-        ("im7-bVImaj7", (C(0, "m7", label="im7"), C(0, "m7", label="im7"), C(8, "maj7", label="bVImaj7"),
-                         C(8, "maj7", label="bVImaj7"))),
-    )
-    N_PROGRESSIONS = 1
-    SECTIONS = {
-        "intro": Section("intro", intensity=0.6, parts=frozenset({"comp", "drums"}), groove="sparse"),
-        "verse": Section("verse", intensity=0.75, parts=BEAT),
-        "hook": Section("hook", intensity=0.95, parts=BEAT | {"lead"}, lead_motifs="hook"),
-        "outro": Section("outro", intensity=0.6, parts=frozenset({"comp", "drums"}), groove="sparse"),
+    instruments = {
+        "kick": _inst("drum_boombap_kick", GmVoice(drum_note=36)),
+        "snare": _inst("drum_boombap_snare", GmVoice(drum_note=38)),
+        "hat": _inst("nostalgic_hihat", GmVoice(drum_note=42)),
+        "bass": _inst("bass_finger", GmVoice(program=33)),
+        "horn": _inst("march_brass_horn", GmVoice(program=60)),
+        "loop": _inst("keys_piano", GmVoice(program=0), volume=42),
+        "str": _inst("orch_violin", GmVoice(program=48), volume=30),
     }
-    # intro 4小節、verse 16小節、hook 8小節、verse 16小節、hook 8小節、outro
-    FORM = ("intro", "verse", "verse", "verse", "verse", "hook", "hook",
-            "verse", "verse", "verse", "verse", "hook", "hook", "outro")
-    GROOVES = {"main": BOOMBAP, "sparse": SPARSE}
-    SWING = groove.SwingConfig(long_speed=7, short_speed=5)
-    BASS = BassSpec("bass", CH_BASS, kind="boombap", vol=56)
-    COMP = CompSpec("loop", CH_LOOP, kind="charleston", vol=40)
-    LEAD = LeadSpec("horn", CH_HORN, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
-                    vol=46, gate=0.6)
-    LAYERS = (LayerSpec("str", CH_X_STR, follow="lead", vol=24, chordal=True),)   # フックだけ弦の和音を重ねる
-    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝ドラムを1チャンネルで共有、6ch＝2系統＋フックの弦
-        4: (Fold("drums", ("kick/snare", "hat"), (("snare", 3), ("kick", 2))), *keep("bass", "loop", "horn")),
-        6: keep("kick/snare", "hat", "bass", "loop", "horn", "strings"),
+    harmony = Harmony(keys=(9, 4, 2, 7), mode="aeolian", progressions=PROGRESSIONS, n_progressions=1)
+    sections = {
+        "intro": Section(intensity=0.6, parts=frozenset({"comp", "drums"}), groove="sparse"),
+        "verse": Section(intensity=0.75, parts=frozenset({"comp", "bass", "drums"})),
+        "hook": Section(intensity=0.95, parts=frozenset({"comp", "bass", "drums", "lead"}), motifs="hook"),
+        "outro": Section(intensity=0.6, parts=frozenset({"comp", "drums"}), groove="sparse"),
     }
-    CHANNEL_WEIGHTS = {4: 2, 6: 1}
+    form = ("intro", "verse", "verse", "verse", "verse", "hook", "hook", "verse", "verse", "verse", "verse", "hook", "hook", "outro")
+    parts = (
+        Part("drums", Groove(GROOVES), pan=128,
+             kit=Kit(groups=(("kick/snare", ("kick", "snare")), ("hat", ("hat",))),
+                     priority={"snare": 3, "kick": 2},
+                     single_priority={"kick": 2, "snare": 3, "hat": 1},
+                     group_pan={"hat": 164})),
+        Part("bass", BassLine("bass", kind="boombap", vol=56), pan=128),
+        Part("comp", Comp("loop", kind="charleston", vol=40), pan=84),
+        Part("lead", Lead("horn", ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
+                   vol=46, gate=0.6), pan=172),
+        Part("strings", Layer("str", vol=24, chordal=True), follow="lead", pan=100, min_channels=6),
+    )
+    swing = Swing(7, 5)
+    mod_channels = {4: 2, 6: 1}

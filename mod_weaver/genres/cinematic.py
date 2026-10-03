@@ -1,112 +1,133 @@
-"""cinematic: 映画音楽の情感（DESIGN.md §6.16.21）。O8（8ch）: ピアノのオスティナートから弦とホルンが重なり、
-合唱とティンパニでドラマチックに高まる。クライマックスは平行長調の響き（III–VII–i–VI＝長調の I–V–vi–IV）。"""
+"""cinematic（旧 genres/cinematic.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
-from ..core.model import ChordSpec
-from ..core.pitch import fold_into_range
-from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, LeadSpec, PadSpec, Section, _scale_vol, keep, preset,
-)
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import Arp, BassLine, Lead, Pad
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.context import Generator, MeasureCtx
+from ..core.pitch import CHORD_QUALITIES, fold_into_range
+from ..framework.registry import register_genre
 
 C = ChordSpec
-CH_PIANO, CH_VLN, CH_VLA, CH_VC, CH_CB, CH_HORN, CH_CHOIR, CH_TIMP = range(8)
-HORN_REGISTER = (14, 26)
+
+
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
 
 LEAD_MOTIFS = {
-    "verse": (RhythmMotif((0, 8)), RhythmMotif((0, 6, 8)), RhythmMotif((0, 4, 8, 12)), RhythmMotif((0, 12))),
+    "verse": (RhythmMotif(rows=(0, 8)), RhythmMotif(rows=(0, 6, 8)), RhythmMotif(rows=(0, 4, 8, 12)), RhythmMotif(rows=(0, 12))),
 }
-P_MINOR, P_LIFT, P_MAJOR = range(3)
+PROGRESSIONS = (
+    ("i-VI-III-VII", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(3, "maj", label="III"), C(10, "maj", label="VII"))),
+    ("VI-VII-i", (C(8, "maj", label="VI"), C(10, "maj", label="VII"), C(0, "min", label="i"), C(0, "min", label="i"))),
+    ("III-VII-i-VI (relative major I-V-vi-IV)", (C(3, "maj", label="III"), C(10, "maj", label="VII"), C(0, "min", label="i"), C(8, "maj", label="VI"))),
+)
 
 
-def _parts(*names: str) -> frozenset[str]:
-    return frozenset(names)
+HORN_REGISTER = (14, 26)
 
 
-@register_profile
-class CinematicProfile(BandProfile):
+class ChordHold(Generator):
+    """和音の変わり目に、和音サンプルを伸ばす（viola。旧 extra_measure）。"""
+
+    def __init__(self, inst: str, vol: int) -> None:
+        self.inst = inst
+        self.vol = vol
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.is_chord_change:
+            m.note(0, self.inst, m.m.chord.harmony, vel=m.scale_vol(self.vol), chord=CHORD_QUALITIES[m.m.quality])
+
+
+class BassHold(Generator):
+    """和音の変わり目に、コントラバスの低音（根音の1オクターブ下）を伸ばす。"""
+
+    def __init__(self, inst: str, vol: int) -> None:
+        self.inst = inst
+        self.vol = vol
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.is_chord_change:
+            m.note(0, self.inst, m.m.chord.bass - 12, vel=m.scale_vol(self.vol))
+
+
+class HornThird(Generator):
+    """和音の変わり目に、ホルンで第3音（根音の次の構成音）を伸ばす。"""
+
+    def __init__(self, inst: str, vol: int) -> None:
+        self.inst = inst
+        self.vol = vol
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.is_chord_change:
+            chord = m.m.chord
+            third = sorted({t % 12 for t in chord.chord_tones}, key=lambda pc: (pc - chord.harmony) % 12)[1]
+            m.note(0, "horn", fold_into_range(third, *HORN_REGISTER), vel=m.scale_vol(self.vol))
+
+
+class Timpani(Generator):
+    """ティンパニ: 区間の頭に1打（climax は8 step 目にもう1打）。rise2 は最後の小節でロール、その2小節前にシンバルのスウェル。"""
+
+    def measure(self, m: MeasureCtx) -> None:
+        bass = m.m.chord.bass
+        kind = m.plan.kind
+        if kind == "rise2" and m.is_last:
+            for step in range(m.m.steps):                      # 最後の小節はティンパニのロールで高める
+                m.note(step, "timp", bass, vel=min(64, 24 + step * 2))
+        elif kind == "rise2" and m.m.index == 1:
+            m.note(0, "swell", vel=40)                         # クライマックスの2小節前にシンバルのスウェル
+        else:
+            m.note(0, "timp", bass, vel=m.scale_vol(50))
+            if kind == "climax":
+                m.note(8, "timp", bass, vel=m.scale_vol(40))
+
+
+@register_genre
+class CinematicGenre(Genre):
     id = "cinematic"
     display_name = "Cinematic"
     description = "映画音楽。ピアノのオスティナートから弦とホルンが重なり、ドラマチックに高まる"
     description_en = "Cinematic: piano ostinato building to soaring strings and horns"
     title = "Cinematic Rise"
-    default_filename = "Cinematic.mod"
     tempo_choices = (70, 72, 76, 80, 84)
 
-    KIT = (
-        ("piano", preset("keys_piano", volume=42)), ("vln", preset("orch_violin")), ("vc", preset("orch_cello")),
-        ("cb", preset("orch_bass_str")), ("horn", preset("march_brass_section", volume=40)),
-        ("timp", preset("orch_timpani")), ("swell", preset("free_cymbal_swell")),
-    )
-    CHORD_KITS = {"vla": (preset("orch_viola", volume=34), 0.0), "choir": (preset("vox_choir", volume=34), 0.0)}
-    CHANNELS = (
-        ChannelDef("piano", ("piano",), pan=100),
-        ChannelDef("violin", ("vln",), pan=84),
-        ChannelDef("viola", ("vla",), pan=160),
-        ChannelDef("cello", ("vc",), pan=176),
-        ChannelDef("contrabass", ("cb",), pan=150),
-        ChannelDef("horn", ("horn",), pan=110),
-        ChannelDef("choir", ("choir",), pan=128),
-        ChannelDef("timpani", ("timp", "swell"), (("timp", 2),), pan=128),
-    )
-    KEYS = (0, 2)
-    MODE = "aeolian"
-    ARP_REGISTER = (12, 27)
-    FIXED_PROGRESSIONS = True
-    PROGRESSIONS = (
-        ("i-VI-III-VII", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(3, "maj", label="III"),
-                          C(10, "maj", label="VII"))),
-        ("VI-VII-i", (C(8, "maj", label="VI"), C(10, "maj", label="VII"), C(0, "min", label="i"), C(0, "min", label="i"))),
-        ("III-VII-i-VI (relative major I-V-vi-IV)", (C(3, "maj", label="III"), C(10, "maj", label="VII"),
-                                                     C(0, "min", label="i"), C(8, "maj", label="VI"))),
-    )
-    SECTIONS = {
-        "intro": Section("intro", prog=P_MINOR, intensity=0.5, parts=_parts("arp")),
-        "rise1": Section("rise1", prog=P_MINOR, intensity=0.6, parts=_parts("arp", "bass", "viola")),
-        "theme": Section("theme", prog=P_MINOR, intensity=0.75, parts=_parts("arp", "bass", "viola", "cb", "lead")),
-        "rise2": Section("rise2", prog=P_LIFT, intensity=0.85,
-                         parts=_parts("arp", "bass", "viola", "cb", "lead", "horn", "pad", "timp")),
-        "climax": Section("climax", prog=P_MAJOR, intensity=1.0,
-                          parts=_parts("arp", "bass", "viola", "cb", "lead", "horn", "pad", "timp")),
-        "resolve": Section("resolve", prog=P_MINOR, intensity=0.4, parts=_parts("arp")),
+    instruments = {
+        "piano": _inst("keys_piano", GmVoice(program=0), volume=42),
+        "vln": _inst("orch_violin", GmVoice(program=48)),
+        "vc": _inst("orch_cello", GmVoice(program=42)),
+        "cb": _inst("orch_bass_str", GmVoice(program=43)),
+        "horn": _inst("march_brass_section", GmVoice(program=61), volume=40),
+        "timp": _inst("orch_timpani", GmVoice(program=47)),
+        "swell": _inst("free_cymbal_swell", GmVoice(program=119)),
+        "vla": _inst("orch_viola", GmVoice(program=48), volume=34),
+        "choir": _inst("vox_choir", GmVoice(program=52), volume=34),
     }
-    FORM = ("intro", "rise1", "theme", "theme", "rise2", "climax", "climax", "resolve")
-    BASS = BassSpec("vc", CH_VC, kind="half", vol=46)
-    PAD = PadSpec("choir", CH_CHOIR, vol=34)
-    ARP = ArpSpec("piano", CH_PIANO, rows=tuple(range(0, 16, 2)), vol=36, pattern="updown")
-    LEAD = LeadSpec("vln", CH_VLN, ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7, 8)), LEAD_MOTIFS,
-                    vol=48, gate=1.0, vibrato=0x23)
-
-    ARRANGEMENTS = {                          # DESIGN.md §6.14: 6ch＝ヴィオラとコントラバスを省いた縮小編成
-        6: keep("piano", "violin", "cello", "horn", "choir", "timpani"),
-        8: keep("piano", "violin", "viola", "cello", "contrabass", "horn", "choir", "timpani"),
+    harmony = Harmony(keys=(0, 2), mode="aeolian", progressions=PROGRESSIONS, n_progressions=2, fixed=True)
+    sections = {
+        "intro": Section(intensity=0.5, parts=frozenset({"arp"})),
+        "rise1": Section(intensity=0.6, parts=frozenset({"viola", "bass", "arp"})),
+        "theme": Section(intensity=0.75, parts=frozenset({"cb", "bass", "lead", "viola", "arp"})),
+        "rise2": Section(prog=1, intensity=0.85, parts=frozenset({"bass", "horn", "pad", "timp", "viola", "lead", "cb", "arp"})),
+        "climax": Section(prog=2, intensity=1.0, parts=frozenset({"bass", "horn", "pad", "timp", "viola", "lead", "cb", "arp"})),
+        "resolve": Section(intensity=0.4, parts=frozenset({"arp"})),
     }
-    CHANNEL_WEIGHTS = {6: 1, 8: 2}
-    def extra_measure(self, mctx, sec, st, rng, buf):
-        ins = mctx.instruments
-        chord = mctx.chord
-        change = self._is_chord_change(mctx)
-        parts = sec.parts
-        # 休む区間では持続音色を先頭で止める（前の区間から鳴り続けないように）
-        for part, ch in (("viola", CH_VLA), ("cb", CH_CB), ("horn", CH_HORN)):
-            if part not in parts:
-                self._silence(buf, ch, part, ins, mctx)
-        if "viola" in parts and change:
-            buf.put(0, CH_VLA, ins[self._chord_key("vla", mctx)].cell(chord.harmony, vol=_scale_vol(32, sec)))
-        if "cb" in parts and change:
-            buf.put(0, CH_CB, ins["cb"].cell(chord.bass - 12, vol=_scale_vol(44, sec)))
-        if "horn" in parts and change:
-            third = sorted({t % 12 for t in chord.chord_tones}, key=lambda pc: (pc - chord.harmony) % 12)[1]
-            buf.put(0, CH_HORN, ins["horn"].cell(fold_into_range(third, *HORN_REGISTER), vol=_scale_vol(40, sec)))
-        if "timp" in parts:
-            timp = ins["timp"]
-            if sec.kind == "rise2" and mctx.is_last:
-                for row in range(16):                                # 最後の小節はティンパニのロールで高める
-                    buf.put(row, CH_TIMP, timp.cell(chord.bass, vol=min(64, 24 + row * 2)))
-            elif sec.kind == "rise2" and mctx.measure_idx == 1:
-                buf.put(0, CH_TIMP, ins["swell"].cell(vol=40))        # クライマックスの2小節前にシンバルのスウェル
-            else:
-                buf.put(0, CH_TIMP, timp.cell(chord.bass, vol=_scale_vol(50, sec)))
-                if sec.kind == "climax":
-                    buf.put(8, CH_TIMP, timp.cell(chord.bass, vol=_scale_vol(40, sec)))
+    form = ("intro", "rise1", "theme", "theme", "rise2", "climax", "climax", "resolve")
+    parts = (
+        Part("arp", Arp("piano", register=(12, 27), steps=(0, 2, 4, 6, 8, 10, 12, 14), vol=36, pattern="updown"), pan=100),
+        Part("lead", Lead("vln", ScaleRules(leap_probability=0.3, leap_semitones=(3, 4, 5, 7, 8)), LEAD_MOTIFS,
+                   vol=48, gate=1.0, vibrato=0x23), pan=84),
+        Part("viola", ChordHold("vla", 32), pan=160, min_channels=8),
+        Part("bass", BassLine("vc", kind="half", vol=46), pan=176),
+        Part("cb", BassHold("cb", 44), pan=150, min_channels=8),
+        Part("horn", HornThird("horn", 40), pan=110),
+        Part("pad", Pad("choir", vol=34), pan=128),
+        Part("timp", Timpani(), pan=128,
+             kit=Kit(groups=(("timpani", ("timp", "swell")),), priority={"timp": 2})),
+    )
+    mod_channels = {6: 1, 8: 2}

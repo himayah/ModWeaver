@@ -31,9 +31,9 @@ HEADER = (ROOT / "mod_weaver" / "framework" / "levels.py").read_text(encoding="u
 
 
 def genres() -> dict:
-    """新しい枠組みの全ジャンル（``genres_next/``）。"""
+    """新しい枠組みの全ジャンル（``genres/``）。"""
     from mod_weaver.framework import registry
-    registry.discover("mod_weaver.genres_next")
+    registry.discover("mod_weaver.genres")
     out = {gid: cls() for gid, cls in registry.GENRE_REGISTRY.items()}
     return out
 

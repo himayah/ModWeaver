@@ -1,66 +1,69 @@
-"""focus: 集中用のミニマルなローファイ（DESIGN.md §6.16.9）。B4（4ch、Amiga 互換）: ブーンバップのビート、
-ベース、エレピの2和音ループ、レコードのノイズ。旋律を持たず、変化は8小節ごとのハットの密度だけ。"""
+"""focus（旧 genres/focus.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
-from ..core import groove
-from ..core.model import ChordSpec
-from ..profiles.band_common import BandProfile, BassSpec, ChannelDef, CompSpec, FxSpec, Section, hits, preset
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import BassLine, Comp, Fx, Groove, hits
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section
+from ..framework.plan import Meter, Swing
+from ..framework.registry import register_genre
 
 C = ChordSpec
-CH_DRUMS, CH_BASS, CH_EP, CH_FX = range(4)
-
-KICK_SNARE = hits("kick", (0, 7, 10), 58) + hits("snare", (4, 12), 48)
-SPARSE = KICK_SNARE + hits("hat", range(0, 16, 4), 22)
-EIGHTHS = KICK_SNARE + hits("hat", range(0, 16, 2), 22)
-NO_KICK = hits("snare", (4, 12), 44) + hits("hat", range(0, 16, 2), 22)
-LOOP = frozenset({"drums", "bass", "comp", "fx"})
 
 
-@register_profile
-class FocusProfile(BandProfile):
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+GROOVES = {
+    "main": hits("kick", (0, 7, 10), 58) + hits("snare", (4, 12), 48) + hits("hat", (0, 2, 4, 6, 8, 10, 12, 14), 22),
+    "sparse": hits("kick", (0, 7, 10), 58) + hits("snare", (4, 12), 48) + hits("hat", (0, 4, 8, 12), 22),
+    "nokick": hits("snare", (4, 12), 44) + hits("hat", (0, 2, 4, 6, 8, 10, 12, 14), 22),
+}
+PROGRESSIONS = (
+    ("im7-IVmaj7", (C(0, "m7", label="im7"), C(5, "maj7", label="IVmaj7"))),
+    ("ii7-V7", (C(2, "m7", label="ii7"), C(7, "dom7", label="V7"))),
+    ("Imaj7-vi7", (C(0, "maj7", label="Imaj7"), C(9, "m7", label="vi7"))),
+)
+
+
+@register_genre
+class FocusGenre(Genre):
     id = "focus"
     category = "mood"
     display_name = "Focus"
     description = "集中。ほとんど変化しないローファイのループと一定のテンポ"
     description_en = "Focus: minimal lo-fi loop with a steady, unchanging groove"
     title = "Focus Loop"
-    default_filename = "Focus.mod"
     tempo_choices = (78, 80, 82, 84, 86)
 
-    KIT = (
-        ("kick", preset("drum_boombap_kick")), ("snare", preset("drum_boombap_snare")),
-        ("hat", preset("nostalgic_hihat")), ("bass", preset("bass_finger")), ("vinyl", preset("fx_vinyl")),
-    )
-    CHORD_KITS = {"ep": (preset("keys_ep"), 0.0)}
-    CHANNELS = (
-        ChannelDef("drums", ("kick", "snare", "hat"), (("snare", 3), ("kick", 2))),
-        ChannelDef("bass", ("bass",)),
-        ChannelDef("e.piano", ("ep",)),
-        ChannelDef("vinyl", ("vinyl",)),
-    )
-    DRUM_CHANNEL = {"kick": CH_DRUMS, "snare": CH_DRUMS, "hat": CH_DRUMS}
-    KEYS = (2, 4)
-    MODE = "dorian"
-    # 曲全体で1つの2和音ループに固定する
-    PROGRESSIONS = (
-        ("im7-IVmaj7", (C(0, "m7", label="im7"), C(5, "maj7", label="IVmaj7"))),
-        ("ii7-V7", (C(2, "m7", label="ii7"), C(7, "dom7", label="V7"))),
-        ("Imaj7-vi7", (C(0, "maj7", label="Imaj7"), C(9, "m7", label="vi7"))),
-    )
-    N_PROGRESSIONS = 1
-    SECTIONS = {
-        "intro": Section("intro", intensity=0.5, parts=frozenset({"comp", "fx"})),
-        "loop": Section("loop", intensity=0.7, parts=LOOP, groove="sparse"),
-        "loop2": Section("loop2", intensity=0.7, parts=LOOP),
-        "loop_b": Section("loop_b", intensity=0.7, parts=LOOP, groove="nokick"),
-        "outro": Section("outro", intensity=0.5, parts=frozenset({"comp", "fx"})),
+    instruments = {
+        "kick": _inst("drum_boombap_kick", GmVoice(drum_note=36)),
+        "snare": _inst("drum_boombap_snare", GmVoice(drum_note=38)),
+        "hat": _inst("nostalgic_hihat", GmVoice(drum_note=42)),
+        "bass": _inst("bass_finger", GmVoice(program=33)),
+        "vinyl": _inst("fx_vinyl", GmVoice(program=122)),
+        "ep": _inst("keys_ep", GmVoice(program=4)),
     }
-    # 8小節（2 pattern）ごとにハットの密度だけが変わる
-    FORM = ("intro", "loop", "loop", "loop2", "loop2", "loop", "loop_b", "loop_b",
-            "loop2", "loop2", "loop", "loop", "outro")
-    GROOVES = {"main": EIGHTHS, "sparse": SPARSE, "nokick": NO_KICK}
-    SWING = groove.SwingConfig(long_speed=7, short_speed=5)
-    BASS = BassSpec("bass", CH_BASS, kind="boombap", vol=52)
-    COMP = CompSpec("ep", CH_EP, kind="half", vol=40, wobble=0x22)
-    FX = FxSpec("vinyl", CH_FX, every=2, vol=22)
+    harmony = Harmony(keys=(2, 4), mode="dorian", progressions=PROGRESSIONS, n_progressions=1)
+    sections = {
+        "intro": Section(intensity=0.5, parts=frozenset({"comp", "fx"})),
+        "loop": Section(intensity=0.7, parts=frozenset({"comp", "bass", "drums", "fx"}), groove="sparse"),
+        "loop2": Section(intensity=0.7, parts=frozenset({"comp", "bass", "drums", "fx"})),
+        "loop_b": Section(intensity=0.7, parts=frozenset({"comp", "bass", "drums", "fx"}), groove="nokick"),
+        "outro": Section(intensity=0.5, parts=frozenset({"comp", "fx"})),
+    }
+    form = ("intro", "loop", "loop", "loop2", "loop2", "loop", "loop_b", "loop_b", "loop2", "loop2", "loop", "loop", "outro")
+    parts = (
+        Part("drums", Groove(GROOVES), pan=128,
+             kit=Kit(groups=(("drums", ("kick", "snare", "hat")),),
+                     priority={"snare": 3, "kick": 2})),
+        Part("bass", BassLine("bass", kind="boombap", vol=52), pan=128),
+        Part("comp", Comp("ep", kind="half", vol=40, wobble=34), pan=128),
+        Part("fx", Fx("vinyl", every=2, vol=22), pan=128),
+    )
+    swing = Swing(7, 5)
+    mod_channels = {4: 1}

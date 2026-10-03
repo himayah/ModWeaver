@@ -1,98 +1,48 @@
-"""free-jazz: フリージャズ / 現代無調音楽（DESIGN.md §6.11）。
+"""free-jazz（旧 genres/free_jazz.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-和声は `harmony.voice()`／`CHORD_QUALITIES` を経由せず、隣接半音を密集させたトーンクラスターを
-``ChordDef`` として直接手組みする（march/nostalgic/maqam と同じ「明示的ボイシング」パターン）。
-``tempo_policy="profile"`` を宣言し、EXT-5①（``core/automation.py`` の ``TempoCurve``）で
-4 pattern を通して連続的にうねる BPM（ルバート）を作る。密なコンポジションルールではなく
-確率密度でテクスチャを作る（各楽器は intensity に応じた確率で発音するかどうかを row ごとに判定する）。
+和声は ``voice()`` を経由せず、隣接半音を密集させたトーンクラスターを ``ChordDef`` として直接手組みする
+（march・nostalgic・maqam と同じ明示的ボイシング）ので ``harmony=None`` とし ``plan()`` を上書きする。
+密なコンポジションルールではなく確率密度でテクスチャを作る（各楽器は intensity に応じた確率で step ごとに鳴らす）。
+4区間（movement_a・b・climax・c）を通して部品 ``tempo_curve`` で BPM を連続的にうねらせる（ルバート）。
+``--tempo`` は開始 BPM で、カーブ全体を ``開始 BPM / 96`` 倍に相似拡大する（現行どおり）。
 """
 from __future__ import annotations
 
 import math
-
 import random
-from dataclasses import dataclass, field
-from typing import Any, Optional
 
-from ..core import automation, synth, synth_presets
-from ..core.model import (
-    Cell,
-    ChannelRole,
-    ChordDef,
-    ChordSlot,
-    MeasureBuffer,
-    MeasureCtx,
-    Pattern,
-    PatternCtx,
-    PatternPlan,
-    RngStreams,
-    SampleSpec,
-    SongPlan,
-)
-from ..core.pitch import fold_into_range
-from ..core.midi import GmVoice
-from ..profiles.base import GenreProfile
-from ..profiles.registry import register_profile
-
-# ============================================================
-# 音域・和声（DESIGN.md §6.11）
-# ============================================================
+from ..core.model import ChordDef, GmVoice
+from ..core.pitch import MODES, Scale, fold_into_range
+from ..core.synth_presets import PRESETS
+from ..framework.context import Generator, MeasureCtx, SectionCtx
+from ..framework.genre import Genre, Instrument, Part, Section
+from ..framework.gens import tempo_curve
+from ..framework.plan import MeasurePlan, Meter, SectionPlan, SongPlan
+from ..framework.registry import register_genre
 
 BASS_REG = (0, 11)                            # arco_bass（shift=-12 → t=12..23）
 CLUSTER_REG = (12, 35)                        # piano_cluster／sax_screech（ともに shift=0）
 CLUSTER_OFFSETS = (0, 1, 2, -1, -2, 6, 7)
 
-INITIAL_BPM = 96                              # SongPlan.bpm（tempo_choices の唯一の値。実テンポ推移は
-                                               # TEMPO_CURVES が決めるため「選択」の意味は薄い）
+INITIAL_BPM = 96                              # tempo_choices の唯一の値。実テンポ推移は TEMPO_CURVES が決める
+METER = Meter(steps=16, steps_per_beat=4)
+MEASURES = 4
+SECTIONS = ("movement_a", "movement_b", "climax", "movement_c")
+INTENSITY = {"movement_a": 0.3, "movement_b": 0.6, "climax": 0.95, "movement_c": 0.2}
 
-
-def _cluster_chord(root_pc: int, label: str, rng: random.Random) -> ChordDef:
-    """root_pc を中心に隣接半音を2〜4個ランダムに選び、密集クラスターを作る（explicit=True 相当）。
-    chord_tones は piano/sax 共有の CLUSTER_REG、bass は別途 BASS_REG に折り返す
-    （楽器ごとに shift が異なり有効な音域が違うため、1つの音域では兼用できない）。
-    """
-    offsets = rng.sample(CLUSTER_OFFSETS, k=rng.randint(2, 4))
-    tones = sorted({fold_into_range(root_pc + o + 12 * 2, *CLUSTER_REG) for o in offsets})
-    bass_note = fold_into_range(root_pc, *BASS_REG)
-    return ChordDef(
-        label=label, bass=bass_note, harmony=bass_note,
-        chord_tones=tuple(tones), scale_tones=tuple(tones), arp=None, explicit=True,
-    )
-
-
-def _movement_slots(rng: random.Random, kind: str, n_clusters: int = 4) -> list[ChordSlot]:
-    return [ChordSlot(_cluster_chord(rng.randint(0, 11), f"{kind}{i}", rng), measures=1)
-            for i in range(n_clusters)]
-
-
-# ============================================================
-# sample 番号 / ChannelPlan（DESIGN.md §6.11）
-# ============================================================
-
-PIANO_CL, ARCO_BASS, SAX_SCR, CYM_SWELL = 1, 2, 3, 4
-SAMPLE_KEYS = ("piano_cluster", "arco_bass", "sax_screech", "cymbal_swell")
-
-CH_PIANO, CH_BASS, CH_SAX, CH_PERC = 0, 1, 2, 3
-
-CHANNEL_PLAN = (
-    ChannelRole("piano", frozenset({PIANO_CL})),
-    ChannelRole("bass", frozenset({ARCO_BASS})),
-    ChannelRole("sax", frozenset({SAX_SCR})),
-    ChannelRole("perc", frozenset({CYM_SWELL})),
-)
-
-# EXT-5①: pattern 境界をまたいで滑らかに繋ぐテンポカーブ（start_bpm は直前 pattern の end_bpm と一致させる）
+# 区間をまたいで滑らかに繋ぐテンポカーブ（start_bpm は直前の区間の end_bpm と一致させる）
 TEMPO_CURVES: dict[str, tuple[tuple[int, int, int, int, str], ...]] = {
     "movement_a": ((96, 82, 0, 63, "ease_out"),),
     "movement_b": ((82, 126, 0, 63, "ease_in"),),
     "climax": ((126, 150, 0, 31, "ease_in"), (150, 126, 32, 63, "ease_out")),
     "movement_c": ((126, 70, 0, 63, "linear"),),
 }
-
-# --tempo で開始 BPM を上書きされたときは、カーブ全体を plan.bpm / INITIAL_BPM 倍に相似拡大する。
-# 拡大後も全点が Fxx の範囲（32..255）に収まる開始 BPM だけを許す（クランプでカーブの形を崩さない）。
+# 拡大後も全点が Fxx の範囲（32..255）に収まる開始 BPM だけを許す（クランプでカーブの形を崩さない）
 _CURVE_POINTS = [b for curves in TEMPO_CURVES.values() for c in curves for b in c[:2]]
 TEMPO_RANGE = (math.ceil(32 * INITIAL_BPM / min(_CURVE_POINTS)), math.floor(255 * INITIAL_BPM / max(_CURVE_POINTS)))
+
+DENSITY = {"bass": 0.18, "piano": 0.25, "perc": 0.08}    # 楽器ごとの発音確率（1 step あたり。intensity 倍率を掛ける）
+SAX_DENSITY_CLIMAX = 0.12
 
 
 def _scaled(bpm: int, start_bpm: int) -> int:
@@ -100,122 +50,115 @@ def _scaled(bpm: int, start_bpm: int) -> int:
 
 
 def _rubato_summary() -> str:
-    """テンポ推移を開始 BPM に対する倍率で表す（--tempo で開始 BPM が変わっても正しい表示になる）。"""
     seq = [INITIAL_BPM]
-    for kind in ("movement_a", "movement_b", "climax", "movement_c"):
-        for _s, end, *_ in TEMPO_CURVES[kind]:
+    for name in SECTIONS:
+        for _s, end, *_ in TEMPO_CURVES[name]:
             seq.append(end)
-    return "Rubato      : " + " -> ".join(f"x{b / INITIAL_BPM:.2f}" for b in seq) + " of start BPM (EXT-5 TempoCurve)"
+    return "Rubato      : " + " -> ".join(f"x{b / INITIAL_BPM:.2f}" for b in seq) + " of start BPM (tempo curve)"
 
 
-# 楽器ごとの発音確率（1 row あたり。intensity 倍率を掛ける）
-DENSITY = {"bass": 0.18, "piano": 0.25, "perc": 0.08}
-SAX_DENSITY_CLIMAX = 0.12
-
-
-# ============================================================
-# 音色合成（core/synth.py の Patch 方式。core/synth_presets.py 参照）
-# ============================================================
-
-def build_free_jazz_samples() -> dict[str, SampleSpec]:
-    """挿入順 = sample 番号（1..4）。"""
-    return {
-        "piano_cluster": synth.render(synth_presets.FREE_PIANO_CLUSTER),
-        "arco_bass": synth.render(synth_presets.FREE_ARCO_BASS),
-        "sax_screech": synth.render(synth_presets.FREE_SAX_SCREECH),
-        "cymbal_swell": synth.render(synth_presets.FREE_CYMBAL_SWELL),
-    }
+def _cluster_chord(root_pc: int, label: str, rng: random.Random) -> ChordDef:
+    """root_pc を中心に隣接半音を2〜4個ランダムに選び、密集クラスターを作る。chord_tones は piano/sax 共有の
+    CLUSTER_REG、bass は別途 BASS_REG に折り返す（楽器ごとに shift が異なり有効な音域が違うため）。"""
+    offsets = rng.sample(CLUSTER_OFFSETS, k=rng.randint(2, 4))
+    tones = sorted({fold_into_range(root_pc + o + 12 * 2, *CLUSTER_REG) for o in offsets})
+    bass_note = fold_into_range(root_pc, *BASS_REG)
+    return ChordDef(label=label, bass=bass_note, harmony=bass_note, chord_tones=tuple(tones),
+                    scale_tones=tuple(tones), arp=None, explicit=True)
 
 
 # ============================================================
-# state
+# ジャンル内のジェネレータ（確率密度のテクスチャ）
 # ============================================================
 
-@dataclass
-class FreeJazzState:
-    extra: dict[str, Any] = field(default_factory=dict)
+class ClusterBass(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        intensity = m.plan.intensity
+        for step in range(m.m.steps):
+            if m.rng.random() < DENSITY["bass"] * intensity:
+                # chord_tones は CLUSTER_REG（piano/sax 用）の音域で arco_bass（shift=-12）には使えないので、
+                # 常に chord.bass（BASS_REG に折り返し済み）を鳴らす。
+                m.note(step, "arco_bass", m.m.chord.bass, vel=min(64, max(1, round(40 * intensity) + 10)))
 
 
-# ============================================================
-# プロファイル本体
-# ============================================================
+class ClusterPiano(Generator):
+    """区間のテンポカーブも書く（音を鳴らさない専用のパートを置くと lane を食うので、先頭のパートに同居させる）。"""
 
-GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
-    "piano_cluster": GmVoice(program=0),
-    "arco_bass": GmVoice(program=43),
-    "sax_screech": GmVoice(program=66),
-    "cymbal_swell": GmVoice(program=119),
-}
+    def section(self, ctx: SectionCtx) -> None:
+        for start_bpm, end_bpm, start_step, end_step, kind in TEMPO_CURVES[ctx.plan.name]:
+            tempo_curve(ctx, _scaled(start_bpm, ctx.bpm), _scaled(end_bpm, ctx.bpm), start_step, end_step, kind)
+        super().section(ctx)
+
+    def measure(self, m: MeasureCtx) -> None:
+        chord, intensity = m.m.chord, m.plan.intensity
+        for step in range(m.m.steps):
+            if m.rng.random() < DENSITY["piano"] * intensity:
+                m.note(step, "piano_cluster", m.rng.choice(chord.chord_tones or (chord.harmony,)),
+                       vel=min(64, max(1, round(45 * intensity) + 8)))
 
 
-@register_profile
-class FreeJazzProfile(GenreProfile):
+class ClusterSax(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.name != "climax":
+            return
+        chord = m.m.chord
+        for step in range(m.m.steps):
+            if m.rng.random() < SAX_DENSITY_CLIMAX:
+                m.note(step, "sax_screech", m.rng.choice(chord.chord_tones or (chord.harmony,)), vel=54)
+
+
+class CymbalSwells(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        intensity = m.plan.intensity
+        for step in range(m.m.steps):
+            if m.rng.random() < DENSITY["perc"] * intensity:
+                m.note(step, "cymbal_swell", vel=max(1, round(50 * intensity)))
+
+
+def _inst(key: str, gm: GmVoice) -> Instrument:
+    return Instrument(patch=PRESETS[key], gm=gm)
+
+
+@register_genre
+class FreeJazzGenre(Genre):
     id = "free-jazz"
+    category = "style"
     display_name = "Free Jazz"
     description = "フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化）"
     description_en = "Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes)"
     title = "Free Jazz"
-    default_filename = "FreeJazz.mod"
     tempo_choices = (INITIAL_BPM,)
     tempo_range = TEMPO_RANGE
-    rows_per_measure = 16
-    channel_plan = CHANNEL_PLAN
-    gm_voices = GM_VOICES
-    tempo_policy = "profile"          # apply_tempo をスキップ（TempoCurve が BPM を管理する）
-    rng_mode = "streams"
-    strict_buffers = True
 
-    grammar = {
-        "movement_a": "_texture", "movement_b": "_texture",
-        "climax": "_texture", "movement_c": "_texture",
+    instruments = {
+        "piano_cluster": _inst("free_piano_cluster", GmVoice(program=0)),
+        "arco_bass": _inst("free_arco_bass", GmVoice(program=43)),
+        "sax_screech": _inst("free_sax_screech", GmVoice(program=66)),
+        "cymbal_swell": _inst("free_cymbal_swell", GmVoice(program=119)),
     }
+    harmony = None   # 手組みのクラスター。plan() を全面的に上書きする
+    sections = {name: Section(meter=METER, measures=MEASURES, intensity=INTENSITY[name]) for name in SECTIONS}
+    form = SECTIONS    # 通作形式。ループしない
+    parts = (
+        Part("piano", ClusterPiano(), pan=64),
+        Part("bass", ClusterBass(), pan=192),
+        Part("sax", ClusterSax(), pan=192),
+        Part("perc", CymbalSwells(), pan=64),
+    )
+    mod_channels = {4: 1}
 
-    def build_samples(self) -> dict[str, SampleSpec]:
-        return build_free_jazz_samples()
-
-    # ------------------------------------------------------------ 計画
-    def plan(self, rng: RngStreams) -> SongPlan:
-        patterns = [
-            PatternPlan("movement_a", _movement_slots(rng.plan, "a"), intensity=0.3),
-            PatternPlan("movement_b", _movement_slots(rng.plan, "b"), intensity=0.6),
-            PatternPlan("climax", _movement_slots(rng.plan, "c", n_clusters=4), intensity=0.95),
-            PatternPlan("movement_c", _movement_slots(rng.plan, "d"), intensity=0.2),
-        ]
-        order = [0, 1, 2, 3]              # 通作形式。ループしない
-        return SongPlan(
-            bpm=INITIAL_BPM, patterns=patterns, order=order, key_pc=None,
-            summary=[_rubato_summary()],
-        )
-
-    def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> FreeJazzState:
-        return FreeJazzState()
-
-    def compose_measure(self, mctx: MeasureCtx, state: FreeJazzState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        getattr(self, self.grammar[mctx.pattern.kind])(mctx, state, rng, buf)
-
-    def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: FreeJazzState, rng: RngStreams) -> None:
-        # sustain 楽器（piano_cluster/arco_bass はループではないが sax/perc 含め全て自然減衰）を
-        # 念のため消音してから、EXT-5 のテンポカーブを描画する（row 単位の Fxx 挿入。DESIGN.md §4.9）。
-        for ch in (CH_PIANO, CH_BASS, CH_SAX, CH_PERC):
-            pattern.put(pattern.rows - 1, ch, Cell(None, 0, vol=0))
-        for start_bpm, end_bpm, start_row, end_row, curve_type in TEMPO_CURVES[pctx.kind]:
-            curve = automation.TempoCurve(_scaled(pctx.bpm, start_bpm), _scaled(pctx.bpm, end_bpm),
-                                          start_row, end_row, curve_type)
-            automation.render_tempo_curve(pattern, curve)
-
-    # ------------------------------------------------------------ 文法（確率密度のテクスチャ）
-    def _texture(self, mctx: MeasureCtx, st: FreeJazzState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, chord, intensity = mctx.instruments, mctx.chord, mctx.pattern.intensity
-        for row in range(mctx.measure_rows):
-            if rng.bass.random() < DENSITY["bass"] * intensity:
-                # chord.chord_tones は CLUSTER_REG（piano/sax 用）の音域であり arco_bass（shift=-12）
-                # には使えないため、常に chord.bass（BASS_REG に折り返し済み）を鳴らす。
-                buf.put(row, CH_BASS, ins["arco_bass"].cell(chord.bass, vol=max(1, round(40 * intensity) + 10)))
-            if rng.harmony.random() < DENSITY["piano"] * intensity:
-                note = rng.harmony.choice(chord.chord_tones or (chord.harmony,))
-                buf.put(row, CH_PIANO, ins["piano_cluster"].cell(note, vol=max(1, round(45 * intensity) + 8)))
-            if mctx.pattern.kind == "climax" and rng.melody.random() < SAX_DENSITY_CLIMAX:
-                note = rng.melody.choice(chord.chord_tones or (chord.harmony,))
-                buf.put(row, CH_SAX, ins["sax_screech"].cell(note, vol=54))
-            if rng.drums.random() < DENSITY["perc"] * intensity:
-                buf.put(row, CH_PERC, ins["cymbal_swell"].cell(vol=max(1, round(50 * intensity))))
+    def plan(self, rng: random.Random) -> SongPlan:
+        scale = Scale(0, MODES["ionian"])
+        sections = {}
+        for name in SECTIONS:
+            measures = []
+            chords = [_cluster_chord(rng.randint(0, 11), f"{name[-1]}{i}", rng) for i in range(MEASURES)]
+            for i, chord in enumerate(chords):
+                measures.append(MeasurePlan(index=i, start=i * METER.steps, steps=METER.steps, chord=chord,
+                                             quality="maj", chord_offset=0, next_chord=chords[(i + 1) % MEASURES]))
+            sections[name] = SectionPlan(
+                name=name, kind=name, meter=METER, measures=tuple(measures), intensity=INTENSITY[name],
+                key_offset=0, tonic=0, scale=scale, parts=frozenset(p.name for p in self.parts), swing=None,
+                section=self.sections[name], extra={})
+        return SongPlan(bpm=INITIAL_BPM, key_pc=0, sections=sections, order=list(SECTIONS),
+                        summary=[_rubato_summary()])

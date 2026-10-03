@@ -1,155 +1,202 @@
-"""suspense-slow: 低速・重苦しい緊張（DESIGN.md §6.3）。
+"""suspense-slow（旧 genres/suspense_slow.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-構成: hush → pedal → phrygian → pedal → shock → aftermath（``order=[0,1,2,1,3,4]``、約 85 秒）。
-文法の核は「心拍」「無音→突発アクセント（anvil）」「ペダルの持続音＋アルペジオ弦」。
+構成: hush → pedal → phrygian → pedal → shock → aftermath。文法の核は「心拍」「無音→突発アクセント（anvil）」
+「ペダルの持続音＋アルペジオ弦」。dropout・anvil・スタブの位置は ``plan()`` が決めて ``SectionPlan.extra`` に置き、
+各パートのジェネレータが読む。持続音（drone・strings・lead）を止める無音は、それぞれの持ち主のパートが ``off`` を書く。
 """
 from __future__ import annotations
 
-from ..core.composer import RhythmMotif, ScaleRules, articulate, ramp
-from ..core.model import Cell, MeasureBuffer, MeasureCtx, Pattern, PatternCtx, PatternPlan, RngStreams, SongPlan
-from ..profiles.registry import register_profile
-from ..profiles.suspense_common import (
-    CH_FX, CH_LEAD, CH_LOW, CH_TEX, KEY_PC, SHOCK_GUARD_ROWS,
-    PatternState, anvil_clear_row, SuspenseBase, heartbeat, pizz_ostinato, progression_summary, put_oneshot_off,
-    silence_run, strings_chord, swoosh_start_row, voice_progression,
+import random
+
+from ..core.composer import RhythmMotif, ScaleRules, ramp
+from ..framework.context import Generator, MeasureCtx, SectionCtx
+from ..framework.genre import Genre, Part, Section
+from ..framework.plan import SongPlan
+from ..framework.registry import register_genre
+from ..framework.score import Glide, Vibrato
+from ._suspense import (
+    INSTRUMENTS, KEY_PC, LEAD_KIT, MEASURES, PAN_DRONE, PAN_LEAD, PAN_PULSE, PAN_TEXTURE, PULSE_KIT,
+    SHOCK_GUARD_ROWS, TEXTURE_KIT, anvil_clear_row, heartbeat, lead_generator, pizz_root_note, progression_summary,
+    section_plan, strings_chord, swoosh_start_row,
 )
 
 GLIDE_PARAM = 0x0A          # lead の 3xx（ポルタメント）速度
 VIBRATO_PARAM = 0x46        # lead の 4xy（ビブラート）
-STAB_ROW = 40               # pedal pattern の突発 pizz スタブの位置（m2 row 8）
+STAB_ROW = 40               # pedal 区間の突発 pizz スタブの位置（m2 step 8）
+STEPS = 16
 
 
-@register_profile
-class SuspenseSlowProfile(SuspenseBase):
+class SlowPulse(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        kind, i, ex = m.plan.kind, m.m.index, m.plan.extra
+        if kind == "hush":
+            if i >= 2:                                   # m2 から心拍（vol 26→40）
+                for b in range(4):
+                    lub = ramp(26, 40, (i - 2) * 4 + b, 8)
+                    heartbeat(m, range(b * 4, b * 4 + 1), lub, round(lub * 0.7))
+        elif kind == "pedal":
+            if i != ex["dropout"]:                       # 心拍・持続音が途切れる（無音）
+                first = anvil_clear_row(m) if i == ex["anvil"] else 0   # anvil の余韻が切れないよう心拍を遅らせる
+                heartbeat(m, range(first, STEPS, 4), 38, 26)
+            if i == ex["anvil"]:                         # dropout 直後の衝撃
+                m.note(0, "anvil", vel=64)
+        elif kind == "phrygian":
+            heartbeat(m, range(0, STEPS, 4), 40, 28)
+        elif kind == "shock":
+            if i == 0:                                   # 心拍加速（vol 40→56、毎拍）
+                for b in range(4):
+                    lub = ramp(40, 56, b, 4)
+                    heartbeat(m, range(b * 4, b * 4 + 1), lub, lub - 12)
+            elif i == 2:                                 # 衝撃の直前に終わる swoosh
+                m.note(swoosh_start_row(m), "swoosh", vel=50)
+            elif i == 3:
+                m.note(0, "anvil", vel=64)
+        elif kind == "aftermath":
+            rows = (0, 8) if i < 3 else (0,)             # 心拍は 2 拍ごと。最終小節は step 0 の lub のみ
+            for k, r in enumerate(rows):
+                lub = ramp(30, 10, i * 2 + k, 7)
+                m.note(r, "heart", vel=lub)
+                if i < 3:
+                    m.note(r + 2, "heart", vel=max(1, round(lub * 0.7)))
+
+
+class SlowDrone(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        kind, i, ex = m.plan.kind, m.m.index, m.plan.extra
+        chord = m.m.chord
+        if kind == "pedal":
+            if i == ex["dropout"]:
+                m.off(0, "drone")
+            else:
+                m.note(0, "drone", chord.bass, vel=50)
+        elif kind == "phrygian":
+            m.note(0, "drone", chord.bass, vel=50)
+        elif kind == "shock":
+            if i == 0:
+                m.note(0, "drone", chord.bass, vel=50)   # phrygian から鳴り続けていた持続音（区間は音を持ち越さない）
+            elif i == 1:
+                m.off(0, "drone")                        # 全 16 step 無音
+            elif i == 3:
+                m.note(0, "drone", chord.bass, vel=50)
+        elif kind == "aftermath":
+            m.note(0, "drone", chord.bass, vel=ramp(40, 0, i, 4))
+
+
+class SlowTexture(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        kind, i, ex = m.plan.kind, m.m.index, m.plan.extra
+        chord = m.m.chord
+        if kind == "hush":
+            m.note(0, "strings", chord.harmony, vel=(6, 14, 22, 30)[i])
+        elif kind == "pedal":
+            if i == ex["dropout"]:
+                m.off(0, "strings")
+            else:
+                strings_chord(m)
+        elif kind == "phrygian":
+            strings_chord(m)
+        elif kind == "shock":
+            if i == 0:
+                strings_chord(m)
+            elif i == 1:
+                m.off(0, "strings")
+            elif i == 3:                                 # pizz ostinato（vol 30→60）
+                steps = list(range(2, STEPS, 2))
+                root = pizz_root_note(chord)
+                for k, r in enumerate(steps):
+                    m.note(r, "pizz", root, vel=ramp(30, 60, k, len(steps)))
+        elif kind == "aftermath":
+            m.note(0, "strings", chord.harmony, vel=ramp(34, 8, i, 4))
+
+
+class SlowLead(Generator):
+    def section(self, ctx: SectionCtx) -> None:
+        if ctx.plan.kind == "phrygian":
+            ctx.state["gen"] = lead_generator(ctx.rng, ScaleRules(dissonance_weight=0.6, leap_probability=0.35),
+                                              ctx.plan)
+            ctx.state["prev"] = None
+        super().section(ctx)
+
+    def measure(self, m: MeasureCtx) -> None:
+        kind, i, ex = m.plan.kind, m.m.index, m.plan.extra
+        chord = m.m.chord
+        if kind == "pedal":
+            stab = ex["stab"]
+            if stab is not None and stab // STEPS == i:      # 突発 pizz スタブ
+                m.note(stab % STEPS, "pizz", pizz_root_note(chord), vel=64)
+        elif kind == "phrygian":                             # 1〜2 音/小節（2 音目はポルタメント）
+            two = m.rng.random() < 0.5
+            motif = RhythmMotif((0, 8)) if two else RhythmMotif((0,))
+            events, m.state["prev"] = m.state["gen"].bar(motif, chord, m.state["prev"], rows=STEPS)
+            if two:
+                m.note(events[0].row, "lead", events[0].note, vel=events[0].vol, dur=events[0].dur)
+                e2 = events[1]
+                m.note(e2.row, "lead", e2.note, vel=e2.vol, dur=STEPS - 1 - e2.row, arts=(Glide(param=GLIDE_PARAM),))
+            else:
+                e = events[0]
+                m.note(e.row, "lead", e.note, vel=e.vol, dur=max(1, round(e.dur * 0.9)))
+        elif kind == "shock":
+            if i == 1:
+                m.off(0, "lead")
+            elif i == 3:                                     # 高音 lead（区間の終わりまで伸ばす）
+                m.note(0, "lead", max(chord.chord_tones), arts=(Vibrato(VIBRATO_PARAM),))
+
+
+@register_genre
+class SuspenseSlowGenre(Genre):
     id = "suspense-slow"
     aliases = ("suspense",)
+    category = "style"
     display_name = "Suspense Slow"
     description = "低速・重苦しい緊張。心拍と無音、突発の金属音"
     description_en = "Slow, heavy tension: heartbeat and silence, sudden metallic hits"
-    category = "style"
     title = "Suspense Slow"
-    default_filename = "SuspenseSlow.mod"
     tempo_choices = (64, 66, 68, 70, 72)
 
-    grammar = {
-        "hush": "_hush", "pedal": "_pedal", "phrygian": "_phrygian", "shock": "_shock", "aftermath": "_aftermath",
+    instruments = INSTRUMENTS
+    harmony = None   # 和声は区間ごとに手組み（voice(arp=True)）。plan() を全面的に上書きする
+    sections = {
+        "hush": Section(measures=MEASURES, intensity=0.2, parts=frozenset({"pulse", "texture"})),
+        "pedal": Section(measures=MEASURES, intensity=0.5, parts=frozenset({"pulse", "drone", "texture", "lead"})),
+        "phrygian": Section(measures=MEASURES, intensity=0.6, parts=frozenset({"pulse", "drone", "texture", "lead"})),
+        "shock": Section(measures=MEASURES, intensity=0.9, parts=frozenset({"pulse", "drone", "texture", "lead"})),
+        "aftermath": Section(measures=MEASURES, intensity=0.1, parts=frozenset({"pulse", "drone", "texture"})),
     }
-    # 進行 A・B の候補（異なるものを plan ストリームで選ぶ）
-    progression_names = ("pedal", "tritone", "phrygian")
+    form = ("hush", "pedal", "phrygian", "pedal", "shock", "aftermath")
+    parts = (
+        Part("pulse", SlowPulse(), pan=PAN_PULSE, kit=PULSE_KIT),
+        Part("drone", SlowDrone(), pan=PAN_DRONE),
+        Part("texture", SlowTexture(), pan=PAN_TEXTURE, kit=TEXTURE_KIT),
+        Part("lead", SlowLead(), pan=PAN_LEAD, kit=LEAD_KIT),
+    )
+    mod_channels = {4: 1}
 
-    # ------------------------------------------------------------ 計画
-    def plan(self, rng: RngStreams) -> SongPlan:
+    progression_names = ("pedal", "tritone", "phrygian")   # 進行 A・B の候補（異なるものを plan で選ぶ）
+
+    def plan(self, rng: random.Random) -> SongPlan:
         names = list(self.progression_names)
-        ia = rng.plan.randrange(len(names))
-        ib = (ia + rng.plan.randint(1, len(names) - 1)) % len(names)
+        ia = rng.randrange(len(names))
+        ib = (ia + rng.randint(1, len(names) - 1)) % len(names)
         a, b = names[ia], names[ib]
-        bpm = rng.plan.choice(list(self.tempo_choices))
-        patterns = [
-            PatternPlan("hush", voice_progression(a), intensity=0.2),
-            PatternPlan("pedal", voice_progression(a), intensity=0.5),
-            PatternPlan("phrygian", voice_progression(b), intensity=0.6),
-            PatternPlan("shock", voice_progression(b), intensity=0.9),
-            PatternPlan("aftermath", voice_progression(a), intensity=0.1),
-        ]
-        return SongPlan(
-            bpm=bpm, patterns=patterns, order=[0, 1, 2, 1, 3, 4], key_pc=KEY_PC,
-            summary=[progression_summary("Theme A", a), progression_summary("Theme B", b)],
-        )
+        bpm = rng.choice(list(self.tempo_choices))
 
-    def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> PatternState:
-        st = PatternState()
-        if pctx.kind == "pedal":
-            # 乱数は他パートへ影響しないよう、使う・使わないに関わらず固定順で引く
-            st.dropout = rng.drums.choice([1, 2])
-            if rng.drums.random() < 0.5:
-                st.anvil_measure = st.dropout + 1
-            if rng.melody.random() < 0.5:
-                st.stab_row = STAB_ROW
-            anvil_row = None if st.anvil_measure is None else st.anvil_measure * self.rows_per_measure
-            if anvil_row is not None and st.stab_row is not None and anvil_row - SHOCK_GUARD_ROWS <= st.stab_row < anvil_row:
-                st.stab_row = None        # Shock hit の直前 8 row に pizz を置かない
-        elif pctx.kind == "phrygian":
-            st.extra["gen"] = self.lead_generator(rng, ScaleRules(dissonance_weight=0.6, leap_probability=0.35))
-        return st
+        # pedal の dropout・anvil・スタブ。乱数は使う・使わないに関わらず固定の順で引く
+        dropout = rng.choice([1, 2])
+        anvil = dropout + 1 if rng.random() < 0.5 else None
+        stab = STAB_ROW if rng.random() < 0.5 else None
+        if anvil is not None and stab is not None and anvil * STEPS - SHOCK_GUARD_ROWS <= stab < anvil * STEPS:
+            stab = None                  # 衝撃の直前 8 step に pizz を置かない
 
-    def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: PatternState, rng: RngStreams) -> None:
-        # lead を使う pattern は末尾で消音する（次の pattern へ鳴り続けない）
-        if pctx.kind in ("phrygian", "shock"):
-            pattern.put(pattern.rows - 1, CH_LEAD, Cell(None, 0, vol=0))
+        def sec(name: str, prog: str, **extra):
+            decl = self.sections[name]
+            return section_plan(name, prog, decl, decl.parts, **extra)
 
-    # ------------------------------------------------------------ 各 pattern の文法
-    def _hush(self, mctx: MeasureCtx, st: PatternState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, m = mctx.instruments, mctx.measure_idx
-        buf.put(0, CH_TEX, ins["strings"].cell(mctx.chord.harmony, vol=(6, 14, 22, 30)[m]))
-        if m >= 2:                                   # m2 から心拍（vol 26→40）
-            for b in range(4):
-                lub = ramp(26, 40, (m - 2) * 4 + b, 8)
-                heartbeat(buf, ins["heart"], range(b * 4, b * 4 + 1), lub, round(lub * 0.7))
-
-    def _pedal(self, mctx: MeasureCtx, st: PatternState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, m, bpm, chord = mctx.instruments, mctx.measure_idx, mctx.pattern.bpm, mctx.chord
-        if m == st.dropout:                          # 心拍・持続音が途切れる（無音）
-            buf.put(0, CH_LOW, ins["drone"].off())
-            buf.put(0, CH_TEX, ins["strings"].off())
-        else:
-            first = anvil_clear_row(bpm) if m == st.anvil_measure else 0     # anvil の余韻が切れないよう心拍を遅らせる
-            heartbeat(buf, ins["heart"], range(first, 16, 4), 38, 26)
-            buf.put(0, CH_LOW, ins["drone"].cell(chord.bass, vol=50))
-            strings_chord(buf, ins["strings"], 0, chord)
-        if m == st.anvil_measure:                    # dropout 直後の衝撃
-            buf.put(0, CH_FX, ins["anvil"].cell(vol=64))
-        if st.stab_row is not None and st.stab_row // self.rows_per_measure == m:
-            r = st.stab_row % self.rows_per_measure
-            buf.put(r, CH_LEAD, ins["pizz"].cell(self.pizz_root_note(chord), vol=64))
-            put_oneshot_off(buf, CH_LEAD, r, ins["pizz"], bpm)
-
-    def _phrygian(self, mctx: MeasureCtx, st: PatternState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, chord = mctx.instruments, mctx.chord
-        heartbeat(buf, ins["heart"], range(0, 16, 4), 40, 28)
-        buf.put(0, CH_LOW, ins["drone"].cell(chord.bass, vol=50))
-        strings_chord(buf, ins["strings"], 0, chord)
-        # lead: 1〜2 音/measure（2 音目はポルタメント）
-        gen, lead = st.extra["gen"], ins["lead"]
-        two = rng.melody.random() < 0.5
-        motif = RhythmMotif((0, 8)) if two else RhythmMotif((0,))
-        events, st.lead_prev = gen.bar(motif, chord, st.lead_prev, rows=self.rows_per_measure)
-        if two:
-            articulate(buf, CH_LEAD, events, lead, gate=1.0)
-            e2 = events[1]
-            buf.replace(e2.row, CH_LEAD, lead.cell(e2.note, effect=3, param=GLIDE_PARAM, keep_sample=True))
-            buf.put(self.rows_per_measure - 1, CH_LEAD, lead.off())
-        else:
-            articulate(buf, CH_LEAD, events, lead, gate=0.9)
-
-    def _shock(self, mctx: MeasureCtx, st: PatternState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, m, bpm, chord = mctx.instruments, mctx.measure_idx, mctx.pattern.bpm, mctx.chord
-        rpm = self.rows_per_measure
-        if m == 0:                                   # 心拍加速（vol 40→56、毎拍）
-            for b in range(4):
-                lub = ramp(40, 56, b, 4)
-                heartbeat(buf, ins["heart"], range(b * 4, b * 4 + 1), lub, lub - 12)
-            strings_chord(buf, ins["strings"], 0, chord)
-        elif m == 1:                                 # 全 16 row 無音（持続音を消す）
-            silence_run(buf, 0, ins)
-        elif m == 2:                                 # 衝撃の直前に終わる swoosh
-            buf.put(swoosh_start_row(rpm, bpm), CH_FX, ins["swoosh"].cell(vol=50))
-        else:                                        # 衝撃: anvil、drone、pizz ostinato、高音 lead
-            buf.put(0, CH_FX, ins["anvil"].cell(vol=64))
-            buf.put(0, CH_LOW, ins["drone"].cell(chord.bass, vol=50))
-            rows = list(range(2, rpm, 2))
-            root = self.pizz_root_note(chord)
-            pizz_ostinato(buf, ins["pizz"], CH_TEX, rows, [root] * len(rows),
-                          [ramp(30, 60, i, len(rows)) for i in range(len(rows))])
-            buf.put(0, CH_LEAD, ins["lead"].cell(max(chord.chord_tones), effect=4, param=VIBRATO_PARAM))
-
-    def _aftermath(self, mctx: MeasureCtx, st: PatternState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, m, chord = mctx.instruments, mctx.measure_idx, mctx.chord
-        heart = ins["heart"]
-        rows = (0, 8) if m < 3 else (0,)             # 心拍は 2 拍ごと。最終 measure は row 0 の lub のみ
-        for i, r in enumerate(rows):
-            lub = ramp(30, 10, m * 2 + i, 7)
-            buf.put(r, CH_FX, heart.cell(vol=lub))
-            if m < 3:
-                buf.put(r + 2, CH_FX, heart.cell(vol=max(1, round(lub * 0.7))))
-        buf.put(0, CH_LOW, ins["drone"].cell(chord.bass, vol=ramp(40, 0, m, 4)))
-        buf.put(0, CH_TEX, ins["strings"].cell(chord.harmony, vol=ramp(34, 8, m, 4)))
+        sections = {
+            "hush": sec("hush", a),
+            "pedal": sec("pedal", a, dropout=dropout, anvil=anvil, stab=stab),
+            "phrygian": sec("phrygian", b),
+            "shock": sec("shock", b),
+            "aftermath": sec("aftermath", a),
+        }
+        return SongPlan(bpm=bpm, key_pc=KEY_PC, sections=sections, order=list(self.form),
+                        summary=[progression_summary("Theme A", a), progression_summary("Theme B", b)])

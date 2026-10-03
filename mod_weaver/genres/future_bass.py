@@ -1,73 +1,25 @@
-"""future-bass: フューチャーベース / グリッチ（DESIGN.md §6.9）。
+"""future-bass（旧 genres/future_bass.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-1 measure = 16 row = 4/4（標準16分格子）。EXT-4（``core/mixer.py``）のサイドチェイン・ダッキングと
-サンプル・スライサーを実証する最初のジャンル。Eb メジャーの I-V-vi-IV を4 measure=1 pattern で回す。
+1小節 = 16 step = 4/4。キック（とクラップ）をトリガにしたサイドチェイン・ダッキング（``Genre.mix``）と、
+サンプル・スライサー（vocal chop。``Offset(i / N_SLICES)``）が特徴。Eb メジャーの I-V-vi-IV を4小節で回す。
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
-
-from ..core import mixer, synth, synth_presets
-from ..core.harmony import Registers, voice
-from ..core.model import (
-    Cell,
-    ChannelRole,
-    ChordSlot,
-    ChordSpec,
-    MeasureBuffer,
-    MeasureCtx,
-    Pattern,
-    PatternCtx,
-    PatternPlan,
-    RngStreams,
-    SampleSpec,
-    SongPlan,
-)
-from ..core.pitch import MODES, Scale
-from ..core.midi import GmVoice
-from ..profiles.base import GenreProfile
-from ..profiles.registry import register_profile
-
-# ============================================================
-# 音域・調・進行（DESIGN.md §6.9）
-# ============================================================
+from ..core.harmony import Registers
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.context import Generator, MeasureCtx
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section, Sidechain
+from ..framework.registry import register_genre
+from ..framework.score import Offset
 
 KEY_PC = 3                                    # Eb
 BASS_REG = (0, 11)                            # sub（shift=-12 → t=12..23）
 CHORD_REG = (12, 23)                          # supersaw の根音（chord.harmony）
 UNUSED_MELODY_REG = (24, 35)                  # Registers の必須フィールド（future-bass では未使用）
-REGISTERS = Registers(bass=BASS_REG, harmony=CHORD_REG, melody=UNUSED_MELODY_REG)
 
 # (root, quality) — Eb（KEY_PC）基準の半音オフセット。I - V - vi - IV
 PROGRESSION = (ChordSpec(0, "maj"), ChordSpec(7, "maj"), ChordSpec(9, "min"), ChordSpec(5, "maj"))
-
-
-def voice_progression() -> list[ChordSlot]:
-    scale = Scale(KEY_PC, MODES["ionian"])
-    return [ChordSlot(voice(spec, KEY_PC, scale, REGISTERS), measures=1) for spec in PROGRESSION]
-
-
-def progression_summary() -> str:
-    chords = " - ".join(s.chord.label for s in voice_progression())
-    return f"Drop progression   : I-V-vi-IV -> {chords}"
-
-
-# ============================================================
-# sample 番号 / ChannelPlan（DESIGN.md §6.9）
-# ============================================================
-
-KICK, SUB, SAW, VOX, CLAP = 1, 2, 3, 4, 5
-SAMPLE_KEYS = ("kick", "sub", "saw", "vox", "clap")
-
-CH_KICK, CH_BASS, CH_CHORD, CH_LEAD = 0, 1, 2, 3
-
-CHANNEL_PLAN = (
-    ChannelRole("kick", frozenset({KICK, CLAP}), {CLAP: 2, KICK: 1}),
-    ChannelRole("bass", frozenset({SUB})),
-    ChannelRole("chord", frozenset({SAW})),
-    ChannelRole("lead", frozenset({VOX})),
-)
 
 FOUR_ON_FLOOR = (0, 4, 8, 12)
 CLAP_BACKBEAT = (4, 12)
@@ -75,147 +27,86 @@ CLAP_OFFBEAT_8TH = (2, 6, 10, 14)          # buildup のハイハット代用
 VOCAL_CHOP_ROWS = (0, 2, 4, 6, 8, 10, 12, 14)
 N_SLICES = 6
 
-# EXT-4 サイドチェイン設定（DESIGN.md §6.9）
-# CH_KICK は kick/clap を優先度共有するチャンネルのため（DESIGN.md §6.9）、backbeat（row 4,12）では
-# clap が kick を置換して実際のセルには clap しか残らない。ドロップの「4つ打ちポンピング」感を
-# 4拍とも保つため、kick と clap の両方をトリガとして登録する（実運用のサイドチェインも通常
-# キック単体ではなく「拍の打点」全体をトリガに使う）。
-SIDECHAIN_RULES = (
-    mixer.SidechainRule(trigger_sample=KICK, target_channel=CH_BASS, duck_ratio=0.25, release_rows=3),
-    mixer.SidechainRule(trigger_sample=KICK, target_channel=CH_CHORD, duck_ratio=0.35, release_rows=4),
-    mixer.SidechainRule(trigger_sample=CLAP, target_channel=CH_BASS, duck_ratio=0.25, release_rows=3),
-    mixer.SidechainRule(trigger_sample=CLAP, target_channel=CH_CHORD, duck_ratio=0.35, release_rows=4),
-)
+
+class FutureKick(Generator):
+    """buildup は kick 4つ打ち＋clap を8分オフビートへ（ハイハット代わり）、drop は kick 4つ打ち＋clap のバックビート。"""
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "buildup":
+            for step in FOUR_ON_FLOOR:
+                m.note(step, "kick", vel=56)
+            for step in CLAP_OFFBEAT_8TH:
+                m.note(step, "clap", vel=32)
+        else:
+            for step in FOUR_ON_FLOOR:
+                m.note(step, "kick", vel=58)
+            for step in CLAP_BACKBEAT:
+                m.note(step, "clap", vel=44)       # Kit の優先度でバックビートのキックに勝つ
 
 
-def _apply_sidechain(song, plan) -> None:
-    """``post_processors`` エントリ。全 pattern にサイドチェイン・ダッキングを適用する（EXT-4）。"""
-    mixer.apply_sidechain(song, SIDECHAIN_RULES)
+class SustainedChord(Generator):
+    """区間の各小節の頭に持続音を1つ。drop は ``intensity × 56``、breakdown・outro は kick 抜きで柔らかく ``intensity × 48``。"""
+
+    def __init__(self, inst: str, pitch_of) -> None:
+        self.inst = inst
+        self.pitch_of = pitch_of
+
+    def measure(self, m: MeasureCtx) -> None:
+        base = 56 if m.plan.kind == "drop" else 48
+        m.note(0, self.inst, self.pitch_of(m.m.chord), vel=max(1, round(base * m.plan.intensity)))
 
 
-# ============================================================
-# 音色合成（core/synth.py の Patch 方式。core/synth_presets.py 参照）
-# ============================================================
+class VocalChop(Generator):
+    """vox のみ。長尺サンプルを N_SLICES 個のシラブルに分割して叩く（``Offset``）。音量はサンプル既定音量。"""
 
-def build_future_bass_samples() -> dict[str, SampleSpec]:
-    """挿入順 = sample 番号（1..5）。"""
-    return {
-        "kick": synth.render(synth_presets.FB_KICK),
-        "sub": synth.render(synth_presets.FB_SUB),
-        "saw": synth.render(synth_presets.FB_SUPERSAW),
-        "vox": synth.render(synth_presets.FB_VOCAL_CHOP),
-        "clap": synth.render(synth_presets.FB_CLAP),
-    }
+    def measure(self, m: MeasureCtx) -> None:
+        for step in VOCAL_CHOP_ROWS:
+            if m.rng.random() < 0.7:
+                i = m.rng.randrange(N_SLICES)
+                m.note(step, "vox", arts=(Offset(i / N_SLICES),))
 
 
-# ============================================================
-# state
-# ============================================================
-
-@dataclass
-class FutureBassState:
-    extra: dict[str, Any] = field(default_factory=dict)
+def _inst(key: str, gm: GmVoice) -> Instrument:
+    return Instrument(patch=PRESETS[key], gm=gm)
 
 
-# ============================================================
-# プロファイル本体
-# ============================================================
-
-GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
-    "kick": GmVoice(drum_note=36),
-    "sub": GmVoice(program=38),
-    "saw": GmVoice(program=81),
-    "vox": GmVoice(program=53),
-    "clap": GmVoice(drum_note=39),
-}
-
-
-@register_profile
-class FutureBassProfile(GenreProfile):
+@register_genre
+class FutureBassGenre(Genre):
     id = "future-bass"
+    category = "style"
     display_name = "Future Bass"
     description = "フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV"
     description_en = "Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV"
     title = "Future Bass"
-    default_filename = "FutureBass.mod"
     tempo_choices = (148, 150, 152, 155, 160)
-    rows_per_measure = 16
-    channel_plan = CHANNEL_PLAN
-    gm_voices = GM_VOICES
-    tempo_policy = "engine"
-    rng_mode = "streams"
-    strict_buffers = True
 
-    post_processors = (_apply_sidechain,)
-
-    grammar = {
-        "intro_chop": "_intro_chop", "buildup": "_buildup",
-        "drop": "_drop", "breakdown": "_breakdown", "outro": "_breakdown",
+    instruments = {
+        "kick": _inst("fb_kick", GmVoice(drum_note=36)),
+        "sub": _inst("fb_sub", GmVoice(program=38)),
+        "saw": _inst("fb_supersaw", GmVoice(program=81)),
+        "vox": _inst("fb_vocal_chop", GmVoice(program=53)),
+        "clap": _inst("fb_clap", GmVoice(drum_note=39)),
     }
-
-    def build_samples(self) -> dict[str, SampleSpec]:
-        return build_future_bass_samples()
-
-    # ------------------------------------------------------------ 計画
-    def plan(self, rng: RngStreams) -> SongPlan:
-        bpm = rng.plan.choice(list(self.tempo_choices))
-        slots = voice_progression()
-        patterns = [
-            PatternPlan("intro_chop", slots, intensity=0.3),
-            PatternPlan("buildup", slots, intensity=0.5),
-            PatternPlan("drop", slots, intensity=1.0),
-            PatternPlan("breakdown", slots, intensity=0.4),
-            PatternPlan("outro", slots, intensity=0.25),
-        ]
-        order = [0, 0, 1, 2, 2, 3, 2, 2, 4]
-        return SongPlan(bpm=bpm, patterns=patterns, order=order, key_pc=KEY_PC, summary=[progression_summary()])
-
-    def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> FutureBassState:
-        return FutureBassState()
-
-    def compose_measure(self, mctx: MeasureCtx, state: FutureBassState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        getattr(self, self.grammar[mctx.pattern.kind])(mctx, state, rng, buf)
-
-    def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: FutureBassState, rng: RngStreams) -> None:
-        # sub/saw（ループ音色）は次 pattern へ鳴り続けないよう消音する
-        pattern.put(pattern.rows - 1, CH_BASS, Cell(None, 0, vol=0))
-        pattern.put(pattern.rows - 1, CH_CHORD, Cell(None, 0, vol=0))
-
-    # ------------------------------------------------------------ 各 pattern の文法
-    def _intro_chop(self, mctx: MeasureCtx, st: FutureBassState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """VOX のみ。`sample_offset_param()` で長尺サンプルを N_SLICES 個のシラブルに分割して叩く。"""
-        vox = mctx.instruments["vox"]
-        length_words = vox.spec.length_words
-        offsets = [mixer.sample_offset_param(round(length_words * 2 * i / N_SLICES), length_words)
-                   for i in range(N_SLICES)]
-        for row in VOCAL_CHOP_ROWS:
-            if rng.melody.random() < 0.7:
-                # vol と effect は同一セルに同居できない（Cell の排他制約）ため、音量は
-                # サンプル既定音量（FB_VOCAL_CHOP.volume）に任せる。
-                param = rng.melody.choice(offsets)
-                buf.put(row, CH_LEAD, vox.cell(effect=9, param=param))
-
-    def _buildup(self, mctx: MeasureCtx, st: FutureBassState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """kick 4つ打ち＋clap をハイハット代わりに8分オフビートへ（密度を増やしていく）。"""
-        ins = mctx.instruments
-        for row in FOUR_ON_FLOOR:
-            buf.put(row, CH_KICK, ins["kick"].cell(vol=56))
-        for row in CLAP_OFFBEAT_8TH:
-            buf.put(row, CH_KICK, ins["clap"].cell(vol=32))
-
-    def _drop(self, mctx: MeasureCtx, st: FutureBassState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, chord, intensity = mctx.instruments, mctx.chord, mctx.pattern.intensity
-        for row in FOUR_ON_FLOOR:
-            buf.put(row, CH_KICK, ins["kick"].cell(vol=58))
-        for row in CLAP_BACKBEAT:
-            buf.put(row, CH_KICK, ins["clap"].cell(vol=44))
-        vol = round(56 * intensity)
-        buf.put(0, CH_BASS, ins["sub"].cell(chord.bass, vol=max(1, vol)))
-        buf.put(0, CH_CHORD, ins["saw"].cell(chord.harmony, vol=max(1, vol)))
-
-    def _breakdown(self, mctx: MeasureCtx, st: FutureBassState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """kick 抜き（ダッキングのトリガが無いため自然にダッキングも止まる）。コードのみ柔らかく。"""
-        ins, chord, intensity = mctx.instruments, mctx.chord, mctx.pattern.intensity
-        vol = max(1, round(48 * intensity))
-        buf.put(0, CH_BASS, ins["sub"].cell(chord.bass, vol=vol))
-        buf.put(0, CH_CHORD, ins["saw"].cell(chord.harmony, vol=vol))
+    harmony = Harmony(keys=(KEY_PC,), mode="ionian", progressions=(("I-V-vi-IV", PROGRESSION),), n_progressions=1,
+                       fixed=True, registers=Registers(bass=BASS_REG, harmony=CHORD_REG, melody=UNUSED_MELODY_REG))
+    sections = {
+        "intro_chop": Section(intensity=0.3, parts=frozenset({"vox"})),
+        "buildup": Section(intensity=0.5, parts=frozenset({"kick"})),
+        "drop": Section(intensity=1.0, parts=frozenset({"kick", "sub", "chord"})),
+        "breakdown": Section(intensity=0.4, parts=frozenset({"sub", "chord"})),
+        "outro": Section(intensity=0.25, parts=frozenset({"sub", "chord"})),
+    }
+    form = ("intro_chop", "intro_chop", "buildup", "drop", "drop", "breakdown", "drop", "drop", "outro")
+    parts = (
+        Part("kick", FutureKick(), pan=128,
+             kit=Kit(groups=(("kick", ("kick", "clap")),), priority={"clap": 2, "kick": 1})),
+        Part("sub", SustainedChord("sub", lambda c: c.bass), pan=128),
+        Part("chord", SustainedChord("saw", lambda c: c.harmony), pan=144),
+        Part("vox", VocalChop(), pan=112),
+    )
+    # clap が kick を置換するバックビートでも4拍ともポンピングを保つため、kick と clap の両方をトリガにする
+    mix = (
+        Sidechain(triggers=("kick", "clap"), targets=("sub",), ratio=0.25, release_steps=3),
+        Sidechain(triggers=("kick", "clap"), targets=("chord",), ratio=0.35, release_steps=4),
+    )
+    mod_channels = {4: 1}

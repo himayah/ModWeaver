@@ -1,6 +1,6 @@
 """ジャンルモジュール置き場（DESIGN.md §5.6）。
 
-ここに置いた ``.py``（``_`` で始まるものを除く）は ``profiles.registry.discover()`` が起動時にすべて import する。
-1ファイル＝1ジャンルで、``@register_profile`` 付きの ``GenreProfile`` サブクラスを1つ定義すること。
-補助モジュール（ジャンルではないもの）は ``mod_weaver/profiles/`` に置く。
+ここに置いた ``.py``（``_`` で始まるものを除く）は ``framework.registry.discover()`` が起動時にすべて import する。
+1ファイル＝1ジャンルで、``@register_genre`` 付きの ``framework.genre.Genre`` サブクラスを1つ定義すること。
+ジャンルの共通部分（ジャンルではないもの）は ``_`` 始まりのモジュール（``_suspense.py`` など）に置く。
 """

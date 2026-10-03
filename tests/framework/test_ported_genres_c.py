@@ -66,7 +66,7 @@ def test_minimalism_has_no_randomness_and_breaks_each_pattern_at_row_47():
 # ---------------------------------------------------------------- free-jazz
 
 def test_free_jazz_rubato_is_continuous_and_scales_with_the_start_bpm():
-    from mod_weaver.genres_next import free_jazz as fj
+    from mod_weaver.genres import free_jazz as fj
 
     genre = _genre("free-jazz")
     assert genre.tempo_range == fj.TEMPO_RANGE and genre.tempo_choices == (96,)
@@ -90,7 +90,7 @@ def test_free_jazz_rubato_is_continuous_and_scales_with_the_start_bpm():
 def test_free_jazz_texture_rules_and_tempo_commands_reach_the_module():
     genre = _genre("free-jazz")
     plan, score = _score(genre)
-    from mod_weaver.genres_next import free_jazz as fj
+    from mod_weaver.genres import free_jazz as fj
 
     for e in all_notes(score, "bass"):
         assert fj.BASS_REG[0] <= e.pitch <= fj.BASS_REG[1]
@@ -280,7 +280,7 @@ def test_swing_jazz_swing_form_and_walking_bass():
     assert not notes(score, "intro", "drums") and not notes(score, "intro", "sax")
     # 次の和音の根音へ向かう（各小節の最後の音が次の小節の根音に折り返した音）
     from mod_weaver.core.pitch import fold_into_range
-    from mod_weaver.genres_next.swing_jazz import BASS_REG
+    from mod_weaver.genres.swing_jazz import BASS_REG
 
     for name in ("a", "b", "solo_a"):
         sec = score.sections[name]

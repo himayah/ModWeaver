@@ -1,84 +1,109 @@
-"""edm: ビルドアップとドロップ（DESIGN.md §6.16.17）。E6（6ch）: シンセ主体、ビルドアップで溜めてドロップで弾ける。"""
+"""edm（旧 genres/edm.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
-from ..core.model import ChordSpec
-from ..profiles.band_common import (
-    ArpSpec, BandProfile, BassSpec, ChannelDef, EchoSpec, Fold, LeadSpec, PadSpec, Section, buildup, hits, keep,
-    preset,
-)
-from ..profiles.registry import register_profile
+from ..core.model import ChordSpec, GmVoice
+from ..core.synth_presets import PRESETS
+from ..framework.gens import Arp, BassLine, Buildup, Echo, Groove, Lead, Pad, hits
+from ..framework.genre import Genre, Harmony, Instrument, Kit, Part, Section, Sidechain
+from ..framework.context import Generator, MeasureCtx
+from ..framework.registry import register_genre
 
 C = ChordSpec
-# 7・8 番目の論理チャンネルは 8ch の編成だけで鳴らす任意パート（DESIGN.md §6.14）
-CH_KICK, CH_PERC, CH_BASS, CH_CHORD, CH_LEAD, CH_FX, CH_X_LEAD_ECHO, CH_X_PLUCK_ARP = range(8)
-
-FLOOR = hits("kick", (0, 4, 8, 12), 62) + hits("clap", (4, 12), 48) + hits("hat", (2, 6, 10, 14), 30)
-INTRO = hits("kick", (0, 4, 8, 12), 56) + hits("hat", (2, 6, 10, 14), 26)
-
-LEAD_MOTIFS = {"verse": (RhythmMotif((0, 3, 6, 8, 11, 12)), RhythmMotif((0, 2, 4, 6, 8, 12)))}
 
 
-@register_profile
-class EdmProfile(BandProfile):
+def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
+    patch = PRESETS[key]
+    if changes:
+        import dataclasses
+        patch = dataclasses.replace(patch, **changes)
+    return Instrument(patch=patch, gm=gm)
+
+GROOVES = {
+    "main": hits("kick", (0, 4, 8, 12), 62) + hits("clap", (4, 12), 48) + hits("hat", (2, 6, 10, 14), 30),
+    "intro": hits("kick", (0, 4, 8, 12), 56) + hits("hat", (2, 6, 10, 14), 26),
+}
+LEAD_MOTIFS = {
+    "verse": (RhythmMotif(rows=(0, 3, 6, 8, 11, 12)), RhythmMotif(rows=(0, 2, 4, 6, 8, 12))),
+}
+PROGRESSIONS = (
+    ("VI-iv-i-VII", (C(8, "maj", label="VI"), C(5, "min", label="iv"), C(0, "min", label="i"), C(10, "maj", label="VII"))),
+    ("i-VI-III-VII", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(3, "maj", label="III"), C(10, "maj", label="VII"))),
+)
+
+
+class BuildupDrums(Groove):
+    """通常は打楽器の型。build の区間ではスネアのビルドアップ（4分→8分→16分→連打と加速し、音量が上がる）。"""
+
+    def __init__(self, grooves, **kw) -> None:
+        super().__init__(grooves, **kw)
+        self.buildup = Buildup("snare")
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build":
+            self.buildup.measure(m)
+        else:
+            super().measure(m)
+
+
+class RiserImpact(Generator):
+    """build の最後から2つ目の小節の頭に上昇音（約2秒）、drop の頭に衝撃音。"""
+
+    def __init__(self, riser: str, impact: str, n_measures: int = 4) -> None:
+        self.riser = riser
+        self.impact = impact
+        self.n_measures = n_measures
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "build" and m.m.index % self.n_measures == self.n_measures - 2:
+            m.note(0, self.riser, vel=48)
+        elif m.plan.kind == "drop" and m.m.index == 0:
+            m.note(0, self.impact, vel=56)           # ドロップの頭の一撃
+
+
+@register_genre
+class EdmGenre(Genre):
     id = "edm"
     display_name = "EDM"
     description = "EDM。シンセ主体、ビルドアップで溜めてドロップで弾ける"
     description_en = "EDM: synth-driven builds that explode into the drop"
     title = "EDM Drop"
-    default_filename = "Edm.mod"
     tempo_choices = (124, 126, 128, 130)
 
-    KIT = (
-        ("kick", preset("drum_909_kick")), ("clap", preset("fb_clap")), ("hat", preset("drum_909_hat")),
-        ("snare", preset("drum_pop_snare")), ("bass", preset("bass_synth_saw")), ("lead", preset("fb_supersaw")),
-        ("riser", preset("fx_riser")), ("impact", preset("fx_impact")),
-        ("pluck", preset("syn_pluck", volume=34)),
-    )
-    CHORD_KITS = {"pad": (preset("syn_poly_pad"), 0.0)}
-    CHANNELS = (
-        ChannelDef("kick", ("kick",), pan=128),
-        ChannelDef("clap/hat", ("clap", "hat", "snare"), (("snare", 3), ("clap", 2)), pan=150),
-        ChannelDef("bass", ("bass",), pan=128),
-        ChannelDef("chords", ("pad",), pan=88),
-        ChannelDef("lead", ("lead",), pan=168),
-        ChannelDef("fx", ("riser", "impact"), (("impact", 2),), pan=128),
-        ChannelDef("lead echo", ("lead",), pan=96),
-        ChannelDef("pluck arp", ("pluck",), pan=160),
-    )
-    DRUM_CHANNEL = {"kick": CH_KICK, "clap": CH_PERC, "hat": CH_PERC, "snare": CH_PERC}
-    KEYS = (5, 7)
-    MODE = "aeolian"
-    PROGRESSIONS = (
-        ("VI-iv-i-VII", (C(8, "maj", label="VI"), C(5, "min", label="iv"), C(0, "min", label="i"), C(10, "maj", label="VII"))),
-        ("i-VI-III-VII", (C(0, "min", label="i"), C(8, "maj", label="VI"), C(3, "maj", label="III"), C(10, "maj", label="VII"))),
-    )
-    SECTIONS = {
-        "intro": Section("intro", prog=0, intensity=0.6, parts=frozenset({"drums", "pad"}), groove="intro"),
-        "build": Section("build", prog=1, intensity=0.8, parts=frozenset({"pad", "fx"})),
-        "drop": Section("drop", prog=0, intensity=1.0, parts=frozenset({"drums", "bass", "pad", "lead", "fx", "arp"})),
-        "break": Section("break", prog=1, intensity=0.5, parts=frozenset({"pad"})),
-        "outro": Section("outro", prog=0, intensity=0.5, parts=frozenset({"drums", "pad"}), groove="intro"),
+    instruments = {
+        "kick": _inst("drum_909_kick", GmVoice(drum_note=36)),
+        "clap": _inst("fb_clap", GmVoice(drum_note=39)),
+        "hat": _inst("drum_909_hat", GmVoice(drum_note=42)),
+        "snare": _inst("drum_pop_snare", GmVoice(drum_note=38)),
+        "bass": _inst("bass_synth_saw", GmVoice(program=38)),
+        "lead": _inst("fb_supersaw", GmVoice(program=81)),
+        "riser": _inst("fx_riser", GmVoice(program=97)),
+        "impact": _inst("fx_impact", GmVoice(program=55)),
+        "pluck": _inst("syn_pluck", GmVoice(program=84), volume=34),
+        "pad": _inst("syn_poly_pad", GmVoice(program=90)),
     }
-    FORM = ("intro", "build", "drop", "drop", "break", "build", "drop", "drop", "outro")
-    GROOVES = {"main": FLOOR, "intro": INTRO}
-    SIDECHAIN = (("kick", CH_BASS, 0.25, 2), ("kick", CH_CHORD, 0.35, 3))
-    BASS = BassSpec("bass", CH_BASS, kind="offbeat", vol=54)
-    PAD = PadSpec("pad", CH_CHORD, vol=34)
-    LEAD = LeadSpec("lead", CH_LEAD, ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
-                    vol=46, gate=0.7)
-
-    ARP = ArpSpec("pluck", CH_X_PLUCK_ARP, rows=tuple(range(16)), vol=28)
-    ECHO = (EchoSpec(CH_LEAD, CH_X_LEAD_ECHO, delay=3, ratio=0.45, offs=True),)
-    ARRANGEMENTS = {                          # DESIGN.md §6.14: 4ch＝小編成、6ch＝標準、8ch＝任意パートを足す
-        4: (Fold("drums", ("kick", "clap/hat"), (("kick", 4), ("snare", 4), ("clap", 3))),
-            *keep("bass", "chords", "lead")),
-        6: keep("kick", "clap/hat", "bass", "chords", "lead", "fx"),
-        8: keep("kick", "clap/hat", "bass", "chords", "lead", "fx", "lead echo", "pluck arp"),
+    harmony = Harmony(keys=(5, 7), mode="aeolian", progressions=PROGRESSIONS, n_progressions=2)
+    sections = {
+        "intro": Section(intensity=0.6, parts=frozenset({"pad", "drums"}), groove="intro"),
+        "build": Section(prog=1, intensity=0.8, parts=frozenset({"fx", "pad", "drums"})),
+        "drop": Section(intensity=1.0, parts=frozenset({"bass", "drums", "pad", "lead", "fx", "arp"})),
+        "break": Section(prog=1, intensity=0.5, parts=frozenset({"pad"})),
+        "outro": Section(intensity=0.5, parts=frozenset({"pad", "drums"}), groove="intro"),
     }
-    def extra_measure(self, mctx, sec, st, rng, buf):
-        ins = mctx.instruments
-        if sec.kind == "build":
-            buildup(mctx, buf, CH_PERC, ins["snare"], riser=ins["riser"], fx_ch=CH_FX)
-        elif sec.kind == "drop" and mctx.measure_idx == 0:
-            buf.put(0, CH_FX, ins["impact"].cell(vol=56))       # ドロップの頭の一撃
+    form = ("intro", "build", "drop", "drop", "break", "build", "drop", "drop", "outro")
+    parts = (
+        Part("drums", BuildupDrums(GROOVES), pan=128,
+             kit=Kit(groups=(("kick", ("kick",)), ("clap/hat", ("clap", "hat", "snare"))),
+                     priority={"snare": 3, "clap": 2},
+                     single_priority={"kick": 4, "clap": 3, "hat": 1, "snare": 4},
+                     group_pan={"clap/hat": 150})),
+        Part("bass", BassLine("bass", kind="offbeat", vol=54), pan=128),
+        Part("pad", Pad("pad", vol=34), pan=88),
+        Part("lead", Lead("lead", ScaleRules(leap_probability=0.3, leap_semitones=(3, 5, 7)), LEAD_MOTIFS,
+                   vol=46, gate=0.7), pan=168),
+        Part("fx", RiserImpact("riser", "impact"), pan=128, min_channels=6),
+        Part("lead echo", Echo(delay=3, ratio=0.45), follow="lead", pan=96, min_channels=8),
+        Part("arp", Arp("pluck", register=(24, 35), steps=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15), vol=28), pan=160, min_channels=8),
+    )
+    mod_channels = {4: 1, 6: 2, 8: 1}
+    mix = (Sidechain(triggers=("kick",), targets=("bass",), ratio=0.25, release_steps=2), Sidechain(triggers=("kick",), targets=("pad",), ratio=0.35, release_steps=3),)

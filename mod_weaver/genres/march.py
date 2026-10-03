@@ -1,395 +1,342 @@
-"""march: 行進曲（DESIGN.md §6.5）。
+"""march（旧 genres/march.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
 
-構成: intro（heroic）→ a（sousa）→ a2（heroic）→ trio → trio2 → coda（heroic）。
-``order=[0, 1, 2, 1, 2, 3, 4, 3, 4, 5]``（10 pattern × 8 measure × 8 row ≈ 80 秒）。
-トリオは主調 +5 半音（下属調）。文法の核は「Oom-Pah（tuba+bd / horn+sd）」「フレーズ末のスネアロール」
-「crash による強拍アクセント」「ファンファーレ分散和音とスケール旋律フレーズ」。
+F3 の試験移植を F7 で本番に昇格した。旧 ``mod_weaver/genres/march.py``（``MarchProfile``）は
+``GenreProfile`` の素の機構を直接使う個別実装で、1 つの「区間ぶんの文法」関数が drums・tuba・harm・picc の
+4 チャンネルすべてを同時に書いていた。新フレームワークは1パート=1ジェネレータなので、その文法を
+``MarchDrums``・``MarchTuba``・``MarchHarm``・``MarchPicc`` の4つに分けて書き直す（§15.4 の想定どおり、
+同じ「どの measure で何を鳴らすか」の条件分岐が複数のジェネレータに現れるが、ジャンル固有の文法なので
+部品化はしない）。
+
+和声は ``Harmony``/``default_plan()`` を使わず（進行の各和音の小節数が不揃いなため。sousa の最後の和音だけ
+2 小節など）、``plan()`` を全面的に上書きして ``SectionPlan`` を直接組み立てる（nostalgic と同じ扱い）。
 """
 from __future__ import annotations
 
-import dataclasses
-import functools
-from dataclasses import dataclass, field
-from typing import Any, Optional
+import random
+from typing import Optional
 
-from ..core import synth, synth_presets
-from ..core.composer import MelodyGenerator, NoteEvent, RhythmMotif, ScaleRules, articulate, ramp
+from ..core.composer import MelodyGenerator, NoteEvent as OldNoteEvent, RhythmMotif, ScaleRules
 from ..core.harmony import Registers, voice
-from ..core.model import (
-    Cell,
-    ChannelRole,
-    ChordSlot,
-    ChordSpec,
-    MeasureBuffer,
-    MeasureCtx,
-    Pattern,
-    PatternCtx,
-    PatternPlan,
-    RngStreams,
-    SampleSpec,
-    SongPlan,
-)
+from ..core.model import ChordSpec, GmVoice
 from ..core.pitch import MODES, Scale, fold_into_range
-from ..core.midi import GmVoice
-from ..profiles.base import GenreProfile
-from ..profiles.registry import register_profile
+from ..core.synth_presets import PRESETS
+from ..framework.context import Generator, MeasureCtx, SectionCtx
+from ..framework.genre import Genre, Instrument, Kit, Part, Section
+from ..framework.plan import Meter, MeasurePlan, SectionPlan, SongPlan
+from ..framework.registry import register_genre
+from ..framework.score import Arpeggio, Vibrato
+
+C = ChordSpec
+
+
+def _inst(key: str, gm: GmVoice) -> Instrument:
+    return Instrument(patch=PRESETS[key], gm=gm)
+
 
 # ============================================================
-# 音域・調・進行（DESIGN.md §6.5）
+# 音域・調・進行（旧 march.py の値をそのまま）
 # ============================================================
 
-KEY_CHOICES = (0, 5, 10, 3)                  # C / F / Bb / Eb
-TRIO_OFFSET = 5                              # トリオは主調 +5 半音（下属調）
-BASS_REG = (0, 11)                           # tuba（shift −12 → t=12..23）
-HARMONY_REG = (17, 28)                       # horn/section のアルペジオ基音（arp 最大 +7 でも t ≤ 35）
-MELODY_MAIN = (24, 43)                       # 主旋律（intro/a/a2）
-MELODY_TRIO = (19, 38)                       # トリオ（低め）
-MELODY_TRIO2 = (31, 47)                      # トリオ2／コーダ（1 オクターブ上）
+KEY_CHOICES = (0, 5, 10, 3)
+TRIO_OFFSET = 5
+BASS_REG = (0, 11)
+HARMONY_REG = (17, 28)
+MELODY_MAIN = (24, 43)
+MELODY_TRIO = (19, 38)
+MELODY_TRIO2 = (31, 47)
 REGISTERS = Registers(bass=BASS_REG, harmony=HARMONY_REG, melody=MELODY_MAIN)
 
-STRAIN_RULES = ScaleRules(
-    step_choices=(-1, 1, -2, 2), leap_probability=0.30, leap_semitones=(4, 5, 7),
-    leap_recovery=True, dissonance_weight=0.05,
-)
-TRIO_RULES = ScaleRules(
-    step_choices=(-1, 1, -2, 2), leap_probability=0.15, leap_semitones=(4, 5, 7),
-    leap_recovery=True, dissonance_weight=0.05, strong_nearest_prob=0.85,
-)
+STRAIN_RULES = ScaleRules(step_choices=(-1, 1, -2, 2), leap_probability=0.30, leap_semitones=(4, 5, 7),
+                           leap_recovery=True, dissonance_weight=0.05)
+TRIO_RULES = ScaleRules(step_choices=(-1, 1, -2, 2), leap_probability=0.15, leap_semitones=(4, 5, 7),
+                         leap_recovery=True, dissonance_weight=0.05, strong_nearest_prob=0.85)
 
 PROGRESSION_TITLES = {"sousa": "Sousa Classic", "heroic": "Heroic Fanfare", "trio": "Trio Uplift"}
-
-# (root, quality, bass, measures) — 主音基準
 PROGRESSIONS: dict[str, list[tuple[ChordSpec, int]]] = {
     "sousa": [
-        (ChordSpec(0, "maj"), 1), (ChordSpec(7, "dom7"), 1), (ChordSpec(0, "maj"), 1),
-        (ChordSpec(5, "maj"), 1), (ChordSpec(0, "maj", bass=7), 1), (ChordSpec(7, "dom7"), 1),
-        (ChordSpec(0, "maj"), 2),
+        (C(0, "maj"), 1), (C(7, "dom7"), 1), (C(0, "maj"), 1), (C(5, "maj"), 1),
+        (C(0, "maj", bass=7), 1), (C(7, "dom7"), 1), (C(0, "maj"), 2),
     ],
     "heroic": [
-        (ChordSpec(0, "maj"), 1), (ChordSpec(5, "maj"), 1), (ChordSpec(7, "maj"), 1),
-        (ChordSpec(0, "maj"), 1), (ChordSpec(9, "min"), 1), (ChordSpec(2, "min"), 1),
-        (ChordSpec(7, "dom7"), 1), (ChordSpec(0, "maj"), 1),
+        (C(0, "maj"), 1), (C(5, "maj"), 1), (C(7, "maj"), 1), (C(0, "maj"), 1),
+        (C(9, "min"), 1), (C(2, "min"), 1), (C(7, "dom7"), 1), (C(0, "maj"), 1),
     ],
     "trio": [
-        (ChordSpec(0, "maj"), 1), (ChordSpec(0, "maj"), 1), (ChordSpec(7, "dom7"), 1),
-        (ChordSpec(0, "maj"), 1), (ChordSpec(5, "maj"), 1), (ChordSpec(0, "maj"), 1),
-        (ChordSpec(7, "dom7"), 1), (ChordSpec(0, "maj"), 1),
+        (C(0, "maj"), 1), (C(0, "maj"), 1), (C(7, "dom7"), 1), (C(0, "maj"), 1),
+        (C(5, "maj"), 1), (C(0, "maj"), 1), (C(7, "dom7"), 1), (C(0, "maj"), 1),
     ],
 }
 
+MARCH_MOTIFS = (RhythmMotif((0, 6)), RhythmMotif((0, 3, 4, 7)), RhythmMotif((0, 2, 4, 6)), RhythmMotif((0, 4)))
+HOLD_MOTIF = RhythmMotif((0,))
+PHRASE_SLOTS = ("a", "a2", "b", "c", "a", "a2", "b", "cad")
+VIBRATO_PARAM = 0x46
 
-def voice_march_progression(name: str, tonic_pc: int) -> list[ChordSlot]:
+
+def _voice_progression(name: str, tonic_pc: int):
+    """``PROGRESSIONS[name]`` を具体化し、小節ごとの ``(ChordDef, chord_offset)`` の列にする
+    （同じ和音が続く小節数ぶん複製する。和音の変わり目が ``chord_offset=0``）。"""
     scale = Scale(tonic_pc, MODES["ionian"])
-    return [
-        ChordSlot(voice(spec, tonic_pc, scale, REGISTERS, arp=True), measures=measures)
-        for spec, measures in PROGRESSIONS[name]
-    ]
+    chords = []
+    offsets = []
+    for spec, measures in PROGRESSIONS[name]:
+        chord = voice(spec, tonic_pc, scale, REGISTERS, arp=True)
+        chords.extend([chord] * measures)
+        offsets.extend(range(measures))
+    return chords, offsets
 
 
-def progression_summary(label: str, name: str, tonic_pc: int) -> str:
-    chords = " - ".join(c.chord.label for c in voice_march_progression(name, tonic_pc))
+def _progression_summary(label: str, name: str, tonic_pc: int) -> str:
+    scale = Scale(tonic_pc, MODES["ionian"])
+    chords = " - ".join(voice(spec, tonic_pc, scale, REGISTERS, arp=True).label for spec, _m in PROGRESSIONS[name])
     return f"{label:<16}: {PROGRESSION_TITLES[name]} -> {chords}"
 
 
-# ============================================================
-# sample 番号 / ChannelPlan（DESIGN.md §6.5）
-# ============================================================
-
-BD, SD, CRASH, TUBA, HORN, SECTION, PICC = 1, 2, 3, 4, 5, 6, 7
-SAMPLE_KEYS = ("bd", "sd", "crash", "tuba", "horn", "section", "picc")
-
-CH_DRUM, CH_BASS, CH_HARM, CH_MEL = 0, 1, 2, 3
-
-CHANNEL_PLAN = (
-    ChannelRole("drums", frozenset({BD, SD, CRASH}), {CRASH: 3, SD: 2, BD: 1}),
-    ChannelRole("bass", frozenset({TUBA})),
-    ChannelRole("harmony", frozenset({HORN, SECTION}), {HORN: 1, SECTION: 2}),
-    ChannelRole("melody", frozenset({PICC})),
-)
-
-VIBRATO_PARAM = 0x46          # picc の 4xy（長音のビブラート）
-
-
-# ============================================================
-# 音色合成（DESIGN.md §6.5）。core/synth.py の Patch 方式へ移行済み（core/synth_presets.py 参照）。
-# ============================================================
-
-def synth_bd() -> SampleSpec:
-    """MarchBassDrum: f(t)=85+35e^(−25t) の位相積分サイン、減衰 e^(−14t)、2ms クリック、tanh(1.3x)、0.25s。"""
-    return synth.render(synth_presets.MARCH_BASS_DRUM)
-
-
-def synth_sd() -> SampleSpec:
-    """MarchSnare: ヘッド 220Hz e^(−30t) ＋スナッピー（HP ノイズ）e^(−18t)、tanh(1.25x)、0.22s。"""
-    return synth.render(synth_presets.MARCH_SNARE)
-
-
-def synth_crash() -> SampleSpec:
-    """CrashCymbal: 非整合部分音 (2100,3300,4700,6100,7300Hz) ＋ HP ノイズ、e^(−6t)、1.0s。rate_note=B-3。"""
-    return synth.render(synth_presets.MARCH_CRASH_CYMBAL)
-
-
-def synth_tuba() -> SampleSpec:
-    """TubaBass: 三角波＋LP 矩形波（additive、h≤6）、アタック 8ms、e^(−7t) 減衰のスタッカート、0.35s。shift=−12。"""
-    return synth.render(synth_presets.MARCH_TUBA_BASS)
-
-
-def synth_horn() -> SampleSpec:
-    """BrassHorn: ノコギリ近似（h=1..8、重み 1/h）＋LP、アタック 8ms、e^(−9t)、0.20s。"""
-    return synth.render(synth_presets.MARCH_BRASS_HORN)
-
-
-def synth_section() -> SampleSpec:
-    """BrassSection: K=6, L=190, attack 100。偶数倍音豊富（h=1..6、重み 1,.7,.5,.35,.2,.12）。"""
-    return synth.render(synth_presets.MARCH_BRASS_SECTION)
-
-
-def synth_picc() -> SampleSpec:
-    """PiccoloLead: K=12, L=190, attack 60。h=1..7、重み 1/h^0.9。shift=+12。"""
-    return synth.render(synth_presets.MARCH_PICCOLO_LEAD)
-
-
-@functools.lru_cache(maxsize=1)
-def _synth_all() -> tuple[tuple[str, SampleSpec], ...]:
-    return (
-        ("bd", synth_bd()), ("sd", synth_sd()), ("crash", synth_crash()), ("tuba", synth_tuba()),
-        ("horn", synth_horn()), ("section", synth_section()), ("picc", synth_picc()),
-    )
-
-
-def build_march_samples() -> dict[str, SampleSpec]:
-    """挿入順 = sample 番号（1..7）。合成は seed 非依存のため 1 回だけ行い、呼び出しごとに複製を返す。"""
-    return {key: dataclasses.replace(spec) for key, spec in _synth_all()}
+def _section_plan(name: str, kind: str, prog_name: str, intensity: float, key_offset: int, tonic: int,
+                   section_decl: Section) -> SectionPlan:
+    chords, offsets = _voice_progression(prog_name, tonic)
+    n = len(chords)
+    measures = []
+    start = 0
+    for i in range(n):
+        nxt = chords[(i + 1) % n]
+        spec_quality = PROGRESSIONS[prog_name][0][0].quality   # 表示用。実査読では使わない
+        measures.append(MeasurePlan(index=i, start=start, steps=8, chord=chords[i], quality=spec_quality,
+                                     chord_offset=offsets[i], next_chord=nxt))
+        start += 8
+    scale = Scale(tonic, MODES["ionian"])
+    return SectionPlan(name=name, kind=kind, meter=Meter(steps=8, steps_per_beat=4, signature=(2, 4)),
+                        measures=tuple(measures), intensity=intensity, key_offset=key_offset, tonic=tonic,
+                        scale=scale, parts=frozenset({"drums", "tuba", "harm", "picc"}), swing=None,
+                        section=section_decl, extra={})
 
 
 # ============================================================
-# 文法の語彙（DESIGN.md §6.5）
+# ジャンル内のジェネレータ（drums・tuba・harm・picc。§15.4）
 # ============================================================
 
-# RhythmMotif: (0,6)=付点4分+8分 / (0,3,4,7)=付点8分+16分x2 / (0,2,4,6)=8分x4 / (0,4)=4分x2
-MARCH_MOTIFS = (RhythmMotif((0, 6)), RhythmMotif((0, 3, 4, 7)), RhythmMotif((0, 2, 4, 6)), RhythmMotif((0, 4)))
-HOLD_MOTIF = RhythmMotif((0,))                              # 2 拍（1 measure 全体）の保持
+class MarchDrums(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        kind = m.plan.kind
+        if kind == "intro":
+            if m.m.index == 0:
+                m.note(0, "crash", vel=64)
+            elif m.m.index == 3:
+                m.note(4, "sd", vel=30)
+            elif m.m.index >= 4:
+                m.note(0, "bd", vel=60)
+                m.note(4, "sd", vel=50)
+            return
+        if kind in ("a", "a2"):
+            m.note(0, "bd", vel=60)
+            m.note(4, "sd", vel=50)
+            if m.is_first:
+                m.note(0, "crash", vel=64)
+            if m.is_last:
+                self._snare_roll(m)
+            return
+        if kind == "trio":
+            m.note(0, "bd", vel=48)
+            m.note(4, "sd", vel=38)
+            return
+        if kind == "trio2":
+            m.note(0, "bd", vel=60)
+            m.note(4, "sd", vel=50)
+            if m.m.index == 4:
+                m.note(0, "crash", vel=64)
+            if m.is_last:
+                self._snare_roll(m)
+            return
+        if kind == "coda":
+            m.note(0, "bd", vel=60)                 # 最終 measure は crash が Kit.priority で勝つ
+            if m.is_last:
+                m.note(0, "crash", vel=64)
+            else:
+                m.note(4, "sd", vel=50)
+                if m.is_first:
+                    m.note(0, "crash", vel=64)
+            return
+        raise ValueError(kind)
 
-# 8 measure = [a, a', b, c, a, a', b, cad]（"a2" は "a'" を表す）
-PHRASE_SLOTS = ("a", "a2", "b", "c", "a", "a2", "b", "cad")
+    @staticmethod
+    def _snare_roll(m: MeasureCtx) -> None:
+        """フレーズ末の4連打（vol 36→58）。row4 の通常スネアと同じ (inst, step) に ``prio=2`` で
+        勝つ（§9.5・§15.4: 現行の ``buf.replace`` に相当）。"""
+        for i, row in enumerate(range(4, 8)):
+            vol = round(36 + (58 - 36) * i / 3)
+            m.note(row, "sd", vel=vol, prio=2)
 
 
-@dataclass
-class MarchState:
-    melody_prev: Optional[int] = None
-    extra: dict[str, Any] = field(default_factory=dict)
+class MarchTuba(Generator):
+    def __init__(self, inst: str = "tuba") -> None:
+        self.inst = inst
+
+    def measure(self, m: MeasureCtx) -> None:
+        if m.plan.kind == "intro" and m.m.index < 4:
+            return
+        chord = m.m.chord
+        note = chord.bass if m.m.chord_offset % 2 == 0 else fold_into_range(chord.bass + 7, *BASS_REG)
+        m.note(0, self.inst, note, vel=60)
+
+
+class MarchHarm(Generator):
+    def measure(self, m: MeasureCtx) -> None:
+        kind = m.plan.kind
+        chord = m.m.chord
+        intensity = m.plan.intensity
+        if kind == "intro":
+            if m.m.index == 0:
+                self._section(m, chord)
+            elif m.m.index >= 4:
+                self._horn(m, chord, intensity)
+            return
+        if kind in ("a", "a2", "trio"):
+            self._horn(m, chord, intensity)
+            return
+        if kind == "trio2":
+            self._horn(m, chord, intensity)
+            if m.m.index <= 3:
+                self._section(m, chord)
+            return
+        if kind == "coda":
+            if m.is_last:
+                self._section(m, chord)
+            else:
+                self._horn(m, chord, intensity)
+            return
+        raise ValueError(kind)
+
+    @staticmethod
+    def _horn(m: MeasureCtx, chord, intensity: float) -> None:
+        if intensity >= 0.7 and chord.arp:
+            x, y = chord.arp >> 4, chord.arp & 0xF
+            m.note(4, "horn", chord.harmony, arts=(Arpeggio(x, y),))
+        elif intensity >= 0.7:
+            m.note(4, "horn", chord.harmony)
+        else:
+            m.note(4, "horn", chord.harmony, vel=34)
+
+    @staticmethod
+    def _section(m: MeasureCtx, chord) -> None:
+        if chord.arp:
+            x, y = chord.arp >> 4, chord.arp & 0xF
+            m.note(0, "section", chord.harmony, dur=None, arts=(Arpeggio(x, y),))
+        else:
+            m.note(0, "section", chord.harmony, dur=None)
+
+
+def _fanfare_events(chord, reg: tuple[int, int], vol: int) -> list[OldNoteEvent]:
+    """rows (0,2,4,6) で主音→3度→5度→オクターブ上を駆け上がる（register を超えないよう clamp）。"""
+    lo, hi = reg
+    base = fold_into_range(chord.chord_tones[0], lo, hi)
+    notes = [min(base + iv, hi) for iv in (0, 4, 7, 12)]
+    return [OldNoteEvent(r, n, vol, 2) for r, n in zip((0, 2, 4, 6), notes)]
+
+
+class MarchPicc(Generator):
+    def __init__(self, inst: str = "picc") -> None:
+        self.inst = inst
+
+    def section(self, ctx: SectionCtx) -> None:
+        kind = ctx.plan.kind
+        if kind == "intro":
+            for m in ctx.measures():
+                self._emit(m, _fanfare_events(m.m.chord, MELODY_MAIN, vol=52))
+            return
+
+        reg, rules = {"trio": (MELODY_TRIO, TRIO_RULES),
+                      "trio2": (MELODY_TRIO2, STRAIN_RULES),
+                      "coda": (MELODY_TRIO2, STRAIN_RULES)}.get(kind, (MELODY_MAIN, STRAIN_RULES))
+        gen = MelodyGenerator(rules, reg, ctx.plan.scale, ctx.rng, base_vol=50)
+        prev: Optional[int] = None
+        last_a_motif: Optional[RhythmMotif] = None
+        for m in ctx.measures():
+            slot = PHRASE_SLOTS[m.m.index]
+            chord = m.m.chord
+            if slot == "c":
+                events = _fanfare_events(chord, reg, vol=54)
+                prev = events[-1].note
+            elif slot == "cad":
+                events, prev = gen.bar(HOLD_MOTIF, chord, prev, cadence=True,
+                                        cadence_target=chord.chord_tones[0], rows=8)
+            else:
+                if slot == "a2" and last_a_motif is not None:
+                    motif = last_a_motif
+                else:
+                    motif = ctx.rng.choice(MARCH_MOTIFS)
+                    if slot == "a":
+                        last_a_motif = motif
+                events, prev = gen.bar(motif, chord, prev, rows=8)
+            self._emit(m, events)
+
+    def _emit(self, m: MeasureCtx, events: list[OldNoteEvent]) -> None:
+        for ev in events:
+            dur = max(1, round(ev.dur * 0.9))   # gate=0.9（現行の articulate と同じ）
+            arts = (Vibrato(VIBRATO_PARAM),) if ev.dur >= 4 else ()
+            m.note(ev.row, self.inst, ev.note, vel=ev.vol, dur=dur, arts=arts)
 
 
 # ============================================================
-# プロファイル本体
+# ジャンル本体
 # ============================================================
 
-GM_VOICES = {                                  # --format midi の GM 音色（core/midi.py）
-    "bd": GmVoice(drum_note=36),
-    "sd": GmVoice(drum_note=38),
-    "crash": GmVoice(drum_note=49),
-    "tuba": GmVoice(program=58),
-    "horn": GmVoice(program=60),
-    "section": GmVoice(program=61),
+GM_VOICES = {
+    "bd": GmVoice(drum_note=36), "sd": GmVoice(drum_note=38), "crash": GmVoice(drum_note=49),
+    "tuba": GmVoice(program=58), "horn": GmVoice(program=60), "section": GmVoice(program=61),
     "picc": GmVoice(program=72),
 }
 
 
-@register_profile
-class MarchProfile(GenreProfile):
+@register_genre
+class MarchGenre(Genre):
     id = "march"
+    category = "style"
     display_name = "Military March"
     description = "行進曲。Oom-Pah とスネアロール、ファンファーレ、トリオへの転調"
     description_en = "Military march: oom-pah and snare rolls, fanfares, modulation into the trio"
     title = "Military March"
-    default_filename = "MilitaryMarch.mod"
     tempo_choices = (118, 119, 120, 121, 122)
-    rows_per_measure = 8
-    channel_plan = CHANNEL_PLAN
-    gm_voices = GM_VOICES
-    tempo_policy = "engine"
-    rng_mode = "streams"
-    strict_buffers = True
 
-    grammar = {
-        "intro": "_intro", "a": "_strain", "a2": "_strain",
-        "trio": "_trio", "trio2": "_trio2", "coda": "_coda",
+    instruments = {
+        "bd": _inst("march_bass_drum", GM_VOICES["bd"]),
+        "sd": _inst("march_snare", GM_VOICES["sd"]),
+        "crash": _inst("march_crash_cymbal", GM_VOICES["crash"]),
+        "tuba": _inst("march_tuba_bass", GM_VOICES["tuba"]),
+        "horn": _inst("march_brass_horn", GM_VOICES["horn"]),
+        "section": _inst("march_brass_section", GM_VOICES["section"]),
+        "picc": _inst("march_piccolo_lead", GM_VOICES["picc"]),
     }
+    harmony = None   # 和声は進行ごとに小節数が不揃いなので plan() を全面的に上書きする（nostalgic と同じ）
+    sections = {name: Section(meter=Meter(steps=8, steps_per_beat=4, signature=(2, 4)))
+                for name in ("intro", "a", "a2", "trio", "trio2", "coda")}
+    form = ("intro", "a", "a2", "a", "a2", "trio", "trio2", "trio", "trio2", "coda")
+    parts = (
+        Part("drums", MarchDrums(), pan=128,
+             kit=Kit(groups=(("drums", ("bd", "sd", "crash")),), priority={"crash": 3, "sd": 2})),
+        Part("tuba", MarchTuba("tuba"), pan=128),
+        Part("harm", MarchHarm(), pan=160,
+             kit=Kit(groups=(("harm", ("horn", "section")),), priority={"section": 2})),
+        Part("picc", MarchPicc("picc"), pan=96),
+    )
+    mod_channels = {4: 1}   # 現行どおり 4ch 専用（§15.4。6ch・8ch 用の追加パートは本移植の範囲外）
 
-    def build_samples(self) -> dict[str, SampleSpec]:
-        return build_march_samples()
-
-    # ------------------------------------------------------------ 計画
-    def plan(self, rng: RngStreams) -> SongPlan:
-        key_pc = rng.plan.choice(KEY_CHOICES)
-        bpm = rng.plan.choice(list(self.tempo_choices))
+    def plan(self, rng: random.Random) -> SongPlan:
+        key_pc = rng.choice(KEY_CHOICES)
+        bpm = rng.choice(list(self.tempo_choices))
         trio_pc = (key_pc + TRIO_OFFSET) % 12
-        patterns = [
-            PatternPlan("intro", voice_march_progression("heroic", key_pc), intensity=0.8),
-            PatternPlan("a", voice_march_progression("sousa", key_pc), intensity=0.7),
-            PatternPlan("a2", voice_march_progression("heroic", key_pc), intensity=0.75),
-            PatternPlan("trio", voice_march_progression("trio", trio_pc), intensity=0.5, key_offset=TRIO_OFFSET),
-            PatternPlan("trio2", voice_march_progression("trio", trio_pc), intensity=0.85, key_offset=TRIO_OFFSET),
-            PatternPlan("coda", voice_march_progression("heroic", key_pc), intensity=1.0),
+
+        sections = {
+            "intro": _section_plan("intro", "intro", "heroic", 0.8, 0, key_pc, self.sections["intro"]),
+            "a": _section_plan("a", "a", "sousa", 0.7, 0, key_pc, self.sections["a"]),
+            "a2": _section_plan("a2", "a2", "heroic", 0.75, 0, key_pc, self.sections["a2"]),
+            "trio": _section_plan("trio", "trio", "trio", 0.5, TRIO_OFFSET, trio_pc, self.sections["trio"]),
+            "trio2": _section_plan("trio2", "trio2", "trio", 0.85, TRIO_OFFSET, trio_pc, self.sections["trio2"]),
+            "coda": _section_plan("coda", "coda", "heroic", 1.0, 0, key_pc, self.sections["coda"]),
+        }
+        order = ["intro", "a", "a2", "a", "a2", "trio", "trio2", "trio", "trio2", "coda"]
+        summary = [
+            _progression_summary("Strain (Sousa)", "sousa", key_pc),
+            _progression_summary("Strain (Heroic)", "heroic", key_pc),
+            _progression_summary("Trio", "trio", trio_pc),
         ]
-        return SongPlan(
-            bpm=bpm, patterns=patterns, order=[0, 1, 2, 1, 2, 3, 4, 3, 4, 5], key_pc=key_pc,
-            summary=[
-                progression_summary("Strain (Sousa)", "sousa", key_pc),
-                progression_summary("Strain (Heroic)", "heroic", key_pc),
-                progression_summary("Trio", "trio", trio_pc),
-            ],
-        )
-
-    def begin_pattern(self, pctx: PatternCtx, rng: RngStreams) -> MarchState:
-        st = MarchState()
-        if pctx.kind == "intro":
-            return st
-        if pctx.kind == "trio":
-            reg, rules = MELODY_TRIO, TRIO_RULES
-        elif pctx.kind in ("trio2", "coda"):
-            reg, rules = MELODY_TRIO2, STRAIN_RULES
-        else:
-            reg, rules = MELODY_MAIN, STRAIN_RULES
-        tonic = ((pctx.key_pc or 0) + pctx.key_offset) % 12
-        st.extra["gen"] = MelodyGenerator(rules, reg, Scale(tonic, MODES["ionian"]), rng.melody, base_vol=50)
-        return st
-
-    def compose_measure(self, mctx: MeasureCtx, state: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        getattr(self, self.grammar[mctx.pattern.kind])(mctx, state, rng, buf)
-
-    def finalize_pattern(self, pctx: PatternCtx, pattern: Pattern, state: MarchState, rng: RngStreams) -> None:
-        # picc（旋律）／section（保持和音）は共にループ音色なので、次の pattern へ鳴り続けないよう消音する
-        pattern.put(pattern.rows - 1, CH_MEL, Cell(None, 0, vol=0))
-        pattern.put(pattern.rows - 1, CH_HARM, Cell(None, 0, vol=0))
-
-    # ------------------------------------------------------------ 共通の部品（Oom-Pah・crash・roll）
-    @staticmethod
-    def _oom(buf: MeasureBuffer, ins, chord, offset: int, *, bd_vol: int = 60, tuba_vol: int = 60) -> None:
-        """row 0: tuba が根音（同一和音が複数 measure 続く場合は根音→5度を交互）、bd を同時。"""
-        note = chord.bass if offset % 2 == 0 else fold_into_range(chord.bass + 7, *BASS_REG)
-        buf.put(0, CH_BASS, ins["tuba"].cell(note, vol=tuba_vol))
-        buf.put(0, CH_DRUM, ins["bd"].cell(vol=bd_vol))
-
-    @staticmethod
-    def _pah(buf: MeasureBuffer, ins, chord, intensity: float, *, sd_vol: int = 50, horn_vol: int = 34) -> None:
-        """row 4: horn が harmony 音＋arp（intensity<0.7 では arp なし・単音 vol）、sd を同時。"""
-        if intensity >= 0.7:
-            buf.put(4, CH_HARM, ins["horn"].cell(chord.harmony, param=chord.arp or 0))
-        else:
-            buf.put(4, CH_HARM, ins["horn"].cell(chord.harmony, vol=horn_vol))
-        buf.put(4, CH_DRUM, ins["sd"].cell(vol=sd_vol))
-
-    @staticmethod
-    def _crash(buf: MeasureBuffer, ins) -> None:
-        """row 0 の crash（vol 64）。ChannelPlan の優先度により同 row の bd を自動的に置き換える。"""
-        buf.put(0, CH_DRUM, ins["crash"].cell(vol=64))
-
-    @staticmethod
-    def _snare_roll(buf: MeasureBuffer, ins) -> None:
-        """row 4-7 の sd 4 連打（vol 36→58）。row 4 の通常スネアは意図的に replace で上書きする。"""
-        for i, r in enumerate(range(4, 8)):
-            buf.replace(r, CH_DRUM, ins["sd"].cell(vol=ramp(36, 58, i, 4)))
-
-    # ------------------------------------------------------------ 旋律（ファンファーレ・フレーズ）
-    @staticmethod
-    def _fanfare_events(chord, reg: tuple[int, int], vol: int) -> list[NoteEvent]:
-        """rows (0,2,4,6) で「主音→3度→5度→オクターブ上」を駆け上がる（register を超えないよう clamp）。"""
-        lo, hi = reg
-        base = fold_into_range(chord.chord_tones[0], lo, hi)
-        notes = [min(base + iv, hi) for iv in (0, 4, 7, 12)]
-        return [NoteEvent(r, n, vol, 2) for r, n in zip((0, 2, 4, 6), notes)]
-
-    @staticmethod
-    def _apply_vibrato(buf: MeasureBuffer, events, inst) -> None:
-        """長音（≥4 row）に 4xy ビブラートを付与する（vol と排他のため既定音量で鳴る）。"""
-        for ev in events:
-            if ev.dur >= 4:
-                buf.replace(ev.row, CH_MEL, inst.cell(ev.note, effect=4, param=VIBRATO_PARAM, keep_sample=True))
-
-    def _phrase_measure(self, buf, ins, st: MarchState, rng, mctx: MeasureCtx, reg, rules, *, gate: float) -> None:
-        """8 measure = [a, a', b, c, a, a', b, cad] の 1 measure 分を picc で鳴らす。"""
-        slot = PHRASE_SLOTS[mctx.measure_idx]
-        chord = mctx.chord
-        gen: MelodyGenerator = st.extra["gen"]
-        gen.register, gen.rules = reg, rules
-        if slot == "c":
-            events = self._fanfare_events(chord, reg, vol=54)
-            st.melody_prev = events[-1].note
-        elif slot == "cad":
-            events, st.melody_prev = gen.bar(
-                HOLD_MOTIF, chord, st.melody_prev,
-                cadence=True, cadence_target=chord.chord_tones[0], rows=self.rows_per_measure,
-            )
-        else:
-            if slot == "a2":
-                motif = st.extra.get("last_a_motif")
-                if motif is None:
-                    motif = rng.melody.choice(MARCH_MOTIFS)
-            else:
-                motif = rng.melody.choice(MARCH_MOTIFS)
-                if slot == "a":
-                    st.extra["last_a_motif"] = motif
-            events, st.melody_prev = gen.bar(motif, chord, st.melody_prev, rows=self.rows_per_measure)
-        articulate(buf, CH_MEL, events, ins["picc"], gate=gate)
-        self._apply_vibrato(buf, events, ins["picc"])
-
-    # ------------------------------------------------------------ 各 pattern の文法
-    def _intro(self, mctx: MeasureCtx, st: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        ins, m, chord, intensity = mctx.instruments, mctx.measure_idx, mctx.chord, mctx.pattern.intensity
-        if m == 0:                                            # crash＋section 保持和音（bd/sd なし）
-            self._crash(buf, ins)
-            buf.put(0, CH_HARM, ins["section"].cell(chord.harmony, param=chord.arp or 0))
-        elif m == 3:                                          # 軽いスネアのみ
-            buf.put(4, CH_DRUM, ins["sd"].cell(vol=30))
-        elif m >= 4:                                          # m4 から oom-pah
-            self._oom(buf, ins, chord, mctx.chord_measure_offset)
-            self._pah(buf, ins, chord, intensity)
-        # m1, m2: ドラムなし
-        events = self._fanfare_events(chord, MELODY_MAIN, vol=52)
-        articulate(buf, CH_MEL, events, ins["picc"], gate=0.9)
-        self._apply_vibrato(buf, events, ins["picc"])
-
-    def _strain(self, mctx: MeasureCtx, st: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """a（sousa）/ a2（heroic）: フル oom-pah、m0 に crash、フレーズ末に snare roll。"""
-        ins, m, chord, intensity = mctx.instruments, mctx.measure_idx, mctx.chord, mctx.pattern.intensity
-        self._oom(buf, ins, chord, mctx.chord_measure_offset)
-        self._pah(buf, ins, chord, intensity)
-        if m == 0:
-            self._crash(buf, ins)
-        if m == mctx.n_measures - 1:
-            self._snare_roll(buf, ins)
-        self._phrase_measure(buf, ins, st, rng, mctx, MELODY_MAIN, STRAIN_RULES, gate=0.9)
-
-    def _trio(self, mctx: MeasureCtx, st: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """軽いドラム（bd 48 / sd 38）、horn は非 arp の単音、旋律は低め・跳躍少なめ、roll/crash なし。"""
-        ins, chord, intensity = mctx.instruments, mctx.chord, mctx.pattern.intensity
-        self._oom(buf, ins, chord, mctx.chord_measure_offset, bd_vol=48)
-        self._pah(buf, ins, chord, intensity, sd_vol=38)
-        self._phrase_measure(buf, ins, st, rng, mctx, MELODY_TRIO, TRIO_RULES, gate=0.9)
-
-    def _trio2(self, mctx: MeasureCtx, st: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """旋律は1オクターブ上、m0-3 に section 保持和音、m4 に crash、フレーズ末に roll。"""
-        ins, m, chord, intensity = mctx.instruments, mctx.measure_idx, mctx.chord, mctx.pattern.intensity
-        self._oom(buf, ins, chord, mctx.chord_measure_offset)
-        self._pah(buf, ins, chord, intensity)
-        if m <= 3:
-            buf.put(0, CH_HARM, ins["section"].cell(chord.harmony, param=chord.arp or 0))
-        if m == 4:
-            self._crash(buf, ins)
-        if m == mctx.n_measures - 1:
-            self._snare_roll(buf, ins)
-        self._phrase_measure(buf, ins, st, rng, mctx, MELODY_TRIO2, STRAIN_RULES, gate=0.9)
-
-    def _coda(self, mctx: MeasureCtx, st: MarchState, rng: RngStreams, buf: MeasureBuffer) -> None:
-        """m0 に crash、最終 measure は「crash＋tuba＋section＋picc 主音の長音」の最終和音（bd は crash に置換）。"""
-        ins, m, chord, intensity = mctx.instruments, mctx.measure_idx, mctx.chord, mctx.pattern.intensity
-        self._oom(buf, ins, chord, mctx.chord_measure_offset)
-        if m == mctx.n_measures - 1:
-            buf.put(0, CH_HARM, ins["section"].cell(chord.harmony, param=chord.arp or 0))
-            self._crash(buf, ins)
-        else:
-            self._pah(buf, ins, chord, intensity)
-            if m == 0:
-                self._crash(buf, ins)
-        self._phrase_measure(buf, ins, st, rng, mctx, MELODY_TRIO2, STRAIN_RULES, gate=0.9)
+        return SongPlan(bpm=bpm, key_pc=key_pc, sections=sections, order=order, summary=summary)

@@ -363,6 +363,23 @@ The design documents are written in Japanese: [DESIGN.md](DESIGN.md) describes t
 
 ---
 
+## How to exit and things to be aware of
+
+- **Exiting**: the command line exits by itself once it has written a song (or printed the usage or the list; exit code `0`; see the exit-code table above for failures). Press `Ctrl+C` to stop it midway. The GUI exits when you close the window (menu "File → Quit"); a generation in progress can be stopped with "Cancel".
+- Giving the name of an existing file overwrites it (the write goes through a temporary file, so a failure midway leaves the original intact). A song whose structural check reports an error is not written at all.
+- 6- and 8-channel MOD files are FastTracker-style and do not play in the original ProTracker or on a real Amiga (use OpenMPT, MilkyTracker and the like). For an Amiga-compatible file use `--channels 4` or pick a 4-channel genre.
+- The same genre, seed, format, tempo and channel count give the same file, but because the waveform synthesis uses floating point, a different Python version or OS can rarely change the end of a sample by one bit (it is the same song).
+- Playback differences between formats: XM and IT are high-resolution (16-bit) while MOD and S3M are 8-bit, so the same song has a richer high end in XM and IT. S3M alone has a pitch error inherited from ST3's period table (up to about 12 cents).
+- MIDI sounds as your GM synth or DAW renders it. Listening on a GM synth has not been verified in this environment.
+
+---
+
+## About AI coding
+
+The code, tests, design documents and README of this project were created with AI coding (Claude Code). Design decisions, listening checks and the decision to publish are made by the author.
+
+---
+
 ## License
 
 This project is released under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0).

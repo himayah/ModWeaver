@@ -154,7 +154,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class SwingJazzGenre(Genre):
     id = "swing-jazz"
-    category = "style"
+    category = "genre"
     display_name = "Swing Jazz"
     description = "スウィング・ジャズ。ライド＋ウォーキングベース＋ピアノコンピング、Bbリズムチェンジ AABA"
     description_en = "Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA)"

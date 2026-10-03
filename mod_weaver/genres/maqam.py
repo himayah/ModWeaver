@@ -121,7 +121,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class MaqamGenre(Genre):
     id = "maqam"
-    category = "style"
+    category = "genre"
     display_name = "Maqam Rast"
     description = "中東マカーム（Rast on G）。ウードのタクシームとマクスーム usul、中立音程"
     description_en = "Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals"

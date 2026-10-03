@@ -630,7 +630,7 @@ MAQAM_OUD = register(
         pitched=True, saturate=1.15, rate_note=24, shift=0, volume=50, noise_seed=601,
     ),
     "撥弦のウード。基音+5倍音（各異なる速さで減衰）+ 微小なピッチドロップ（撥弦アタック）。shift=0 のため"
-    "resolve_micronote() の tracker note をそのまま logical note として使える。maqam の oud 由来。"
+    "書かれた音高としてそのまま使える。maqam の oud 由来。"
     "中立音程は finetune 分散スロット（maqam_oud_n3／maqam_oud_n7。build_samples() で dataclasses.replace"
     "して追加登録する）。",
 )

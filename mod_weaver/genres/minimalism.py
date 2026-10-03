@@ -67,7 +67,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class MinimalismGenre(Genre):
     id = "minimalism"
-    category = "style"
+    category = "genre"
     display_name = "Minimalism"
     description = "ミニマル／フェーズ音楽。16/12/8/6row周期の4パートが少しずつズレて→揃って戻る"
     description_en = "Minimal / phase music: four parts with 16/12/8/6-row cycles drift apart and realign"

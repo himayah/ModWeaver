@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from ..target import Target
 
 # MOD の finetune の1単位（実プレイヤー libopenmpt で測定: -8 で -100、+7 で +87 セント＝12.5 セント刻み）。
-# 旧 ``core.pitch.FINETUNE_CENTS``（7.8125）は誤り（旧パイプラインの微分音はこのためずれていた。F8 で旧と一緒に消える）
+# （旧い実装は 7.8125 セントとしていたが誤りで、旧パイプラインの微分音はこのためずれていた。その定数は F8 で消した）
 MOD_FINETUNE_CENTS = 12.5
 
 SampleKey = tuple[str, tuple[int, ...], int, Optional[int]]   # (楽器名, 和音の形, セント, パン)

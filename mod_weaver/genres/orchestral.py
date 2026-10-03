@@ -87,7 +87,7 @@ def _inst(key: str, gm: GmVoice, **changes) -> Instrument:
 @register_genre
 class OrchestralGenre(Genre):
     id = "orchestral"
-    category = "style"
+    category = "genre"
     display_name = "Orchestral"
     description = "フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ"
     description_en = "Full orchestra / film score: 8 channels, six-voice strings + woodwinds + brass + timpani"

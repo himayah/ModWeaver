@@ -115,22 +115,3 @@ def test_microscale_absolute_cents_combines_tonic_note():
     assert scale.absolute_cents(1, tonic_note=19) == 2100.0
 
 
-def test_resolve_micronote_exact_12et():
-    t, ft = pitch.resolve_micronote(1900.0)          # G-2 ちょうど
-    assert (t, ft) == (19, 0)
-
-
-def test_resolve_micronote_neutral_third():
-    t, ft = pitch.resolve_micronote(2250.0)          # 22.5*100セント。round(22.5)は偶数丸めで22
-    assert t == 22 and -8 <= ft <= 7
-    # 残差 = 2250 - 22*100 = 50セント ≈ +6.4 finetune ステップ
-    assert ft == round(50.0 / pitch.FINETUNE_CENTS)
-
-
-def test_fine_portamento_param_zero_for_same_period():
-    assert pitch.fine_portamento_param(428, 0.0) == 0
-
-
-def test_fine_portamento_param_positive_for_nonzero_cents():
-    p = pitch.fine_portamento_param(428, 50.0)
-    assert 0 <= p <= 15

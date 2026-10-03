@@ -73,7 +73,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class FutureBassGenre(Genre):
     id = "future-bass"
-    category = "style"
+    category = "genre"
     display_name = "Future Bass"
     description = "フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV"
     description_en = "Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV"

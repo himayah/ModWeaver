@@ -122,7 +122,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class FreeJazzGenre(Genre):
     id = "free-jazz"
-    category = "style"
+    category = "genre"
     display_name = "Free Jazz"
     description = "フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化）"
     description_en = "Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes)"

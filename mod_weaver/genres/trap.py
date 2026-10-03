@@ -99,7 +99,7 @@ def _inst(key: str, gm: GmVoice) -> Instrument:
 @register_genre
 class TrapGenre(Genre):
     id = "trap"
-    category = "style"
+    category = "genre"
     display_name = "Trap"
     description = "トラップ／ドリル。32分ハイハットロールと808グライド、Cm-Ab の2和音ループ"
     description_en = "Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop"

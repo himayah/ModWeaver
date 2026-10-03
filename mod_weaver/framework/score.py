@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Optional, Union
 if TYPE_CHECKING:
     from .plan import SectionPlan
 
-TICKS_PER_BEAT = 24
 
 
 # ============================================================

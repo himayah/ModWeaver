@@ -17,7 +17,6 @@ from .pitch import NOTE_MAX, PERIODS
 HEADER_SIZE = 1084
 ROWS = 64
 CHANNELS = 4               # M.K. のチャンネル数（xCHN はマジックから読む）
-PATTERN_BYTES = ROWS * CHANNELS * 4   # M.K. の 1 pattern のバイト数
 LEFT_CHANNELS = (0, 3)     # Amiga: 1,4 = 左（5ch 以上は 4ch 周期で繰り返す）
 RIGHT_CHANNELS = (1, 2)    # Amiga: 2,3 = 右
 VOLUME_SUM_LIMIT = 120     # V15
@@ -329,11 +328,6 @@ def has_errors(issues: list[Issue]) -> bool:
 
 XM_FIXED_HEADER = 60     # ID(17)+name(20)+0x1A(1)+tracker(20)+version(2)
 XM_ORDER_TABLE_SIZE = 256
-# XM note 番号 37（FT2 の C-3）＝ ProTracker period 856（tracker note t=0）。writer とは独立に、
-# 「FT2 の C-4（note 49）が 8363Hz＝period 428」という仕様上の事実から導いた値。
-XM_NOTE_T0 = 37
-
-
 @dataclass(frozen=True)
 class ParsedXMCell:
     note: int          # 0=無音、1..96（1=C-0）。本プロジェクトは 37..72（t+XM_NOTE_OFFSET）のみ使用

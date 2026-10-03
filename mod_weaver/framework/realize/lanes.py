@@ -302,11 +302,6 @@ class AutomationPlacement:
     value: int
 
 
-def chord_shapes_of(part: "Part", score: "Score") -> frozenset[tuple[int, ...]]:
-    """``part`` で実際に使われた和音の形の集合（samples.py が焼くサンプルを決めるのに使う）。"""
-    return _chord_shapes(part, score)
-
-
 def compute_layout(genre: "Genre", score: "Score", budget: int) -> LaneLayout:
     """DESIGN.md §7.6〜§7.6: 予算でパートを選び、ladder で lane 数を収め、物理チャンネルの並び・パンを決める。"""
     active = [p.name for p in genre.parts if p.min_channels <= budget]
@@ -324,26 +319,6 @@ def _kit_lane_for(lanes: list[Lane], inst: str) -> Optional[Lane]:
         if inst in lane.insts:
             return lane
     return None
-
-
-def _resolve_note_conflicts(placements: list[Placement]) -> list[Placement]:
-    """同じ lane・同じ step に複数の note があれば、``NoteEvent.prio`` → ``Kit.priority``
-    （lane.priority に展開済み）→ 宣言順（先勝ち）で1つに決める（DESIGN.md §7.6）。"""
-    by_pos: dict[tuple[int, int], list[tuple[int, int, Placement]]] = {}
-    others: list[Placement] = []
-    for i, p in enumerate(placements):
-        if p.kind == "note":
-            by_pos.setdefault((p.lane, p.step), []).append((0, i, p))
-        else:
-            others.append(p)
-    out = list(others)
-    for _pos, group in by_pos.items():
-        if len(group) == 1:
-            out.append(group[0][2])
-            continue
-        # group の並び順＝lane に割り当てた順（kit なら楽器の宣言順）を「先勝ち」の基準にする
-        out.append(group[0][2])
-    return out
 
 
 def assign_events(genre: "Genre", layout: LaneLayout, score: "Score"

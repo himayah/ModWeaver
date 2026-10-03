@@ -51,7 +51,7 @@ class _Ctx:
 
 def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", *,
             level: bool = True) -> RealizedSong:
-    """``level=False`` は音量の底上げをしない（``tools/calibrate_native_levels.py`` が測るため）。"""
+    """``level=False`` は音量の底上げをしない（``tools/calibrate_levels.py`` が測るため）。"""
     if target.kind != "tracker":
         raise PlanError(f"TrackerRealizer cannot realize format {target.format!r}")
     fmt = "it" if target.format == "mp3" else target.format

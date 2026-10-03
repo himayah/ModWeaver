@@ -1,4 +1,4 @@
-"""Score を作る（FRAMEWORK_REDESIGN.md §6.8・§6.9）。
+"""Score を作る（DESIGN.md §5.5・§5.7）。
 
 ``resolve_plan(genre, seed)`` が ``genre.plan()`` を正しい乱数ストリームで呼び、``compose(genre, plan,
 seed, features)`` が区間ごと・パートごとに ``Generator`` を呼んで ``Score`` を作る。
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 def resolve_plan(genre: "Genre", seed: int) -> SongPlan:
-    """``genre.plan()`` を §6.8 の乱数ストリームで呼ぶ。"""
+    """``genre.plan()`` を DESIGN.md §5.5 の乱数ストリームで呼ぶ。"""
     rng = random.Random(f"{seed}:{genre.id}:plan")
     return genre.plan(rng)
 
 
 def _topo_order(genre: "Genre") -> list["Part"]:
     """``depends``（``follow`` を暗黙に含む）で位相整列する。循環は ``Genre`` のクラス定義時に
-    検査済みなのでここでは起きない想定だが、念のため検査する（§6.9 の1）。"""
+    検査済みなのでここでは起きない想定だが、念のため検査する（DESIGN.md §5.7 の1）。"""
     by_name = {p.name: p for p in genre.parts}
 
     def edges(p: "Part") -> list[str]:
@@ -56,7 +56,7 @@ def _topo_order(genre: "Genre") -> list["Part"]:
 
 
 def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str]) -> Score:
-    """区間ごと（作成順）・パートごとに ``Generator`` を呼んで ``Score`` を作る（§6.9）。"""
+    """区間ごと（作成順）・パートごとに ``Generator`` を呼んで ``Score`` を作る（DESIGN.md §5.7）。"""
     plan.extra = dict(plan.extra)
     plan.extra["features"] = frozenset(features)
 
@@ -93,7 +93,7 @@ def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str])
 
 
 # ============================================================
-# Score の検査（§6.9 の4）
+# Score の検査（DESIGN.md §5.7 の4）
 # ============================================================
 
 def _validate_section_score(genre: "Genre", sec_score: SectionScore) -> None:

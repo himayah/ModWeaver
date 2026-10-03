@@ -194,3 +194,11 @@ def test_unknown_category_rejected(clean_registry, category):
 
 def test_every_genre_has_a_known_category():
     assert {p.category for p in registry.list_genres()} <= set(registry.CATEGORIES)
+
+
+def test_categories_of_the_individually_implemented_genres():
+    """§6: nostalgic・suspense-* は style、他の個別実装の9ジャンルは genre（一覧の区分に出る）。"""
+    cats = {c.id: c.category for c in registry.list_genres()}
+    assert {cats[g] for g in ("nostalgic", "suspense-slow", "suspense-chase")} == {"style"}
+    assert {cats[g] for g in ("march", "swing-jazz", "prog-rock", "trap", "future-bass", "maqam", "free-jazz",
+                              "minimalism", "orchestral")} == {"genre"}

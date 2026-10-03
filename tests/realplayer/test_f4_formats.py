@@ -1,4 +1,4 @@
-"""F4 の完了条件（FRAMEWORK_REDESIGN.md §16.2）のうち実プレイヤー（libopenmpt）を使うもの: I5（テンポと長さ）・
+"""F4 の完了条件（DESIGN_HISTORY.md §15）のうち実プレイヤー（libopenmpt）を使うもの: I5（テンポと長さ）・
 I6（音割れなし）・MP3（IT 経由）。3 つの試験移植ジャンル × S3M・XM・IT（MOD は F3 の再生確認を含む）。"""
 from __future__ import annotations
 

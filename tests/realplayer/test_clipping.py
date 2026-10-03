@@ -32,7 +32,7 @@ def test_real_playback_does_not_clip(genre, fmt, seed):
         assert pk > 10 ** ((native_level.TARGET_PEAK_DB - 6) / 20), f"{genre} {fmt} seed {seed}: too quiet {pk:.3f}"
 
 
-@pytest.mark.parametrize("genre,fmt", [("march", "mod"), ("orchestral", "mod"), ("pop", "s3m")])
+@pytest.mark.parametrize("genre,fmt", [("march", "mod"), ("pop", "mod"), ("pop", "s3m")])
 def test_detects_clipping(genre, fmt):
     """検査が音割れを見逃さないこと: 全サンプルを振幅最大の矩形波・音量 64 にすると 0 dBFS を超える。"""
     g = engine.get_genre(genre)

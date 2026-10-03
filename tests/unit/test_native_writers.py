@@ -1,4 +1,4 @@
-"""``core/native_s3m.py``・``native_xm.py``・``native_it.py``（FRAMEWORK_REDESIGN.md §10）の単体テスト。
+"""``core/native_s3m.py``・``native_xm.py``・``native_it.py``（DESIGN.md §7）の単体テスト。
 読み戻し（パーサ）で値が一致すること、検査器が壊れたファイルを ERROR にすることを確かめる。実プレイヤーでの
 再生は ``tests/realplayer/`` が担う（自作 writer と自作 parser が同じ誤解を共有しうるため）。"""
 from __future__ import annotations

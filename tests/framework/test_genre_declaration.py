@@ -1,4 +1,4 @@
-"""``Genre`` のクラス定義時の宣言検査（FRAMEWORK_REDESIGN.md §13.1 I9）。"""
+"""``Genre`` のクラス定義時の宣言検査（DESIGN.md §10.1 I9）。"""
 from __future__ import annotations
 
 import pytest

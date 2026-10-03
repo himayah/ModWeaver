@@ -1,4 +1,4 @@
-"""セル化の規則（FRAMEWORK_REDESIGN.md §9.5〜§9.7）を ``tracker._write_note`` / ``_put_stop`` に直接当てて確かめる。"""
+"""セル化の規則（DESIGN.md §7.6〜§7.6）を ``tracker._write_note`` / ``_put_stop`` に直接当てて確かめる。"""
 from __future__ import annotations
 
 import types
@@ -47,7 +47,7 @@ def test_extended_formats_keep_volume_and_effect_together(fmt):
 
 def test_mod_drops_volume_for_a_trigger_effect():
     c = _note("mod", _p(arts=(Delay(2),))).get(0, 0)
-    assert c.fx == ("E", 0xD2) and c.vol is None            # §9.6 の2: エフェクトを残して音量を落とす
+    assert c.fx == ("E", 0xD2) and c.vol is None            # DESIGN.md §7.6 の2: エフェクトを残して音量を落とす
 
 
 def test_mod_omits_volume_equal_to_sample_default():

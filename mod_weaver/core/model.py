@@ -25,7 +25,7 @@ MAX_SAMPLE_BYTES = 131070  # 65535 words
 # GmVoice
 # ============================================================
 # 形式系（writer・native*・render・verify）ではなくここに置く理由: genres/*.py が core の形式系を import しない
-# （FRAMEWORK_REDESIGN.md §3.1・§13.1 I8）。Instrument.gm の型として genres が GmVoice を参照する必要があるので、
+# （DESIGN.md §2.1・§10.1 I8）。Instrument.gm の型として genres が GmVoice を参照する必要があるので、
 # 形式系ではないここに置く。
 
 @dataclass(frozen=True)
@@ -141,7 +141,7 @@ class SampleSpec:
     volume: int                    # 0..64
     loop: Optional[tuple[int, int]] = None   # (start_words, length_words) length>1。None は (0,1)。
     # ↑ "word" は常に「data の2 byte」を指す（8-bit なら 2 サンプル、16-bit なら 1 サンプル）。
-    #   writer 側は常に ×2 するだけで byte 位置に戻せる（FRAMEWORK_REDESIGN.md §8.2）
+    #   writer 側は常に ×2 するだけで byte 位置に戻せる（DESIGN.md §4.8）
     rate_note: int = 24            # 生成レートを決める tracker note（既定 C-3）
     shift: int = 0                 # n = t + shift（DESIGN.md §3.1）
     pitched: bool = True           # False: 常に rate_note で発音（打楽器）
@@ -151,12 +151,12 @@ class SampleSpec:
     # ↑ tracker note ``rate_note``（finetune 0）で鳴らしたときに実際に聞こえる基本周波数（Hz）。
     #   synth.render() が記録する。音高を持たない音色は None。MIDI 出力が実音の高さを求めるのに使う
     #   （合成は dsp.sample_rate()＝実際の Paula 再生レートの半分を基準に波形を作るため、論理 note の
-    #   pitch.hz(n) とは一致しない。DESIGN.md §3.1）。oversample（m）に依存しない値（FRAMEWORK_REDESIGN.md §8.1）
-    bits: int = 8                  # 8 | 16（FRAMEWORK_REDESIGN.md §8.2）。8-bit の全ジャンルは既定のまま
+    #   pitch.hz(n) とは一致しない。DESIGN.md §3.1）。oversample（m）に依存しない値（DESIGN.md §3.1）
+    bits: int = 8                  # 8 | 16（DESIGN.md §4.8）。8-bit の全ジャンルは既定のまま
     rate_hz: Optional[float] = None
     # ↑ ``rate_note`` で鳴らすときに実際に使うべき再生レート（Hz）。synth.render() が oversample から
     #   計算する。S3M/IT の C2Spd・C5Speed や XM の relative_note+finetune は、この値から求める
-    #   （FRAMEWORK_REDESIGN.md §8.2・§10）。MOD は Period 表だけで再生レートが決まるので参照しない
+    #   （DESIGN.md §4.8・§7）。MOD は Period 表だけで再生レートが決まるので参照しない
 
     @property
     def length_words(self) -> int:
@@ -178,7 +178,7 @@ class SampleSpec:
             raise SampleConstraintError(f"sample {n!r}: length must be even and >=2 (got {len(self.data)})")
         if self.bits == 8 and len(self.data) > MAX_SAMPLE_BYTES:
             # MOD/S3M の 8-bit サイズ上限（65535 word）。16-bit や他形式の上限は Realizer/SampleCaps が
-            # 持つ（FRAMEWORK_REDESIGN.md §4.1・§8.2）ので、ここでは 8-bit のときだけ検査する
+            # 持つ（DESIGN.md §3.2・§4.8）ので、ここでは 8-bit のときだけ検査する
             raise SampleConstraintError(f"sample {n!r}: length {len(self.data)} exceeds {MAX_SAMPLE_BYTES}")
         if not 0 <= self.volume <= 64:
             raise SampleConstraintError(f"sample {n!r}: volume out of range: {self.volume}")

@@ -1,10 +1,10 @@
-"""形式に依存しない楽譜（FRAMEWORK_REDESIGN.md §5）。
+"""形式に依存しない楽譜（DESIGN.md §3.3）。
 
 ジャンルのジェネレータが作るのはここまで。``NoteEvent``・``NoteOff``・``Automation``・``TempoEvent`` の
 時刻は区間の先頭からの **step**（既定 16分音符）。奏法（``Articulation``）は意味だけを書き、
-形式ごとの表現（MOD の `4xy` にするか CC1 にするか等）は Realizer（§9・§11）が決める。
+形式ごとの表現（MOD の `4xy` にするか CC1 にするか等）は Realizer（DESIGN.md §7.6・§7.7）が決める。
 
-単位は §5.1 のとおり: 音量は 0..64（``None``＝楽器の既定音量）、音高は書かれた音高（整数部＝logical note、
+単位は DESIGN.md §3.3 のとおり: 音量は 0..64（``None``＝楽器の既定音量）、音高は書かれた音高（整数部＝logical note、
 小数部＝セント/100）、パンは 0..255。
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ TICKS_PER_BEAT = 24
 
 
 # ============================================================
-# 奏法（Articulation。§5.3）
+# 奏法（Articulation。DESIGN.md §3.3）
 # ============================================================
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class Glide:
 
 @dataclass(frozen=True)
 class Delay:
-    """step 内で遅らせる（`EDx`）。``ticks`` はその row の tick 数未満（§6.6）。"""
+    """step 内で遅らせる（`EDx`）。``ticks`` はその row の tick 数未満（DESIGN.md §5.2）。"""
     ticks: int
 
 
@@ -96,7 +96,7 @@ class NoteEvent:
     #                                   ループは区間の終わりまで」
     chord: tuple[int, ...] = ()      # 和音: pitch（根音）からの半音の列。空なら単音
     strum_ms: float = 0.0            # 和音の構成音ごとの鳴り始めの遅れ（ギターのストローク）
-    prio: int = 1                    # 同じチャンネルに畳まれたときの優先度（大きいほど勝つ。§9.3）
+    prio: int = 1                    # 同じチャンネルに畳まれたときの優先度（大きいほど勝つ。DESIGN.md §7.6）
     arts: tuple[Articulation, ...] = ()
 
 
@@ -137,7 +137,7 @@ class SectionScore:
 
     def mute(self, parts: tuple[str, ...], start: int, end: int) -> None:
         """``finalize_section`` 用: 指定パートの ``[start, end)`` の区間にある NoteEvent/NoteOff を取り除く
-        （「決め」で他のパートを一時的に黙らせる等。FRAMEWORK_REDESIGN.md §6.2）。Automation は対象外。"""
+        （「決め」で他のパートを一時的に黙らせる等。DESIGN.md §5.1）。Automation は対象外。"""
         for name in parts:
             events = self.parts.get(name)
             if not events:

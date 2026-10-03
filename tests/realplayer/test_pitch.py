@@ -1,4 +1,4 @@
-"""I4（FRAMEWORK_REDESIGN.md §13.1）: 実音の一致。全形式で、同じ楽器の同じ音が §8.1 の基準（平均律）の高さで鳴る。
+"""I4（DESIGN.md §10.1）: 実音の一致。全形式で、同じ楽器の同じ音が §8.1 の基準（平均律）の高さで鳴る。
 
 1 サンプルだけの曲を各形式で作り、音域の両端と中央の音を1音ずつ、libopenmpt で鳴らして FFT で基本周波数を測る。
 基準は ``sounding_hz × 2^((t − rate_note)/12)``（t は tracker note）。許容は XM・IT が 7 セント（設計書どおり）、
@@ -101,7 +101,7 @@ def test_pitch_matches_sounding_hz(fmt, key):
 @pytest.mark.parametrize("fmt", ["s3m", "xm", "it"])
 @pytest.mark.parametrize("cents", [-37, 12, 50])
 def test_cents_variant_shifts_the_pitch_by_exactly_that_much(fmt, cents):
-    """微分音・``tune_cents`` の変種（再生レートに 2^(cents/1200) を掛ける。§8.4）が、その分だけ高さをずらす。"""
+    """微分音・``tune_cents`` の変種（再生レートに 2^(cents/1200) を掛ける。DESIGN.md §4.9）が、その分だけ高さをずらす。"""
     import dataclasses
 
     patch = PRESETS["keys_organ"]
@@ -119,7 +119,7 @@ def test_cents_variant_shifts_the_pitch_by_exactly_that_much(fmt, cents):
 
 @pytest.mark.parametrize("key", TONAL)
 def test_midi_note_number_matches_the_pitch_the_player_actually_sounds(key):
-    """MidiRealizer の音高（§11.3）が、実プレイヤーで鳴る実音と一致する（MIDI は実音から求めるので、
+    """MidiRealizer の音高（DESIGN.md §7.7）が、実プレイヤーで鳴る実音と一致する（MIDI は実音から求めるので、
     トラッカー形式の音高の検査 I4 と同じ高さを指すこと）。"""
     import types
 

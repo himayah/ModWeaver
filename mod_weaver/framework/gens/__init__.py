@@ -1,4 +1,4 @@
-"""ジェネレータ部品集（FRAMEWORK_REDESIGN.md §7）。ジャンルはここから必要なものを import する。"""
+"""ジェネレータ部品集（DESIGN.md §5.8）。ジャンルはここから必要なものを import する。"""
 from .arp import Arp
 from .bass import BassLine
 from .buildup import Buildup

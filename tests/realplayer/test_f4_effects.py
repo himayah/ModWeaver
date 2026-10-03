@@ -1,4 +1,4 @@
-"""形式ごとの奏法の表現を実プレイヤー（libopenmpt）で確かめる（FRAMEWORK_REDESIGN.md §13.4 の F4 の実測項目）。
+"""形式ごとの奏法の表現を実プレイヤー（libopenmpt）で確かめる（DESIGN.md §9.2 の F4 の実測項目）。
 
 - ``Tremolo``: 深さが形式間で一致する（S3M・IT は深さのニブルを 2 倍にして合わせている。``encode.Codec.tremolo``）。
 - リリース（``Instrument.release_s``）: XM・IT は音量エンベロープ＋キーオフ、MOD・S3M は音量スライドで、
@@ -143,7 +143,7 @@ def test_it_note_off_without_envelope_does_not_stop_the_note():
 
 @pytest.mark.parametrize("rows", (12, 16))
 def test_libopenmpt_plays_it_patterns_shorter_than_32_rows(rows):
-    """IT の仕様上の下限は 32 row なので書き出しは 32 row に詰める（§9.9）が、libopenmpt は短い pattern も正しく
+    """IT の仕様上の下限は 32 row なので書き出しは 32 row に詰める（DESIGN.md §7.6）が、libopenmpt は短い pattern も正しく
     扱う（要実測の結果）。"""
     from mod_weaver.core import native_it
 

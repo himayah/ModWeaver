@@ -1,6 +1,6 @@
-"""core/synth.py の高解像度描画（oversample・bits。FRAMEWORK_REDESIGN.md §8）の検査。
+"""core/synth.py の高解像度描画（oversample・bits。DESIGN.md §4.8）の検査。
 
-I7（§13.1）: 全プリセットについて、m=1 と m>1 の描画を比べる。
+I7（DESIGN.md §10.1）: 全プリセットについて、m=1 と m>1 の描画を比べる。
 - m=1・bits=8 は現行(MOD)の出力とバイト単位で完全に同じこと(既存のジャンル・テストの前提)。
 - m>1 にしても、m=1 のナイキスト以下の帯域ではスペクトルの包絡が大きく変わらないこと。
 
@@ -9,7 +9,7 @@ I7（§13.1）: 全プリセットについて、m=1 と m>1 の描画を比べ�
 詳細は該当するテスト関数のコメント)。NoiseLayer を含む音色は ``rng.uniform()`` の消費が内部レートに
 応じて時間軸上でずれる(seed は同じでも「経過何秒目のドロー」が変わる)ため、個々のスペクトルの微細構造
 までは一致しない。そちらは厳密な相関ではなく、全体のエネルギー(RMS)が大きく変わらないことだけを
-確かめる(§13.1 I7)。
+確かめる(DESIGN.md §10.1 I7)。
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def test_oversample_one_is_byte_identical_to_legacy_render(name):
 
 @pytest.mark.parametrize("name", sorted(PRESETS))
 def test_sounding_hz_is_independent_of_oversample(name):
-    """sounding_hz は m に依存しない(FRAMEWORK_REDESIGN.md §8.1・§8.3)。"""
+    """sounding_hz は m に依存しない(DESIGN.md §3.1・§4.8)。"""
     patch = PRESETS[name]
     base = synth.render(patch, oversample=1.0, bits=8)
     high = synth.render(patch, oversample=OVERSAMPLE, bits=16)

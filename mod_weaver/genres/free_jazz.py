@@ -1,4 +1,4 @@
-"""free-jazz（旧 genres/free_jazz.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""free-jazz（旧 genres/free_jazz.py の移植。DESIGN.md §6 のグループC）。
 
 和声は ``voice()`` を経由せず、隣接半音を密集させたトーンクラスターを ``ChordDef`` として直接手組みする
 （march・nostalgic・maqam と同じ明示的ボイシング）ので ``harmony=None`` とし ``plan()`` を上書きする。

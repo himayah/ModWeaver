@@ -1,8 +1,8 @@
-"""出力形式の能力表（FRAMEWORK_REDESIGN.md §4）。
+"""出力形式の能力表（DESIGN.md §3.2）。
 
-Realizer（§9・§11）とジェネレータ（``ctx.features`` 経由。§4.3）が読む、形式ごとの事実の集まり。
-値の出典は ProTracker・ST3・FT2・IT2.14 の仕様と現行実装の定数（§4.2 の表）。XM・IT の 16-bit・
-ボリューム列・楽器モード・エンベロープ、拡張音域の音高は実装時の要実測（§13.4。F4 で確かめる）。
+Realizer（DESIGN.md §7.6・§7.7）とジェネレータ（``ctx.features`` 経由。DESIGN.md §3.2）が読む、形式ごとの事実の集まり。
+値の出典は ProTracker・ST3・FT2・IT2.14 の仕様と現行実装の定数（DESIGN.md §3.2 の表）。XM・IT の 16-bit・
+ボリューム列・楽器モード・エンベロープ、拡張音域の音高は実装時の要実測（DESIGN.md §9.2。F4 で確かめる）。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class SampleCaps:
     bits: int                  # 8 | 16
-    target_rate: float         # 描画の目標再生レート（Hz）。MOD は 0（＝現行のまま。§8.2）
+    target_rate: float         # 描画の目標再生レート（Hz）。MOD は 0（＝現行のまま。DESIGN.md §4.8）
     max_bytes: int             # 1サンプルの最大バイト数
     max_samples: int           # サンプル（楽器）数の上限
 
@@ -38,7 +38,7 @@ class Target:
 
 
 # ============================================================
-# 形式ごとの値（§4.2）
+# 形式ごとの値（DESIGN.md §3.2）
 # ============================================================
 
 _FEATURES: dict[str, frozenset[str]] = {
@@ -100,7 +100,7 @@ def _tracker_budget(fmt: str, genre: "Genre", channels_request: Optional[int]) -
 
 
 def resolve(fmt: str, channels_request: Optional[int], genre: "Genre", seed: int) -> Target:
-    """``fmt``・``--channels`` の要求・ジャンルの宣言から ``Target`` を作る（§4.1）。"""
+    """``fmt``・``--channels`` の要求・ジャンルの宣言から ``Target`` を作る（DESIGN.md §3.2）。"""
     if fmt not in _FEATURES:
         raise PlanError(f"unknown format {fmt!r}. choices: {', '.join(_FEATURES)}")
     if fmt == "midi":
@@ -115,7 +115,7 @@ def resolve(fmt: str, channels_request: Optional[int], genre: "Genre", seed: int
     else:
         key = "it" if fmt == "mp3" else fmt
         budget = _tracker_budget(fmt, genre, channels_request)
-        sample = _SAMPLE_CAPS[key]   # S3M は長さの上限で実際の oversample 倍率を下げる（§8.2。Realizer の仕事）
+        sample = _SAMPLE_CAPS[key]   # S3M は長さの上限で実際の oversample 倍率を下げる（DESIGN.md §4.8。Realizer の仕事）
 
     lookup = "it" if fmt == "mp3" else fmt
     _max_ch, max_rows, max_patterns, max_orders = _TRACKER_LIMITS[lookup]

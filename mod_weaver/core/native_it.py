@@ -1,6 +1,6 @@
-"""Impulse Tracker ``.it`` の書き出しと検査（FRAMEWORK_REDESIGN.md §10.4・§10.5）。``RealizedSong`` 用。
+"""Impulse Tracker ``.it`` の書き出しと検査（DESIGN.md §7.5・§9.1）。``RealizedSong`` 用。
 
-旧 ``it.serialize_it``（``model.Song`` 用・サンプルモード）は F8 まで並行して残る。違い:
+書き出しの要点:
 
 - **楽器モード**（フラグの bit2）。1 サンプル＝1 楽器、キーボード表は全ノートをそのサンプルの同じノートに対応させる。
   NNA は Note Cut、DCT は無し。

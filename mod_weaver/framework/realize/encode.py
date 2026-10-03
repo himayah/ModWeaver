@@ -1,6 +1,6 @@
-"""奏法・音高・row コマンドの形式ごとの表現（FRAMEWORK_REDESIGN.md §9.6 の表）。
+"""奏法・音高・row コマンドの形式ごとの表現（DESIGN.md §7.6 の表）。
 
-形式の差はこのファイルの表に閉じ込める（§17.1 の原則2）。Realizer（``tracker.py``）は ``Codec`` を
+形式の差はこのファイルの表に閉じ込める（DESIGN.md §10.3 の原則2）。Realizer（``tracker.py``）は ``Codec`` を
 通してしか形式の表記に触れない。コマンドは ``(1文字, param)``。param は MOD の単位で受け取り、
 形式の表記に変えるだけ（D12）。
 """
@@ -24,11 +24,11 @@ _LETTER = {
 }
 _FMT_INDEX = {"mod": 0, "s3m": 1, "xm": 2, "it": 3}
 
-# 基準ノート（0 始まり。C-0 = 0）: ``rate_hz`` で鳴る音（§9.6）。MOD は使わない
+# 基準ノート（0 始まり。C-0 = 0）: ``rate_hz`` で鳴る音（DESIGN.md §7.6）。MOD は使わない
 _N_REF = {"s3m": 48, "xm": 48, "it": 60}
 _NOTE_RANGE = {"mod": (0, 35), "s3m": (0, 95), "xm": (0, 95), "it": (0, 119)}
 
-# 1セルに入りきらないときのエフェクトの優先順位（§9.6。小さいほど強い）
+# 1セルに入りきらないときのエフェクトの優先順位（DESIGN.md §7.6。小さいほど強い）
 PRIORITY = {"delay": 1, "glide": 2, "retrig": 3, "cut": 3, "arpeggio": 4, "offset": 5,
             "vibrato": 6, "tremolo": 6, "volslide": 7, "pan": 8, "cutoff": 8}
 
@@ -53,7 +53,7 @@ class Codec:
 
     @property
     def has_release_env(self) -> bool:
-        """音量エンベロープでリリースを表せる形式（§9.7）。"""
+        """音量エンベロープでリリースを表せる形式（DESIGN.md §7.6）。"""
         return self.fmt in ("xm", "it")
 
     # ---- 音高 ----

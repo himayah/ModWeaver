@@ -1,7 +1,6 @@
-"""racing-breaks（旧 genres/racing_breaks.py の移植。FRAMEWORK_REDESIGN.md §15.3 のグループB）。
+"""racing-breaks（旧 genres/racing_breaks.py の移植。DESIGN.md §6.14 のグループB）。
 
-旧 ``RacingBreaksProfile`` の ``plan()``・``drums``・``bass``・``comp`` の上書きを、ジャンル内のジェネレータに書き直した
-（F3 の試験移植を F6 で本番に昇格した）。
+``plan()``（系統）・``drums``・``bass``・``comp`` の個別の文法を、ジャンル内のジェネレータとして持つ。
 """
 from __future__ import annotations
 
@@ -90,7 +89,7 @@ GROOVE = frozenset({"drums", "bass", "comp", "pad"})
 
 
 # ============================================================
-# ジャンル内のジェネレータ（§15.3: racing-breaks）
+# ジャンル内のジェネレータ（DESIGN.md §6.14: racing-breaks）
 # ============================================================
 
 class BreaksBass(Generator):

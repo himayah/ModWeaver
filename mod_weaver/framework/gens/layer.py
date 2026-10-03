@@ -1,6 +1,6 @@
-"""任意パートの層（FRAMEWORK_REDESIGN.md §7 の ``Layer``）。現行 ``band_common.layer()``（``LayerSpec``）と
+"""任意パートの層（DESIGN.md §5.8 の ``Layer``）。現行 ``band_common.layer()``（``LayerSpec``）と
 同じ規則: 和音の変わり目に、和音（``chordal``）か第3音相当の長音を置く。パートの ``follow`` で鳴る区間を
-決める（§6.3）ので、このジェネレータ自身は常に処理する。乱数は使わない。"""
+決める（DESIGN.md §5.1）ので、このジェネレータ自身は常に処理する。乱数は使わない。"""
 from __future__ import annotations
 
 from ...core.pitch import CHORD_QUALITIES, fold_into_range

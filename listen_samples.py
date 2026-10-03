@@ -4,6 +4,8 @@
   14_arrangements だけは <ジャンル>_<シード>_<チャンネル数>ch.<拡張子>（同じ曲を編成ごとに聴き比べる）。
 使い方: ``python listen_samples.py``（Windows は listen_samples.bat のダブルクリックでも可）。
   環境変数 FMT : 出力形式（mod / xm / s3m / it / midi / mp3。既定 mod。mp3 は ffmpeg が必要）
+                 14_arrangements（チャンネル数ごとの聴き比べ）は MOD の編成の項目なので、FMT が mod 以外のときは作らない
+                 （--channels の意味が形式で違うため。DESIGN.md §7.1）
 シードは 101, 202, 303（同じシードなら何度作っても同じ曲）。16_racing-breaks だけは系統を揃えるため 101, 102, 113。
 第11章の表に試聴の項目を足したら、ここ（ITEMS）にも足す。
 """
@@ -82,13 +84,15 @@ def main() -> int:
     os.chdir(ROOT)
     fmt = os.environ.get("FMT") or "mod"
     ext = cli.formats.get_format(fmt).extension
-    total = len(songs())
+    total = len([x for x in songs() if fmt == "mod" or not x[3]])
     ok = ng = 0
     for folder, title, entries in ITEMS:
         print(f"[{folder}] {title}", flush=True)
         out_dir = Path("output") / "listen" / folder
         out_dir.mkdir(parents=True, exist_ok=True)
         for genre, seed, channels in entries:
+            if channels and fmt != "mod":
+                continue                                           # 編成の項目は MOD だけ（--channels の意味が形式で違う）
             name = f"{genre}_{seed}" + (f"_{channels}ch" if channels else "") + ext
             args = ["--genre", genre, "--seed", str(seed), "--format", fmt, "--output", str(out_dir / name)]
             if channels:

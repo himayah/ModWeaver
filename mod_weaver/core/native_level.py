@@ -1,12 +1,12 @@
-"""出力音量の底上げ（FRAMEWORK_REDESIGN.md §9.10。旧 ``core/level.py`` の ``RealizedSong`` 版）。
+"""出力音量の底上げ（DESIGN.md §7.9）。
 
-最大振幅を ``TARGET_PEAK_DB`` に揃える。手段は旧設計と同じ:
+最大振幅を ``TARGET_PEAK_DB`` に揃える。手段:
 - 音量の値（サンプルの既定音量と ``RCell.vol``）を一律に倍にする。上限 64 に当たる曲ではそこまで（音量の比を保つ）。
 - S3M のマスター音量・IT の mix volume（既定 48。127/128 まで）。ミキシング後に線形に効くので先に使う。
   XM・MOD にはこれが無いので、音量の値の余裕の範囲でしか持ち上がらない。
 
 どれだけ持ち上げるかは、ジャンル × 形式 × チャンネル数ごとに実プレイヤー（libopenmpt）で測った最悪の最大振幅
-（``framework/levels.py``。``tools/calibrate_native_levels.py`` が作る）から決める。作曲には触れない。
+（``framework/levels.py``。``tools/calibrate_levels.py`` が作る）から決める。作曲には触れない。
 """
 from __future__ import annotations
 

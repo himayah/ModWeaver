@@ -1,4 +1,4 @@
-"""Standard MIDI File の低レベル部品と読み戻し（FRAMEWORK_REDESIGN.md §11）。
+"""Standard MIDI File の低レベル部品と読み戻し（DESIGN.md §7.7）。
 
 MIDI を作るのは ``framework/realize/midi.py``（Score から直接）、構造検査は ``core/native_midi.py``。ここは両者が共有する
 SMF のバイト列の部品（可変長数値・メタイベント・トラック）と、writer とは独立に SMF を読む ``parse_midi`` だけを持つ。

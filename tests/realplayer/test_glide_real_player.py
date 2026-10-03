@@ -1,4 +1,4 @@
-"""``Glide`` の速さを実プレイヤー（libopenmpt）で確かめる（FRAMEWORK_REDESIGN.md §13.4「拡張音域の Glide の速さ」・§16.9）。
+"""``Glide`` の速さを実プレイヤー（libopenmpt）で確かめる（DESIGN.md §9.2「拡張音域の Glide の速さ」・§16.9）。
 
 ``tracker._glide_param`` が求めた ``3xx``/``Gxx`` の速さで、1 オクターブのグライドが指定した step 数で届く
 （MOD・S3M・XM・IT。周期は period の線形補間なので、周波数が目標の 97% に達するのは所要時間の約 97% の時点）。

@@ -1,4 +1,4 @@
-"""future-bass（旧 genres/future_bass.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""future-bass（旧 genres/future_bass.py の移植。DESIGN.md §6 のグループC）。
 
 1小節 = 16 step = 4/4。キック（とクラップ）をトリガにしたサイドチェイン・ダッキング（``Genre.mix``）と、
 サンプル・スライサー（vocal chop。``Offset(i / N_SLICES)``）が特徴。Eb メジャーの I-V-vi-IV を4小節で回す。

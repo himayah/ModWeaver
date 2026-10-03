@@ -1,4 +1,4 @@
-"""swing-jazz（旧 genres/swing_jazz.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""swing-jazz（旧 genres/swing_jazz.py の移植。DESIGN.md §6 のグループC）。
 
 1小節 = 8 step = 4/4（1 step = 8分音符、``Meter(8, 2)``）。``swing=Swing(14, 10)``（14:10 = 1.4:1、合計 24 tick = 1拍）。
 Bb のリズムチェンジ形式 AABA（8小節ずつ）で、Head → Solo → Head-out（タグエンディング）と進む。進行は "Rhythm Changes" の簡略形

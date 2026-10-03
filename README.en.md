@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 51 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`). `--genre random` picks one for you. Each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one; `--channels` picks one). (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 51 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`). `--genre random` picks one for you. **The format is chosen first and the song is composed for what that format can do** (16-bit, high-resolution samples and a wide note range for XM and IT, a looser channel limit for IT, XM, S3M and MIDI, and so on). With MOD, each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one). With XM, S3M, IT and MP3 every part of the genre is included and `--channels` is an upper limit. For the same genre, seed and tempo, the skeleton of the song (melody, chords, rhythm) is the same in every format. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -19,14 +19,14 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
 - **Full reproducibility with seeds**:
   When you get a song you like, pass the seed shown in the console as `--seed <number>` to regenerate exactly the same song at any time.
 - **Fully standalone synthesis**:
-  Instead of loading external audio files (WAV or MP3), it synthesizes 8-bit PCM samples directly with digital signal processing (DSP): sine waves, harmonics and filtered noise.
+  Instead of loading external audio files (WAV or MP3), it synthesizes PCM samples directly with digital signal processing (DSP): sine waves, harmonics and filtered noise (8-bit at the Amiga playback rate for MOD, 8-bit at a high rate for S3M, 16-bit at a high rate for XM and IT).
 - **Nostalgic sound design**:
   - **Music Box / Chime**: a music-box tone modelling the resonance of clear metal tines (inharmonic partials) with a smooth exponential decay.
   - **Twilight Ambient Pad**: warm analog synth strings with integer-period design, so they loop seamlessly with no clicks.
   - **Warm Mellow Bass**: a round, deep acoustic / lo-fi sub bass.
   - **Vintage Lo-Fi Drums**: a pitch-dropping kick, a warm retro snare and a delicate closed hi-hat.
 - **Six output formats (`--format`)**:
-  The default is Amiga ProTracker 4-channel MOD (`M.K.`). 6- and 8-channel songs (e.g. `pop` in its standard 6 channels, 8-channel `orchestral`) become FastTracker-style multichannel MOD (`6CHN` / `8CHN`). You can also choose `.xm` / `.s3m` / `.it` (tracker formats), General MIDI `.mid` (playable in DAWs and GM synths) and `.mp3` (rendered with ffmpeg). Automated tests play every tracker format with OpenMPT's playback engine (libopenmpt) and check that it sounds at the same pitch and length as the MOD.
+  The default is Amiga ProTracker 4-channel MOD (`M.K.`). 6- and 8-channel songs (e.g. `pop` in its standard 6 channels, 8-channel `orchestral`) become FastTracker-style multichannel MOD (`6CHN` / `8CHN`). You can also choose `.xm` / `.s3m` / `.it` (tracker formats), General MIDI `.mid` (playable in DAWs and GM synths) and `.mp3` (rendered with ffmpeg). Automated tests play every tracker format with OpenMPT's playback engine (libopenmpt) and check pitch (equal temperament; S3M alone has an error inherited from ST3's period table) and length. XM and IT have a richer high end than MOD, MIDI plays chords as real simultaneous notes and glides as pitch bends.
 - **Tempo control (`--tempo`)**:
   Fix the BPM with `--tempo 120`, or give a range such as `--tempo 80-100` to pick one at random within it. With the same seed you get "the same song" at a different tempo.
 - **GUI**:
@@ -39,7 +39,7 @@ The default `nostalgic` genre produces bittersweet, wistful pieces: emotional ch
 - **Python 3.10 or later** (no extra `pip install` needed)
 - **Only for the GUI: tkinter** (part of Python's standard library and included in the python.org installers for Windows and macOS; on Linux it may be a separate package, e.g. `sudo apt install python3-tk` on Debian/Ubuntu, or `brew install python-tk` for Homebrew's Python)
 - **Only for `--format mp3`: ffmpeg** (built with **libopenmpt** and **libmp3lame**)
-  - The MP3 is made by writing the song as `.xm`, playing it with ffmpeg's built-in libopenmpt (OpenMPT's playback engine) and encoding it to MP3. ModWeaver itself has no audio playback engine.
+  - The MP3 is made by writing the song as `.it` (64 channels, 16-bit, 44.1 kHz), playing it with ffmpeg's built-in libopenmpt (OpenMPT's playback engine) and encoding it to a 320 kbps MP3. ModWeaver itself has no audio playback engine.
   - Put `ffmpeg` on your PATH, or set the environment variable `MODWEAVER_FFMPEG` to the path of the executable.
   - On Windows, builds such as the **full** build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) include libopenmpt (the essentials build may not). To check, make sure `ffmpeg -hide_banner -demuxers` lists `libopenmpt` and `ffmpeg -hide_banner -encoders` lists `libmp3lame`.
   - If ffmpeg is not found or lacks a required feature, ModWeaver says what is missing and exits with code `5` (no file is written).
@@ -67,9 +67,10 @@ Example output:
 Genre       : nostalgic
 Format      : mod
 Seed        : 732501
-Tempo       : BPM 90
-Theme A     : Step-Down (Nostalgic Descent) -> Fmaj7 - Em7 - Dm7 - Cmaj7
-Theme B     : Journey (Memories & Depart) -> Am7 - Fmaj7 - Cmaj7 - G7
+Tempo       : BPM 88
+Channels    : 4
+Theme A     : Royal Road (Classic Emotion) -> Fmaj7 - G7 - Em7 - Am7
+Theme B     : Canon Sunset (Warm Twilight) -> Cmaj7 - G7 - Am7 - Em7
 --------------------------------------------------
 Output File : output/nostalgic_732501.mod
 Success! To reproduce this exact song, run:
@@ -136,12 +137,13 @@ python modweaver.py -e --tempo 80-100       # pick a random BPM from 80 to 100
 ```
 With a range, the BPM actually chosen is shown on the banner's `Tempo` line, and the reproduce command contains the resolved value (e.g. `--tempo 92`).
 
-#### Set the number of channels (`--channels` / `-c`; chosen by the genre for each song if omitted):
+#### Set the number of channels (`--channels` / `-c`; the meaning depends on the format):
 ```bash
-python modweaver.py -e --genre pop --channels 4   # small 4-channel combo, Amiga-compatible (M.K.)
-python modweaver.py -e --genre pop --channels 8   # 8 channels with a counter-melody and echo added
+python modweaver.py -e --genre pop --channels 4                 # MOD: small 4-channel combo, Amiga-compatible (M.K.)
+python modweaver.py -e --genre pop --channels 8                 # MOD: 8 channels with a counter-melody and echo added
+python modweaver.py -e --genre pop --format xm --channels 12    # XM: upper limit on the channels used (default 32)
 ```
-For genres with several numbers in the ch column (e.g. `4/6/8`), the same seed gives the same melody and chords in every arrangement; only the thickness and the number of channels change.
+With MOD the number must be one the genre declares (the ch column of the genre list, e.g. `4/6/8`; chosen by the genre for each song if omitted). With XM, S3M, IT and MP3 it is an upper limit: the genre's parts are fitted into it by merging drum kit pieces and baking chords into single samples (the format's maximum if omitted; an error if the parts cannot fit). It cannot be given for MIDI. For MOD genres with several numbers in the ch column, the same seed gives the same melody and chords in every arrangement; only the thickness and the number of channels change.
 
 #### List the available genres:
 ```bash
@@ -176,7 +178,7 @@ https://github.com/himayah/ModWeaver
 | `--format` | `-f` | `mod` | Output format: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3` (see the table below) |
 | `--tempo` | `-t` | chosen per genre | A BPM (`120`) or a range (`80-100`, random within it), 32–255. A range the genre cannot play is an error (exit code 2); a range only partly outside is clipped to the supported range with a warning |
 | `--output` | `-o` | `output/<genre>_<seed>.<ext>` (e.g. `output/nostalgic_732501.mod`); the folder is created if needed | Output path. When given, the file is written to exactly that path (a missing parent folder is an error) |
-| `--channels` | `-c` | chosen by the genre for each song | Number of channels: `4` / `6` / `8`. Which numbers are available depends on the genre (the ch column of the genre list); an unavailable number is an error (exit code 2). With `--genre random`, only genres that can use that number are picked |
+| `--channels` | `-c` | MOD: chosen by the genre for each song; other formats: the format's maximum | Number of channels; the meaning depends on the format. **MOD**: one of the `4` / `6` / `8` the genre declares (the ch column of the genre list; an unavailable number is an error, exit code 2). **XM / S3M / IT / MP3**: an upper limit (exit code 2 if the genre's parts cannot fit). **MIDI**: not allowed (exit code 2). With `--genre random`, only genres that can build that format with that number are picked |
 | `--output-dir` | – | `output` | Output folder when `--output` is omitted (created if missing). Cannot be combined with `--output` |
 | `--list-genres` | – | – | Print the id, aliases and description of every available genre, grouped into moods, genres and styles, then exit (code 0). Nothing is generated |
 | `--json` | – | – | Print the genre list (`--list-genres`) or the generation result as machine-readable JSON (for the GUI and other programs; see [DESIGN.md](DESIGN.md) §8.8) |
@@ -188,12 +190,12 @@ https://github.com/himayah/ModWeaver
 
 | `--format` | Extension | Channels | Notes |
 |:---|:---|:---|:---|
-| `mod` (default) | `.mod` | 4 (`M.K.`) / otherwise `xCHN` | Genres with other than 4 channels (6 or 8) use FastTracker-style multichannel MOD. Plays in OpenMPT, MilkyTracker, libxmp and others, but not in the original ProTracker or on a real Amiga. The genre's stereo placement is lost and the player's default L R R L panning is used |
-| `xm` | `.xm` | 1–32 | 4-channel genres use Amiga-style L R R L (with a narrower stereo width); 6- and 8-channel genres use the per-instrument panning the genre declares |
-| `s3m` | `.s3m` | 1–16 | Same as above (expressed as channel panning) |
-| `it` | `.it` | 1–64 | Same as above |
-| `midi` | `.mid` | unlimited | General MIDI (SMF format 1). Instruments are the GM programs each genre assigns to its parts, not the synthesized samples themselves. Glides (portamento) jump straight to the target note; vibrato is approximated with modulation (CC1) |
-| `mp3` | `.mp3` | 1–32 | 44.1 kHz stereo, 192 kbps. **Needs ffmpeg** (see Requirements) |
+| `mod` (default) | `.mod` | 4 (`M.K.`), 6, 8 (`xCHN`) | 8-bit samples. Genres with other than 4 channels (6 or 8) use FastTracker-style multichannel MOD. Plays in OpenMPT, MilkyTracker, libxmp and others, but not in the original ProTracker or on a real Amiga. The genre's stereo placement is lost and the player's default L R R L panning is used |
+| `xm` | `.xm` | limit 1–32 | **16-bit, high-rate samples**, volume in the volume column. Per-instrument panning the genre declares (Amiga-style L R R L if it declares none) |
+| `s3m` | `.s3m` | limit 1–16 | 8-bit, high-rate samples (at most 64000 bytes each). Expressed as channel panning |
+| `it` | `.it` | limit 1–64 | **16-bit, high-rate samples**, instrument mode. Expressed as channel panning |
+| `midi` | `.mid` | not allowed (16 MIDI channels) | General MIDI (SMF format 1, PPQ 480). Every part is included and chords are real simultaneous notes. Instruments are the GM programs each genre assigns to its parts, not the synthesized samples themselves. Glides are pitch bends, vibrato is modulation (CC1), and microtones are pitch bends |
+| `mp3` | `.mp3` | limit 1–64 (same as IT) | 44.1 kHz stereo, 320 kbps (rendered through IT). **Needs ffmpeg** (see Requirements) |
 
 #### What the tempo (BPM) means
 
@@ -308,7 +310,7 @@ python modweaver_gui.pyw --lang=ja   # Japanese (the default follows the OS lang
 
 On Windows, **double-click `modweaver_gui.bat`** (no console window). It works even when no application is associated with `.pyw` files (e.g. Python installed without the `py` launcher). If `pythonw` is not on PATH, set the `PYW` environment variable to the Python to use (e.g. `set PYW=py -3w`).
 
-- Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5). Picking a genre fills the tempo fields with its typical tempo (Fixed) and its usual range (Range); channel counts the genre cannot use are disabled.
+- Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5). Picking a genre fills the tempo fields with its typical tempo (Fixed) and its usual range (Range); the channel field depends on the format (buttons for the numbers the genre offers for MOD, an upper-limit field for XM, S3M, IT and MP3, unavailable for MIDI).
 - From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
 - The genre list and available formats are read from the CLI (`--list-genres --json`) at startup. The GUI runs `modweaver.py` behind the scenes, so it can do exactly what the CLI can.
 
@@ -316,11 +318,11 @@ On Windows, **double-click `modweaver_gui.bat`** (no console window). It works e
 
 ## Tracks and parts
 
-The number of channels (4, 6 or 8), their roles and instruments differ per genre and are defined in `mod_weaver/genres/*.py`
-(see the ch column of the genre list). Below is the layout of the default `nostalgic` genre (a balanced stereo image
-following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For other genres, see each `genres/*.py`
-(the 35 stage-3 genres declare them in `CHANNELS`), or the per-genre sections in §6 of [DESIGN.md](DESIGN.md)
-(§6.16 for the stage-3 genres; in Japanese).
+The parts (drums, bass, chords, melody, pad, …), their roles and instruments differ per genre and are declared in `mod_weaver/genres/*.py`;
+the MOD channel counts (4, 6 or 8) are in the ch column of the genre list. Assigning parts to channels (merging drum kit pieces, baking chords into one sample, and so on) is done automatically per format.
+Below is the MOD (4-channel) layout of the default `nostalgic` genre (a balanced stereo image
+following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For other genres, see the `parts` declaration in each `genres/*.py`,
+or the per-genre sections in §6 of [DESIGN.md](DESIGN.md) (§6.16 for the 35 band-style genres; in Japanese).
 
 | Channel | Pan | Part | Instruments | Role |
 |:---|:---|:---|:---|:---|
@@ -341,14 +343,15 @@ following the Amiga's fixed panning: 1: left, 2: right, 3: right, 4: left). For 
 ├── listen_samples.py  # Renders listening samples (3 per item of DESIGN.md §11) into output/listen/
 ├── listen_samples.bat # Windows: double-click to run the script above
 ├── mod_weaver/        # The package. Also runnable as `python -m mod_weaver`
-│   ├── core/          # Stable layer: data model, DSP, sample synthesis (Patch system), harmony, groove (EXT-1),
-│   │                   #   variable measures (EXT-2), writer/verify, output formats (formats / s3m / it / midi /
-│   │                   #   timeline / render (mp3)), output loudness boost (level)
-│   ├── profiles/      # Genre machinery: GenreProfile base, registry (auto-discovers genres/), shared helpers
-│   │                   #   (band_common: BandProfile, the skeleton shared by the 35 stage-3 genres), measured per-genre peaks (levels)
-│   ├── genres/        # Variable layer: genre modules (one file = one genre; registered just by being there; 51 genres)
+│   ├── core/          # Music and format layers: pitch, harmony, melody, DSP, sample synthesis (Patch system, high-resolution
+│   │                   #   rendering), and the writers/verifiers of each format (writer / native_s3m / native_xm / native_it /
+│   │                   #   native_midi / verify / render (mp3)), output loudness boost (native_level)
+│   ├── framework/     # The composition framework: Target (format capabilities), Score (format-independent score), Genre base,
+│   │                   #   generator parts (gens/), Realizers (realize/: tracker and MIDI), measured per-genre peaks (levels)
+│   ├── genres/        # Genre modules (one file = one genre; registered just by being there; 51 genres)
 │   └── gui/           # GUI (tkinter). Runs the CLI as a child process
-├── tools/             # For development: calibrate_levels.py (re-measures per-genre peaks with ffmpeg; DESIGN.md §7.9)
+├── tools/             # For development: calibrate_levels.py (re-measures per-genre peaks with ffmpeg; DESIGN.md §7.9),
+│                      #   update_golden.py (updates the output baseline tests/regression/golden.json; DESIGN.md §10)
 ├── output/            # Generated music files (default output folder, e.g. nostalgic_732501.mod)
 ├── DESIGN.md          # Design document (the current specification; Japanese)
 ├── DESIGN_HISTORY.md  # Design history (reasons for decisions, corrections, dropped ideas; Japanese)

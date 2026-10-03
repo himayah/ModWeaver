@@ -1,4 +1,4 @@
-"""dark-tense（旧 genres/dark_tense.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
+"""dark-tense（旧 genres/dark_tense.py の宣言を機械変換したもの。DESIGN.md §6）。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec, GmVoice

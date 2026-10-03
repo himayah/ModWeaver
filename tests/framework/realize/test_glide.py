@@ -1,4 +1,4 @@
-"""``Glide`` の Realizer 側の規則（FRAMEWORK_REDESIGN.md §5.3・§16.9）: 速さの計算と、先行音が鳴り終わっているかの判定。"""
+"""``Glide`` の Realizer 側の規則（DESIGN.md §3.3・DESIGN_HISTORY.md §15）: 速さの計算と、先行音が鳴り終わっているかの判定。"""
 from __future__ import annotations
 
 import types

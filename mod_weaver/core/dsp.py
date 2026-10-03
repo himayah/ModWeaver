@@ -40,7 +40,7 @@ def to_pcm(values: Iterable[float], gain: float = 127.0) -> bytes:
 
 
 def clamp16(x: float) -> int:
-    """[-32768, 32767] へ丸める（``clamp`` の16-bit版。FRAMEWORK_REDESIGN.md §8.2）。"""
+    """[-32768, 32767] へ丸める（``clamp`` の16-bit版。DESIGN.md §4.8）。"""
     return max(-32768, min(32767, int(round(x))))
 
 
@@ -140,7 +140,7 @@ def diff_hp(data: Sequence[float]) -> list[float]:
 
     遮断周波数は常に「呼び出し時の実際のレートの ``DIFF_HP_CUTOFF_RATIO`` 倍」になる（レートに比例して動く）。
     内部レートを oversample したときにこの遮断周波数を固定したい場合は ``one_pole_hp`` を使う
-    （FRAMEWORK_REDESIGN.md §8.2・§18.1）。
+    （DESIGN.md §4.8・DESIGN_HISTORY.md §15）。
     """
     out: list[float] = []
     prev = 0.0
@@ -150,7 +150,7 @@ def diff_hp(data: Sequence[float]) -> list[float]:
     return out
 
 
-# ---- oversample（FRAMEWORK_REDESIGN.md §8.2）: フィルタ係数の換算 ----
+# ---- oversample（DESIGN.md §4.8）: フィルタ係数の換算 ----
 
 DIFF_HP_CUTOFF_RATIO = math.asin(1.0 / (2.0 * math.sqrt(2.0))) / math.pi   # ≈ 0.115027
 # ↑ diff_hp の −3dB 点が「呼び出し時のレート」の何倍かという定数。diff_hp の周波数特性
@@ -173,7 +173,7 @@ def lp_coeff_for_cutoff(fc: float, rate: float) -> float:
 def one_pole_hp(data: Sequence[float], a: float) -> list[float]:
     """一次 HP ＝ 信号 − 一次 LP（係数 a は ``lp_coeff_for_cutoff`` で求める）。``diff_hp`` と違い
     遮断周波数を呼び出し側が指定できるので、oversample 時に ``diff_hp`` の遮断周波数を固定して
-    置き換えるのに使う（§8.2。実際の音は試聴で確かめる。§18.1）。"""
+    置き換えるのに使う（DESIGN.md §4.8。実際の音は試聴で確かめる。DESIGN_HISTORY.md §15）。"""
     lp = one_pole_lp(data, a)
     return [x - y for x, y in zip(data, lp)]
 

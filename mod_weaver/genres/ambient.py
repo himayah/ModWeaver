@@ -1,4 +1,4 @@
-"""ambient（旧 genres/ambient.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
+"""ambient（旧 genres/ambient.py の宣言を機械変換したもの。DESIGN.md §6）。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec, GmVoice
@@ -37,7 +37,7 @@ def _pcs(m: MeasureCtx) -> list[int]:
 
 class GlassHold(Generator):
     """区間の頭（4小節ごと）に、パッドとは別の構成音（第3音か第7音）を上で伸ばす（旧 extra_measure）。
-    鳴らさない区間で前の音を止める処理は Realizer の責任（§9.7）なので書かない。"""
+    鳴らさない区間で前の音を止める処理は Realizer の責任（DESIGN.md §7.6）なので書かない。"""
 
     def __init__(self, inst: str, register: tuple[int, int]) -> None:
         self.inst = inst

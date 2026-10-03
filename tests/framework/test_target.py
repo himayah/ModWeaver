@@ -1,4 +1,4 @@
-"""``framework/target.py``（FRAMEWORK_REDESIGN.md §4）の検査。"""
+"""``framework/target.py``（DESIGN.md §3.2）の検査。"""
 from __future__ import annotations
 
 import pytest

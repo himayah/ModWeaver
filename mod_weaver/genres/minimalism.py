@@ -1,4 +1,4 @@
-"""minimalism（旧 genres/minimalism.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""minimalism（旧 genres/minimalism.py の移植。DESIGN.md §6 のグループC）。
 
 4つのパートがそれぞれ固定の周期（16/12/8/6 step）で決まった音型を反復し、piano だけが区間（＝位相）ごとに
 参照位置を1 step ずつ右へずらす（ライヒの "Piano Phase" 的な発想）。1区間 = 1小節 = LCM(16,12,8,6) = 48 step、
@@ -25,7 +25,7 @@ N_PHASES = CYCLE_PIANO            # 16段階で piano の周期をちょうど1�
 METER = Meter(steps=LCM_STEPS, steps_per_beat=4)
 
 # 固定音型（step -> (logical note or None, vol)）。woodblock は row 0 を避ける（旧版の「row 0 に空きを残す契約」だが、
-# 1 step 目の弱いアクセントは音楽上の意味もあるので残す。§15.1）。
+# 1 step 目の弱いアクセントは音楽上の意味もあるので残す。DESIGN.md §6.14）。
 PIANO_PATTERN: dict[int, tuple[Optional[int], int]] = {
     0: (24, 44), 2: (28, 40), 4: (31, 42), 6: (28, 38),
     8: (24, 44), 10: (28, 40), 12: (31, 42), 14: (28, 38),

@@ -1,4 +1,4 @@
-"""suspense-slow・suspense-chase の共通部分（音色・和声・語彙。FRAMEWORK_REDESIGN.md §15.4）。
+"""suspense-slow・suspense-chase の共通部分（音色・和声・語彙。DESIGN.md §6）。
 
 ジャンルではない（``_`` 始まりなので ``discover()`` は読み込まない）。旧 ``profiles/suspense_common.py`` の移植。
 両ジャンルは ``plan()`` と各区間の文法（パートごとのジェネレータ）だけを別に書く。

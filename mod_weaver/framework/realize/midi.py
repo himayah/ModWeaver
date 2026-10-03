@@ -1,4 +1,4 @@
-"""MidiRealizer（FRAMEWORK_REDESIGN.md §11）: Score から直接 SMF（format 1・PPQ 480）を作る。
+"""MidiRealizer（DESIGN.md §7.7）: Score から直接 SMF（format 1・PPQ 480）を作る。
 
 トラッカー用の lane・ladder は使わない（予算の考え方が無い）。**全パートを入れる**（``min_channels``・``channel_cap``
 は無視する。MIDI は「ジャンルの意図を GM 音源で聴ける」ことが目的で、厚い編成が意図そのもの）。
@@ -7,9 +7,9 @@
   スウィングは 2 step の組の後ろの step を ``long`` tick 目から始める。
 - トラック: パートごとに 1 トラック。打楽器のパート（全楽器が ``GmVoice(drum_note=)``）は MIDI ch10、他は宣言順に
   ch1–9・11–16。足りなければ同じ program のパートで相乗りし、それでも足りなければ ``PlanError``。
-- 音高: 実音（§8.1 の基準 ``sounding_hz × 2^((t − rate_note)/12)``）から MIDI ノート番号を求め、整数でない部分と
+- 音高: 実音（DESIGN.md §3.1 の基準 ``sounding_hz × 2^((t − rate_note)/12)``）から MIDI ノート番号を求め、整数でない部分と
   ``tune_cents`` はピッチベンド。セントの違う音が重なるパートは、セントの値ごとに別の MIDI チャンネルにする。
-- 音量: velocity ＝ ``round(vel/64 × 127)``。曲の最大が 127 になるまで一律に持ち上げる（§9.10）。
+- 音量: velocity ＝ ``round(vel/64 × 127)``。曲の最大が 127 になるまで一律に持ち上げる（DESIGN.md §7.9）。
 """
 from __future__ import annotations
 

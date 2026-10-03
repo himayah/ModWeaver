@@ -1,4 +1,4 @@
-"""orchestral（旧 genres/orchestral.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""orchestral（旧 genres/orchestral.py の移植。DESIGN.md §6 のグループC）。
 
 8チャンネル専用（``mod_channels={8: 1}``）のフルオーケストラ。6声（bass/tenor/alto/soprano1/soprano2/descant）の
 和声を、``voice()`` が返す標準の bass/harmony/chord_tones に、残り3声（alto/soprano1/descant）を

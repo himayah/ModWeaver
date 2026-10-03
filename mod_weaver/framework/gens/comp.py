@@ -1,4 +1,4 @@
-"""和音の刻み（FRAMEWORK_REDESIGN.md §7 の ``Comp``）。現行 ``band_common.comp()``・``comp_rows()`` と
+"""和音の刻み（DESIGN.md §5.8 の ``Comp``）。現行 ``band_common.comp()``・``comp_rows()`` と
 同じ値・規則で、座標を row ではなく step で書く。"""
 from __future__ import annotations
 

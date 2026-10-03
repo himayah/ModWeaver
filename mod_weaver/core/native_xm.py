@@ -1,13 +1,13 @@
-"""FastTracker II ``.xm`` の書き出しと検査（FRAMEWORK_REDESIGN.md §10.3・§10.5）。``RealizedSong`` 用。
+"""FastTracker II ``.xm`` の書き出しと検査（DESIGN.md §7.3・§9.1）。``RealizedSong`` 用。
 
-旧 ``writer.serialize_xm``（``model.Song`` 用）は F8 まで並行して残る。違い:
+書き出しの要点:
 
-- **音量はボリューム列**（``0x10 + vol``。旧: エフェクト ``Cxx``）。エフェクトの列は奏法に使える。
+- **音量はボリューム列**（``0x10 + vol``）。エフェクトの列は奏法に使える。
 - **16-bit サンプル**対応: サンプルヘッダ type の bit4、データは 16-bit 語の差分（delta）符号化。
 - 再生レート: 基準ノート C-4（XM note 49）で ``rate_hz`` になるよう relative note と finetune（1/128 半音）を書く
   （Amiga 周波数表のまま。D13）。
 - パンはサンプル（instrument）のパン。Realizer が lane のパンごとに別サンプルを作る（``samples.sample_key``）ので、
-  旧来のセルごとの ``Px`` は不要。
+  セルごとの ``Px`` は不要。
 - ``Instrument.release_s`` のあるサンプルだけ、音量エンベロープ（サステイン＋リリース）を有効にする。
   キーオフはノート 97。
 """
@@ -105,7 +105,7 @@ def tuning(rate_hz: float) -> tuple[int, int]:
 
 def release_envelope(release_s: float, bpm: int) -> tuple[list[tuple[int, int]], int, int]:
     """(点の列, サステイン点, type)。点0（音量 64）でサステインし、キーオフ後に ``release_s`` 秒で 0 へ落ちる。
-    tick は曲の初期テンポで換算（``2.5 / bpm`` 秒）。テンポが変わる曲では長さがずれる（§16.6）。"""
+    tick は曲の初期テンポで換算（``2.5 / bpm`` 秒）。テンポが変わる曲では長さがずれる（DESIGN_HISTORY.md §15）。"""
     ticks = max(1, round(release_s / (2.5 / bpm)))
     return [(0, 64), (ticks, 0)], 0, 0x03     # bit0=有効、bit1=サステイン
 

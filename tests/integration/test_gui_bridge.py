@@ -81,6 +81,17 @@ def test_replay_request_passes_only_what_was_requested():
     assert req == Request("pop", 5, "xm", (111, 111), 6, Path("o"))
 
 
+def test_replay_request_keeps_a_channel_request_only_where_it_means_the_same(catalog):
+    """--channels の意味は形式で違う（DESIGN.md §5.8）。MOD の選択を MIDI（指定不可）や上限の形式へそのまま渡さない。"""
+    mod_song = _song(channels_request=6)                       # format="mod"
+    assert bridge.replay_request(mod_song, "midi", None, catalog).channels is None
+    assert bridge.replay_request(mod_song, "xm", None, catalog).channels is None       # 選択 → 上限は意味が違う
+    xm_song = _song(format="xm", channels_request=8)
+    assert bridge.replay_request(xm_song, "it", None, catalog).channels == 8            # 上限 → 上限は同じ意味
+    assert bridge.replay_request(xm_song, "mod", None, catalog).channels is None
+    assert bridge.replay_request(xm_song, "midi", None, catalog).channels is None
+
+
 def _run_job(args) -> bridge.Outcome:
     done = threading.Event()
     box = []

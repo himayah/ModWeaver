@@ -1,4 +1,4 @@
-"""楽器のサンプル計画と描画（FRAMEWORK_REDESIGN.md §8.4）。
+"""楽器のサンプル計画と描画（DESIGN.md §4.9）。
 
 サンプル番号は lane とは独立に決まる: kit/chord_voice/mono の lane に乗る楽器は1つにつき1サンプル
 （lane が「まとめ」られていても、鳴らす楽器ごとに別サンプルが要る）。chord_baked の lane は、実際に
@@ -45,7 +45,7 @@ def sample_key(fmt: str, genre: "Genre", p: Placement, lane: Lane) -> SampleKey:
 
 
 def render_for(patch: synth.Patch, target: "Target") -> SampleSpec:
-    """``target`` に合わせて描画する（§8.2）。倍率 m ＝ 目標レート / 実際の再生レート。1サンプルの
+    """``target`` に合わせて描画する（DESIGN.md §4.8）。倍率 m ＝ 目標レート / 実際の再生レート。1サンプルの
     上限（S3M の 64000 byte など）を超えるときは m を下げ、m=1 でも超えるなら ``SampleConstraintError``。"""
     caps = target.sample
     if caps.target_rate <= 0:

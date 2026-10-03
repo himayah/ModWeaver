@@ -1,4 +1,4 @@
-"""出力形式の一覧（CLI の ``--format`` の値・拡張子・説明・``--channels`` の意味。FRAMEWORK_REDESIGN.md §4・§14）。
+"""出力形式の一覧（CLI の ``--format`` の値・拡張子・説明・``--channels`` の意味。DESIGN.md §3.2・§8）。
 
 各形式の能力（行数・pattern 数・サンプルの上限・機能）は ``framework/target.py``、書き出しは ``framework/realize/``
 （Realizer）と ``core/native*.py``（writer・検査器）。ここは「どんな形式があるか」の表だけを持つ。

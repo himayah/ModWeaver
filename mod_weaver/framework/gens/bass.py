@@ -1,4 +1,4 @@
-"""ベースの型（FRAMEWORK_REDESIGN.md §7 の ``BassLine``）。現行 ``band_common.bass_line()`` と同じ値・
+"""ベースの型（DESIGN.md §5.8 の ``BassLine``）。現行 ``band_common.bass_line()`` と同じ値・
 規則で、座標を row ではなく step で書く。register は ``Genre.harmony.registers.bass`` から取る。"""
 from __future__ import annotations
 

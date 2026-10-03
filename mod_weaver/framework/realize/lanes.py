@@ -1,8 +1,8 @@
 """パートの選択・lane の需要と ladder・チャンネルの並びとパン・イベントの lane への割当
-（FRAMEWORK_REDESIGN.md §9.2〜§9.5）。
+（DESIGN.md §7.6〜§7.6）。
 
 MOD 専用ではない設計にしてあるが、F3 の時点で実際に使うのは MOD（制御チャンネル・和音の声部化は
-B の大きい S3M/XM/IT でこそ本領を発揮する。§9.3 の計算例を参照）。
+B の大きい S3M/XM/IT でこそ本領を発揮する。DESIGN.md §7.6 の計算例を参照）。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 # ============================================================
-# lane の種類と需要（§9.3）
+# lane の種類と需要（DESIGN.md §7.6）
 # ============================================================
 
 @dataclass
@@ -94,7 +94,7 @@ def _build_demands(genre: "Genre", score: "Score") -> dict[str, _PartDemand]:
 
 
 # ============================================================
-# ladder（§9.3）
+# ladder（DESIGN.md §7.6）
 # ============================================================
 
 def _total(demands: dict[str, "_PartDemand"], active: list[str]) -> int:
@@ -102,7 +102,7 @@ def _total(demands: dict[str, "_PartDemand"], active: list[str]) -> int:
 
 
 def _apply_ladder(genre: "Genre", demands: dict[str, "_PartDemand"], active: list[str], budget: int) -> None:
-    """``demands`` を書き換えて ``_total(...) <= budget`` に収める（収まらなければ PlanError。§9.3 R5）。
+    """``demands`` を書き換えて ``_total(...) <= budget`` に収める（収まらなければ PlanError。DESIGN.md §7.6 R5）。
     ``active``（予算未満で外れなかったパート名、宣言順）の範囲でだけ動く。
     """
     if _total(demands, active) <= budget:
@@ -150,7 +150,7 @@ def _apply_ladder(genre: "Genre", demands: dict[str, "_PartDemand"], active: lis
 
 
 def _can_bake_chord(genre: "Genre", pd: "_PartDemand") -> bool:
-    """この和音パートで実際に使われた全ての和音の形が焼けるか試す（§8.4 の誤差 12 セント規則）。
+    """この和音パートで実際に使われた全ての和音の形が焼けるか試す（DESIGN.md §4.9 の誤差 12 セント規則）。
     1つでも焼けない形があれば、このパートは声部のままにする（measure によって lane 数が変わる
     ような不整合な結果を避けるため）。"""
     from ...core.synth import chord_patch
@@ -168,7 +168,7 @@ def _can_bake_chord(genre: "Genre", pd: "_PartDemand") -> bool:
     return True
 
 # ============================================================
-# 物理チャンネル（§9.4）
+# 物理チャンネル（DESIGN.md §7.6）
 # ============================================================
 
 @dataclass(frozen=True)
@@ -277,7 +277,7 @@ def _build_lanes(genre: "Genre", demands: "dict[str, _PartDemand]", active: list
 
 
 # ============================================================
-# イベントの lane への割当（§9.5）
+# イベントの lane への割当（DESIGN.md §7.6）
 # ============================================================
 
 @dataclass(frozen=True)
@@ -308,12 +308,12 @@ def chord_shapes_of(part: "Part", score: "Score") -> frozenset[tuple[int, ...]]:
 
 
 def compute_layout(genre: "Genre", score: "Score", budget: int) -> LaneLayout:
-    """§9.2〜§9.4: 予算でパートを選び、ladder で lane 数を収め、物理チャンネルの並び・パンを決める。"""
+    """DESIGN.md §7.6〜§7.6: 予算でパートを選び、ladder で lane 数を収め、物理チャンネルの並び・パンを決める。"""
     active = [p.name for p in genre.parts if p.min_channels <= budget]
     demands = _build_demands(genre, score)
     for name in list(demands):
         if name not in active:
-            del demands[name]   # 予算で外れたパートは ladder の対象にしない（§9.2）
+            del demands[name]   # 予算で外れたパートは ladder の対象にしない（DESIGN.md §7.6）
     _apply_ladder(genre, demands, active, budget)
     lanes = _build_lanes(genre, demands, active, budget)
     return LaneLayout(budget=budget, lanes=lanes, active_parts=frozenset(active))
@@ -328,7 +328,7 @@ def _kit_lane_for(lanes: list[Lane], inst: str) -> Optional[Lane]:
 
 def _resolve_note_conflicts(placements: list[Placement]) -> list[Placement]:
     """同じ lane・同じ step に複数の note があれば、``NoteEvent.prio`` → ``Kit.priority``
-    （lane.priority に展開済み）→ 宣言順（先勝ち）で1つに決める（§9.5）。"""
+    （lane.priority に展開済み）→ 宣言順（先勝ち）で1つに決める（DESIGN.md §7.6）。"""
     by_pos: dict[tuple[int, int], list[tuple[int, int, Placement]]] = {}
     others: list[Placement] = []
     for i, p in enumerate(placements):
@@ -348,7 +348,7 @@ def _resolve_note_conflicts(placements: list[Placement]) -> list[Placement]:
 
 def assign_events(genre: "Genre", layout: LaneLayout, score: "Score"
                    ) -> dict[str, tuple[list[Placement], list[AutomationPlacement]]]:
-    """区間ごとに、イベントを lane へ割り当てる（§9.5）。戻り値は区間名 → (Placement の列, Automation の列)。"""
+    """区間ごとに、イベントを lane へ割り当てる（DESIGN.md §7.6）。戻り値は区間名 → (Placement の列, Automation の列)。"""
     out: dict[str, tuple[list[Placement], list[AutomationPlacement]]] = {}
     for sec_name, sec_score in score.sections.items():
         placements: list[Placement] = []
@@ -429,7 +429,7 @@ def _assign_kit(lanes: list[Lane], events: list[Event]) -> list[Placement]:
 
 
 def _assign_chord_voices(lanes: list[Lane], events: list[Event]) -> list[Placement]:
-    """§9.5: NoteEvent 1つを、``pitch + chord[i]`` として声部 i の lane に置く。音量は
+    """DESIGN.md §7.6: NoteEvent 1つを、``pitch + chord[i]`` として声部 i の lane に置く。音量は
     ``round(vel/√k)``。構成音が lane の数より少ない和音は、余った lane を同じ step で止める。
     ``strum_ms`` は声部 i を ``Delay`` で遅らせる（Realizer 側。ここでは情報を残すだけ）。"""
     import math
@@ -456,7 +456,7 @@ def _assign_chord_voices(lanes: list[Lane], events: list[Event]) -> list[Placeme
 
 def _assign_poly(lanes: list[Lane], events: list[Event]) -> list[Placement]:
     """``poly`` の lane への動的割当。空いている（鳴っている音が無い）lane のうち番号の小さいものを
-    使う。無ければ最も古い音の lane を奪う（§9.5）。"""
+    使う。無ければ最も古い音の lane を奪う（DESIGN.md §7.6）。"""
     notes = sorted((e for e in events if isinstance(e, NoteEvent)), key=lambda e: e.step)
     offs = [e for e in events if isinstance(e, NoteOff)]
     # 各 lane の「現在鳴っている音の終了予定 step」（None = ワンショットで自然減衰／ループで継続中）

@@ -1,4 +1,4 @@
-"""suspense-chase（旧 genres/suspense_chase.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""suspense-chase（旧 genres/suspense_chase.py の移植。DESIGN.md §6 のグループC）。
 
 構成: intro → a1 → a2 → b → a1 → b → climax → outro。進行は A=pedal / B=tritone 固定（増 4 度の追走が主役）。
 文法の核は「毎拍の心拍＋8 分連打の drone＋半音・増 4 度を混ぜた pizz オスティナート」と、silence run（無音）から

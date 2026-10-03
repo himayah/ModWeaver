@@ -1,4 +1,4 @@
-"""ドラムの型（FRAMEWORK_REDESIGN.md §7 の ``Groove``）。現行 ``band_common`` の ``Hit``・``hits()``・
+"""ドラムの型（DESIGN.md §5.8 の ``Groove``）。現行 ``band_common`` の ``Hit``・``hits()``・
 ``BandProfile.drums`` と同じ値・規則で、座標を row ではなく step で書く。"""
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class Hit:
 
 
 GroovePattern = tuple[Hit, ...]   # grooves マッピングの値の型。Generator クラスは下の Groove（名前が重なるが
-# 設計書 §7 の表の名前どおりにしてある。型エイリアスは別名にして衝突を避ける）
+# 設計書 DESIGN.md §5.8 の表の名前どおりにしてある。型エイリアスは別名にして衝突を避ける）
 
 
 def hits(key: str, rows: Sequence[int], vol: int, prob: float = 1.0,

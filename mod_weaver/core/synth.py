@@ -249,7 +249,7 @@ class Patch:
 # 和音サンプル
 # ============================================================
 # 第３段階のジャンル向けに profiles/band_common.py にあった chord_patch() をここへ移す
-# （FRAMEWORK_REDESIGN.md §8.4）。quality 文字列ではなく intervals（半音オフセットの列）を直接受けるように
+# （DESIGN.md §4.9）。quality 文字列ではなく intervals（半音オフセットの列）を直接受けるように
 # 一般化し、core/pitch.CHORD_QUALITIES の値をそのまま渡せるようにした。
 
 MAX_LOOP_CHORD_CENTS = 12.0   # ループの和音で、構成音のサイクル数を整数に丸めたときに許す音程誤差
@@ -303,7 +303,7 @@ def _filter_fn(f: FilterSpec, *, oversample: float, base_rate: float, rate: floa
 
     ``_apply_post_filter``（そのまま適用）と ``_render_loop_body``（``dsp.circular`` で包んで適用）が共用する。
     ``oversample``（内部レートの倍率 m）・``base_rate``（m=1 のときのレート）・``rate``（実際に使う
-    内部レート＝base_rate×m）は、m>1 でも遮断周波数を変えないための換算に使う（FRAMEWORK_REDESIGN.md §8.2）。
+    内部レート＝base_rate×m）は、m>1 でも遮断周波数を変えないための換算に使う（DESIGN.md §4.8）。
     ``oversample=1.0`` では換算が恒等（``a^1=a``）になり、"hp" は従来どおり ``dsp.diff_hp`` のまま
     （現行の挙動と完全に一致する）。
     """
@@ -390,7 +390,7 @@ def _ms_to_samples(ms: float, rate: float) -> int:
 
 def _scale_even(n: int, oversample: float) -> int:
     """サンプル数で書かれた値（``Loop.length``・``attack_samples``）を oversample 倍し、偶数に丸める
-    （FRAMEWORK_REDESIGN.md §8.2）。``oversample=1.0`` では ``n`` が偶数である限り ``n`` をそのまま返す
+    （DESIGN.md §4.8）。``oversample=1.0`` では ``n`` が偶数である限り ``n`` をそのまま返す
     （既存の挙動を変えない）。"""
     return max(2, 2 * round(n * oversample / 2.0))
 
@@ -400,15 +400,15 @@ def render(patch: Patch, *, oversample: float = 1.0, bits: int = 8) -> SampleSpe
     """``Patch`` から ``SampleSpec`` を合成する（core/synth.py の唯一の公開エントリ）。
 
     ``oversample``（m、既定 1.0）は内部の合成レートを ``base_rate×m`` に上げる
-    （FRAMEWORK_REDESIGN.md §8.2）。``m=1.0``・``bits=8``（ともに既定値）は現行（MOD 向け）と
+    （DESIGN.md §4.8）。``m=1.0``・``bits=8``（ともに既定値）は現行（MOD 向け）と
     完全に同じバイト列を返す。``bits=16`` は 16-bit signed PCM で量子化する。
 
-    ``(patch, oversample, bits)`` をキーにプロセス内でキャッシュする（§8.6。``Patch`` は frozen
+    ``(patch, oversample, bits)`` をキーにプロセス内でキャッシュする（DESIGN.md §4.8。``Patch`` は frozen
     dataclass なのでハッシュできる）。返り値の ``SampleSpec`` はキャッシュヒット時に**同じオブジェクト**を
     返すので、呼び出し側は書き換えない（``dataclasses.replace()`` で複製してから変える。既存のコードは
     すでにそうしている）。CLI は1回ごとに新しいプロセスなので、このキャッシュは同一プロセス内の
     繰り返し呼び出し（テストの総当たり等）にだけ効く。1曲あたりの生成時間がこれで足りない場合に、
-    ディスクキャッシュを足すかどうかを F1 completion で判断する（§8.6）。
+    ディスクキャッシュを足すかどうかを F1 completion で判断する（DESIGN.md §4.8）。
     """
     if oversample < 1.0:
         raise SampleConstraintError(f"{patch.name}: oversample must be >= 1.0: {oversample}")

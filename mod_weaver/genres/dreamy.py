@@ -1,4 +1,4 @@
-"""dreamy（旧 genres/dreamy.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
+"""dreamy（旧 genres/dreamy.py の宣言を機械変換したもの。DESIGN.md §6）。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

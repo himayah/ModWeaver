@@ -656,7 +656,7 @@ class App(tk.Tk):
         s = self._selected_song()
         if s is not None:
             out = self.output_dir.get().strip()
-            self._generate(bridge.replay_request(s, fmt, Path(out) if out else None))
+            self._generate(bridge.replay_request(s, fmt, Path(out) if out else None, self.catalog))
 
     def _load_song_settings(self) -> None:
         """選んだ曲の指定を設定に戻す（シードを固定してテンポや形式だけ変える、などのため）。"""

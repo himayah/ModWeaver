@@ -1,4 +1,4 @@
-"""生成エンジン（engine.py。FRAMEWORK_REDESIGN.md §3.1）の検査: build・generate・検査器との接続・エラー。"""
+"""生成エンジン（engine.py。DESIGN.md §2.1）の検査: build・generate・検査器との接続・エラー。"""
 from __future__ import annotations
 
 import logging

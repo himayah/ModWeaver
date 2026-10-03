@@ -1,4 +1,4 @@
-"""旧 ``ARRANGEMENTS``（BandProfile 39ジャンル）の編成の期待値（FRAMEWORK_REDESIGN.md §15.1「編成の対応表」。
+"""旧 ``ARRANGEMENTS``（BandProfile 39ジャンル）の編成の期待値（DESIGN.md §6.14「編成の対応表」。
 
 旧実装を消す前に、旧クラスから生成して固定した。``{ジャンル: {チャンネル数: (((楽器名…), {楽器: 優先度}) の列, パン or None)}}``。
 """

@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral` など27種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、90年代のレースゲーム風 `racing-breaks`、サスペンス `suspense-slow` など15種）の計51ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。チャンネル数はジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります（`--channels` で指定も可能）。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral` など27種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、90年代のレースゲーム風 `racing-breaks`、サスペンス `suspense-slow` など15種）の計51ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。**形式を最初に選び、その形式の能力に合わせて曲を作ります**（XM・IT は 16-bit・高解像度のサンプルと広い音域、IT・XM・S3M・MIDI はチャンネル数の制約が緩い、など）。MOD ではチャンネル数がジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります。XM・S3M・IT・MP3 ではジャンルのパートがすべて入り、`--channels` はその上限になります。同じジャンル・シード・テンポなら、形式が違っても旋律・和音・リズムの骨格は同じです。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -19,14 +19,14 @@
 - **シード値による完全な再現性（Reproducibility）**:
   気に入った曲が生まれたら、コンソールに表示されるシード番号を使って `--seed <番号>` を指定すれば、いつでも寸分違わず同じ曲を再出力できます。
 - **完全スタンドアロン合成**:
-  外部音声ファイル（WAVやMP3）を読み込むのではなく、スクリプト内でデジタル信号処理（DSP）を用いてサイン波・倍音・フィルタ処理ノイズから8ビットPCMサンプルを直接生成します。
+  外部音声ファイル（WAVやMP3）を読み込むのではなく、スクリプト内でデジタル信号処理（DSP）を用いてサイン波・倍音・フィルタ処理ノイズからPCMサンプルを直接生成します（MOD は 8-bit・Amiga の再生レート、S3M は 8-bit の高レート、XM・IT は 16-bit の高レート）。
 - **ノスタルジック・サウンドデザイン**:
   - **Music Box / Chime**: 澄んだ金属棒の共鳴（非整数倍音）と美しい指数減衰を再現したオルゴール音色。
   - **Twilight Ambient Pad**: 整数周期設計によりクリックノイズが一切生じない、温かいアナログシンセ・ストリングス（完全シームレスループ）。
   - **Warm Mellow Bass**: 丸く深みのあるアコースティック／Lo-Fiサブベース。
   - **Vintage Lo-Fi Drums**: ピッチ降下キック、温かいレトロスネア、繊細なクローズドハイハット。
 - **6つの出力形式（`--format`）**:
-  既定は Amiga ProTracker 4ch MOD（`M.K.`）。6ch・8ch の曲（例: `pop` の標準の 6ch、`orchestral` の 8ch）は FastTracker 系の多チャンネル MOD（`6CHN`・`8CHN`）になります。ほかに `.xm`／`.s3m`／`.it`（トラッカー形式）、General MIDI の `.mid`（DAW や GM 音源で鳴らせる）、`.mp3`（ffmpeg で音声化）を選べます。トラッカー形式はすべて OpenMPT の再生エンジン（libopenmpt）で実際に再生し、MOD と同じ音高・長さで鳴ることを自動テストで確認しています。
+  既定は Amiga ProTracker 4ch MOD（`M.K.`）。6ch・8ch の曲（例: `pop` の標準の 6ch、`orchestral` の 8ch）は FastTracker 系の多チャンネル MOD（`6CHN`・`8CHN`）になります。ほかに `.xm`／`.s3m`／`.it`（トラッカー形式）、General MIDI の `.mid`（DAW や GM 音源で鳴らせる）、`.mp3`（ffmpeg で音声化）を選べます。トラッカー形式はすべて OpenMPT の再生エンジン（libopenmpt）で実際に再生し、同じ音高（平均律。S3M だけ ST3 の周期表由来の誤差がある）・長さで鳴ることを自動テストで確認しています。XM・IT は MOD より音色の高域が豊かで、MIDI は和音を本物の同時発音で、グライドをピッチベンドで表します。
 - **テンポ指定（`--tempo`）**:
   `--tempo 120` のように BPM を固定するか、`--tempo 80-100` のように範囲を指定してその中からランダムに決められます。同じシードならテンポだけが違う「同じ曲」になります。
 - **GUI**:
@@ -39,7 +39,7 @@
 - **Python 3.10 以上**（追加の `pip install` は不要です）
 - **GUI を使う場合のみ: tkinter**（Python 標準ライブラリ。Windows・macOS の python.org 版には最初から入っています。Linux では別パッケージのことがあります。例: Debian/Ubuntu は `sudo apt install python3-tk`、Homebrew の Python は `brew install python-tk`）
 - **`--format mp3` を使う場合のみ: ffmpeg**（**libopenmpt** と **libmp3lame** を有効にしてビルドされたもの）
-  - MP3 は、曲をいったん `.xm` にして ffmpeg 内蔵の libopenmpt（OpenMPT の再生エンジン）で再生し、MP3 に符号化して作ります。ModWeaver 自身は音声の再生エンジンを持ちません。
+  - MP3 は、曲をいったん `.it`（64ch・16-bit・44.1 kHz）にして ffmpeg 内蔵の libopenmpt（OpenMPT の再生エンジン）で再生し、320 kbps の MP3 に符号化して作ります。ModWeaver 自身は音声の再生エンジンを持ちません。
   - `ffmpeg` を PATH に通すか、環境変数 `MODWEAVER_FFMPEG` に実行ファイルのパスを指定してください。
   - Windows では [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) の **full** ビルド等が libopenmpt を含みます（essentials ビルドには含まれない場合があります）。対応を確認するには `ffmpeg -hide_banner -demuxers` の出力に `libopenmpt` が、`ffmpeg -hide_banner -encoders` の出力に `libmp3lame` があることを確かめてください。
   - ffmpeg が見つからない／必要な機能が無い場合は、何が足りないかを表示して終了コード `5` で終了します（ファイルは作られません）。
@@ -65,9 +65,10 @@ python modweaver.py --genre nostalgic
 ジャンル    : nostalgic
 出力形式    : mod
 シード      : 732501
-テンポ      : BPM 90
-Theme A     : Step-Down (Nostalgic Descent) -> Fmaj7 - Em7 - Dm7 - Cmaj7
-Theme B     : Journey (Memories & Depart) -> Am7 - Fmaj7 - Cmaj7 - G7
+テンポ      : BPM 88
+チャンネル  : 4
+Theme A     : Royal Road (Classic Emotion) -> Fmaj7 - G7 - Em7 - Am7
+Theme B     : Canon Sunset (Warm Twilight) -> Cmaj7 - G7 - Am7 - Em7
 --------------------------------------------------
 出力ファイル: output/nostalgic_732501.mod
 生成に成功しました。同じ曲を再現するには次を実行してください:
@@ -134,12 +135,13 @@ python modweaver.py --tempo 80-100       # 80〜100 の範囲からランダム�
 ```
 範囲指定のとき、実際に選ばれた BPM はバナーの `テンポ` 行に表示され、再現コマンドには確定した値（例: `--tempo 92`）が出ます。
 
-#### チャンネル数を指定する（`--channels` / `-c`。省略時はジャンルが曲ごとに選ぶ）:
+#### チャンネル数を指定する（`--channels` / `-c`。意味は形式ごとに違います）:
 ```bash
-python modweaver.py --genre pop --channels 4      # Amiga 互換の 4ch（M.K.）の小編成
-python modweaver.py --genre pop --channels 8      # 対旋律やエコーを足した 8ch の編成
+python modweaver.py --genre pop --channels 4                 # MOD: Amiga 互換の 4ch（M.K.）の小編成
+python modweaver.py --genre pop --channels 8                 # MOD: 対旋律やエコーを足した 8ch の編成
+python modweaver.py --genre pop --format xm --channels 12    # XM: 使うチャンネル数の上限（既定は 32）
 ```
-ch 列に複数の数があるジャンル（例: `4/6/8`）は、同じシードならどの編成でも同じ旋律・和音で、厚みとチャンネル数だけが変わります。
+MOD ではジャンルが宣言した数（ジャンル一覧の ch 列。例: `4/6/8`）から選びます（省略時はジャンルが曲ごとに選ぶ）。XM・S3M・IT・MP3 では上限で、ジャンルのパートがその中に収まるよう打楽器をまとめたり和音を1つにしたりします（省略時は形式の上限。収まらなければエラー）。MIDI では指定できません。MOD の ch 列に複数の数があるジャンルは、同じシードならどの編成でも同じ旋律・和音で、厚みとチャンネル数だけが変わります。
 
 #### 指定できるジャンル一覧を確認する:
 ```bash
@@ -174,7 +176,7 @@ https://github.com/himayah/ModWeaver
 | `--format` | `-f` | `mod` | 出力形式: `mod` / `xm` / `s3m` / `it` / `midi` / `mp3`（下表参照） |
 | `--tempo` | `-t` | ジャンルごとに自動 | BPM（`120`）または範囲（`80-100`、範囲内からランダム）。32〜255。ジャンルが対応できない範囲だとエラー終了（コード 2）、一部だけ外れていれば対応範囲に切り詰めて警告 |
 | `--output` | `-o` | `output/<ジャンル名>_<シード>.<拡張子>`（例: `output/nostalgic_732501.mod`）。フォルダが無ければ自動作成 | 出力先パス。明示した場合はそのパスへそのまま出力する（存在しない親フォルダがあればエラー終了） |
-| `--channels` | `-c` | ジャンルが曲ごとに自動 | チャンネル数 `4` / `6` / `8`。選べる数はジャンルによる（ジャンル一覧の ch 列）。選べない数を指定するとエラー終了（コード 2）。`--genre random` と組み合わせると、その数を選べるジャンルから選ぶ |
+| `--channels` | `-c` | MOD はジャンルが曲ごとに自動、他の形式は形式の上限 | チャンネル数。意味は形式ごと: **MOD** はジャンルが宣言した `4` / `6` / `8` のうちの数（ジャンル一覧の ch 列。選べない数はエラー終了＝コード 2）、**XM・S3M・IT・MP3** は上限（ジャンルのパートが収まらなければコード 2）、**MIDI** は指定不可（コード 2）。`--genre random` と組み合わせると、その数でこの形式を作れるジャンルから選ぶ |
 | `--output-dir` | – | `output` | `--output` を省略したときの出力フォルダ（無ければ作る）。`--output` とは同時に指定できない |
 | `--list-genres` | – | – | 指定できる全ジャンルの id・別名・説明を区分（気分・ジャンル・〜風）ごとに一覧表示して終了（コード 0）。生成は行わない |
 | `--json` | – | – | ジャンル一覧（`--list-genres`）・生成結果を機械向けの JSON で出力する（GUI などほかのプログラムから呼ぶため。形式は [DESIGN.md](DESIGN.md) §8.8） |
@@ -186,12 +188,12 @@ https://github.com/himayah/ModWeaver
 
 | `--format` | 拡張子 | チャンネル数 | 備考 |
 |:---|:---|:---|:---|
-| `mod`（既定） | `.mod` | 4（`M.K.`）／それ以外は `xCHN` | 4ch 以外（6ch・8ch のジャンル）は FastTracker 系の多チャンネル MOD。OpenMPT・MilkyTracker・libxmp 等で再生できるが、本家 ProTracker／Amiga 実機では再生不可。ジャンルごとの定位は失われ、プレイヤー既定の L R R L 定位になる |
-| `xm` | `.xm` | 1〜32 | 4ch ジャンルは Amiga 風の L R R L（左右幅は控えめ）、6ch・8ch のジャンルはジャンルが決めた楽器ごとの定位 |
-| `s3m` | `.s3m` | 1〜16 | 同上（チャンネル定位で表現） |
-| `it` | `.it` | 1〜64 | 同上 |
-| `midi` | `.mid` | 制限なし | General MIDI（SMF format 1）。音色は各ジャンルが楽器ごとに指定した GM 音色で、サンプル音色そのものではない。グライド（ポルタメント）は目標音への即時切替、ビブラートはモジュレーション（CC1）で近似 |
-| `mp3` | `.mp3` | 1〜32 | 44.1kHz ステレオ 192kbps。**ffmpeg が必要**（動作要件を参照） |
+| `mod`（既定） | `.mod` | 4（`M.K.`）・6・8（`xCHN`） | 8-bit サンプル。4ch 以外（6ch・8ch のジャンル）は FastTracker 系の多チャンネル MOD。OpenMPT・MilkyTracker・libxmp 等で再生できるが、本家 ProTracker／Amiga 実機では再生不可。ジャンルごとの定位は失われ、プレイヤー既定の L R R L 定位になる |
+| `xm` | `.xm` | 上限 1〜32 | **16-bit・高レートのサンプル**、音量はボリューム列。ジャンルが決めた楽器ごとの定位（宣言のないジャンルは Amiga 風の L R R L） |
+| `s3m` | `.s3m` | 上限 1〜16 | 8-bit・高レートのサンプル（1サンプルは 64000 byte 以内）。チャンネル定位で表現 |
+| `it` | `.it` | 上限 1〜64 | **16-bit・高レートのサンプル**、楽器モード。チャンネル定位で表現 |
+| `midi` | `.mid` | 指定不可（MIDI は16チャンネル） | General MIDI（SMF format 1、PPQ 480）。全パートを入れ、和音は本物の同時発音。音色は各ジャンルが楽器ごとに指定した GM 音色で、サンプル音色そのものではない。グライドはピッチベンド、ビブラートはモジュレーション（CC1）、微分音はピッチベンドで表す |
+| `mp3` | `.mp3` | 上限 1〜64（IT と同じ） | 44.1kHz ステレオ 320kbps（IT を経由して作る）。**ffmpeg が必要**（動作要件を参照） |
 
 #### テンポ（BPM）の意味
 
@@ -306,7 +308,7 @@ python modweaver_gui.pyw --lang=en   # 英語で表示（既定は OS の言語�
 
 Windows では **`modweaver_gui.bat` をダブルクリック**すると起動します（コンソール窓なし）。`.pyw` にアプリが関連付けられていない環境（Python を `py` ランチャーなしで入れた場合など）でも動きます。`pythonw` が PATH に無ければ、環境変数 `PYW` に起動する Python を指定してください（例: `set PYW=py -3w`）。
 
-- 左の一覧からジャンルを選び（検索・区分での絞り込み可。「ジャンルもランダムに選ぶ」も可）、テンポ・チャンネル数・シード・出力形式・保存フォルダを決めて「生成」（Ctrl+Enter / F5）。ジャンルを選ぶと、テンポの入力欄にそのジャンルの代表的なテンポ（固定）とふだんの範囲（範囲）が入ります。ジャンルが選べないチャンネル数は選べません。
+- 左の一覧からジャンルを選び（検索・区分での絞り込み可。「ジャンルもランダムに選ぶ」も可）、テンポ・チャンネル数・シード・出力形式・保存フォルダを決めて「生成」（Ctrl+Enter / F5）。ジャンルを選ぶと、テンポの入力欄にそのジャンルの代表的なテンポ（固定）とふだんの範囲（範囲）が入ります。チャンネル数の入力欄は形式で変わります（MOD はジャンルが選べる数のボタン、XM・S3M・IT・MP3 は上限の入力欄、MIDI は指定不可）。
 - 「作った曲」の一覧から、再生（OS に登録されたアプリで開く）、フォルダで表示、再現コマンドのコピー、**別の形式でも書き出す**（同じ曲を MP3 や MIDI などでも作る）、**設定に読み込む**（シードを固定してテンポや形式だけ変える）ができます。
 - ジャンルの一覧や選べる形式は、起動時に CLI（`--list-genres --json`）から読み込みます。GUI は裏で `modweaver.py` を実行しているので、できることは CLI と同じです。
 
@@ -314,10 +316,10 @@ Windows では **`modweaver_gui.bat` をダブルクリック**すると起動�
 
 ## トラック・パート構成
 
-チャンネル数（4・6・8）・役割・使用音色はジャンルごとに `mod_weaver/genres/*.py` に定義されています（ジャンル一覧の ch 列）。
-以下は既定ジャンル `nostalgic` の構成例です（Amigaのステレオ定位特性 1:左, 2:右, 3:右, 4:左 に合わせた
-バランスの良い音像設計）。他ジャンルの構成は各 `genres/*.py`（第３段階の35ジャンルは `CHANNELS` の宣言）、または
-[DESIGN.md](DESIGN.md) §6 の各ジャンルの節（第３段階のジャンルは §6.16）を参照してください。
+パート（ドラム・ベース・和音・旋律・パッド…）・役割・使用音色はジャンルごとに `mod_weaver/genres/*.py` に宣言されています。MOD のチャンネル数（4・6・8）はジャンル一覧の ch 列です。パートをチャンネルに割り当てる（打楽器を1つにまとめる、和音を1サンプルに焼くなど）のは形式ごとに自動で行います。
+以下は既定ジャンル `nostalgic` の MOD（4ch）の構成例です（Amigaのステレオ定位特性 1:左, 2:右, 3:右, 4:左 に合わせた
+バランスの良い音像設計）。他ジャンルの構成は各 `genres/*.py` の `parts` の宣言、または
+[DESIGN.md](DESIGN.md) §6 の各ジャンルの節（35ジャンルは §6.16）を参照してください。
 
 | チャンネル | 定位 | パート | 使用音色 | 役割 |
 |:---|:---|:---|:---|:---|
@@ -338,14 +340,15 @@ Windows では **`modweaver_gui.bat` をダブルクリック**すると起動�
 ├── listen_samples.py  # 試聴用の曲をまとめて作るスクリプト（DESIGN.md §11 の試聴項目ごとに3例、output/listen/ へ）
 ├── listen_samples.bat # 上を Windows でダブルクリックで動かすバッチ
 ├── mod_weaver/        # パッケージ本体。`python -m mod_weaver` でも起動可
-│   ├── core/          # 不変層: データモデル・DSP・音源合成（Patch方式）・和声・グルーヴ(EXT-1)・
-│   │                   #        可変小節(EXT-2)・writer/verify・出力形式（formats / s3m / it / midi /
-│   │                   #        timeline / render(mp3)）・出力音量の底上げ（level）
-│   ├── profiles/      # ジャンルの仕組み: GenreProfile 基底・登録簿（genres/ の自動検出）・ジャンル共通の補助
-│   │                   #        （band_common: 第３段階の35ジャンルが共有する骨格 BandProfile）・ジャンル別の音量の測定値（levels）
-│   ├── genres/        # 可変層: ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。51ジャンル）
+│   ├── core/          # 音楽系と形式系: 音高・和声・旋律・DSP・音源合成（Patch方式・高解像度の描画）と、
+│   │                   #        各形式の書き出し・検査（writer / native_s3m / native_xm / native_it / native_midi /
+│   │                   #        verify / render(mp3)）・出力音量の底上げ（native_level）
+│   ├── framework/     # 新しい枠組み: Target（形式の能力）・Score（形式に依存しない楽譜）・Genre の基底・
+│   │                   #        ジェネレータの部品集（gens/）・Realizer（realize/: トラッカー用と MIDI 用）・音量の測定値（levels）
+│   ├── genres/        # ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。51ジャンル）
 │   └── gui/           # GUI（tkinter）。CLI を子プロセスとして呼ぶ
-├── tools/             # 開発用: calibrate_levels.py（ジャンル別の最大振幅を ffmpeg で測り直す。DESIGN.md §7.9）
+├── tools/             # 開発用: calibrate_levels.py（ジャンル別の最大振幅を ffmpeg で測り直す。DESIGN.md §7.9）、
+│                      #        update_golden.py（出力の基準 tests/regression/golden.json を更新する。DESIGN.md §10）
 ├── output/            # 生成された音楽ファイル（既定出力先。例: nostalgic_732501.mod）
 ├── DESIGN.md          # 設計書（現在の仕様）
 ├── DESIGN_HISTORY.md  # 設計の経緯（決定の理由・訂正・見送ったもの）

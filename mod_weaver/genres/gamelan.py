@@ -1,4 +1,4 @@
-"""gamelan: ジャワのガムラン風（旧 genres/gamelan.py の移植。FRAMEWORK_REDESIGN.md §15.3 のグループB）。
+"""gamelan: ジャワのガムラン風（旧 genres/gamelan.py の移植。DESIGN.md §6.14 のグループB）。
 
 6ch: クンダン・ゴング／クンプル・クノン／クトゥッ・サロン（balungan＝骨格の旋律）・プキン（サロンの1オクターブ上、
 2倍の密度）・ボナン（4倍の密度の装飾）。

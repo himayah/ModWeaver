@@ -1,4 +1,4 @@
-"""テンポカーブ（FRAMEWORK_REDESIGN.md §7・§15.1 の ``TempoCurve``・``render_tempo_curve``）。
+"""テンポカーブ（DESIGN.md §5.8・§6.14 の ``TempoCurve``・``render_tempo_curve``）。
 
 現行 ``core/automation.TempoCurve`` と同じ式。``ctx.tempo(step, bpm)`` を、BPM が変わる step にだけ呼ぶ
 （同じ値が続く step は書かない）。Realizer が形式ごとに表現する（MOD・S3M・XM・IT は Fxx・Txx 等、MIDI は Set Tempo）。

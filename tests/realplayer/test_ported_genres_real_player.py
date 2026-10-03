@@ -1,4 +1,4 @@
-"""移植したジャンル（``genres/``）の実プレイヤー検査（FRAMEWORK_REDESIGN.md §13.1 の I5・I6）。
+"""移植したジャンル（``genres/``）の実プレイヤー検査（DESIGN.md §10.1 の I5・I6）。
 
 全ジャンルについて、MOD（宣言された最大の予算）と IT で、再生した長さが Score の時間軸と一致し（I5。スウィングを含む）、
 最大振幅が −0.5 dBFS 以下（I6）。XM・S3M は同じ Realizer の別の書き出しなので、F4 の検査（test_f4_formats.py）に任せる。

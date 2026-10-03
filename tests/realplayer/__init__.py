@@ -114,7 +114,7 @@ def correlation(x: list[float], y: list[float]) -> float:
     return sxy / (sx * sy) if sx and sy else 0.0
 
 
-# ---- 高精度の音高測定（I4。FRAMEWORK_REDESIGN.md §13.1・§13.4）。numpy が要る ----
+# ---- 高精度の音高測定（I4。DESIGN.md §10.1・§9.2）。numpy が要る ----
 
 def decode_f32(data: bytes, ext: str, rate: int = 48000, channels: int = 1):
     """実プレイヤーで再生した波形（float32 の ndarray、チャンネル数 1 なら 1 次元）。"""

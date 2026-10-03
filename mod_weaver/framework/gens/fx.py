@@ -1,4 +1,4 @@
-"""効果音の鳴らし直し（FRAMEWORK_REDESIGN.md §7 の ``Fx``）。現行 ``band_common`` の ``FxSpec`` 相当。
+"""効果音の鳴らし直し（DESIGN.md §5.8 の ``Fx``）。現行 ``band_common`` の ``FxSpec`` 相当。
 長い OneShot（vinyl・rain 等）を ``every`` 小節ごとに小節の先頭で鳴らし直す。"""
 from __future__ import annotations
 

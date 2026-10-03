@@ -1,4 +1,4 @@
-"""F4 の完了条件のうち実プレイヤーを使わないもの（FRAMEWORK_REDESIGN.md §13.1 の I2・I3）。
+"""F4 の完了条件のうち実プレイヤーを使わないもの（DESIGN.md §10.1 の I2・I3）。
 
 3 つの試験移植ジャンルが、S3M・XM・IT（と MP3 の元になる IT）で、既定の予算と ``--channels`` を絞った予算の
 どちらでも生成でき、検査に ERROR が無く、同じ入力から同じバイト列になる。MOD は F3 のテストが
@@ -61,7 +61,7 @@ def test_output_is_deterministic(name, fmt):
 
 @pytest.mark.parametrize("fmt", FORMATS)
 def test_wider_budget_gives_more_channels_than_mod_at_pop(fmt):
-    """予算が大きい形式では、打楽器を分け、和音を声部に開く（§9.3）。MOD 8ch より厚い編成になる。"""
+    """予算が大きい形式では、打楽器を分け、和音を声部に開く（DESIGN.md §7.6）。MOD 8ch より厚い編成になる。"""
     rs, _data = _build(GENRES["pop"], fmt, 1, None)
     assert rs.n_channels > 8
 
@@ -83,7 +83,7 @@ def test_high_resolution_samples_for_xm_and_it_8bit_for_s3m():
     assert all(abs(s.rate_hz - 44100) < 100 for s in rs.samples)   # 目標レート（ループは丸めで少しずれる）
 
 
-# ---- 微分音・tune_cents の変種（§8.4）----
+# ---- 微分音・tune_cents の変種（DESIGN.md §4.9）----
 
 def _toy_with_tune(cents: float):
     import dataclasses

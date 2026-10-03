@@ -1,4 +1,4 @@
-"""``core/native_level.py``（FRAMEWORK_REDESIGN.md §9.10）の単体テスト。"""
+"""``core/native_level.py``（DESIGN.md §7.9）の単体テスト。"""
 from __future__ import annotations
 
 import math

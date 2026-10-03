@@ -1,8 +1,8 @@
-"""トラッカー形式（MOD・S3M・XM・IT）共通の中間表現（FRAMEWORK_REDESIGN.md §9.6・§10）。
+"""トラッカー形式（MOD・S3M・XM・IT）共通の中間表現（DESIGN.md §7.6・§7）。
 
 ``framework/realize/tracker.py`` が Score からこの形を作り、形式ごとの writer（``native_s3m``・
-``native_xm``・``native_it``、MOD は ``to_mod_song``）が**換算なしで**書き出す（§10 冒頭）。
-旧来の ``model.Cell``（MOD 風のエフェクト表現）とは別物で、F8 までは新旧が並行する。
+``native_xm``・``native_it``、MOD は ``to_mod_song``）が**換算なしで**書き出す（DESIGN.md §7 冒頭）。
+MOD の writer が読む ``model.Cell``（MOD 風のエフェクト表現）とは別物で、MOD だけ ``to_mod_song`` でそちらに直す。
 
 - ``RCell.note``: **0 始まりの半音番号**（C-0 = 0）。S3M は C-4 = 48、XM は C-4 = 48（書くとき +1）、
   IT は C-5 = 60 が ``rate_hz`` で鳴る基準。MOD だけは tracker note t（0..35、``model.Cell`` と同じ）。
@@ -104,7 +104,7 @@ class RGrid:
 
 @dataclass
 class RealizedSong:
-    """Realizer の出力（§10）。writer はこれだけを読む。"""
+    """Realizer の出力（DESIGN.md §7）。writer はこれだけを読む。"""
     format: str                                   # "mod" | "s3m" | "xm" | "it"
     title: str
     samples: list[SampleSpec]                     # sample 番号順。``rate_hz`` は基準ノートで鳴らすときのレート

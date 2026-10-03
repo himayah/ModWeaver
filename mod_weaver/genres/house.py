@@ -1,4 +1,4 @@
-"""house（旧 genres/house.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
+"""house（旧 genres/house.py の宣言を機械変換したもの。DESIGN.md §6）。"""
 from __future__ import annotations
 
 from ..core.model import ChordSpec, GmVoice

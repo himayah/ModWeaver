@@ -1,5 +1,5 @@
 """``Genre`` の登録簿とジャンルモジュールの自動検出（現行 ``profiles/registry.py`` と同じ仕組みを
-``Genre`` 向けに用意したもの。FRAMEWORK_REDESIGN.md §2.4 の「そのまま残す」は現行の
+``Genre`` 向けに用意したもの。DESIGN_HISTORY.md §15 の「そのまま残す」は現行の
 ``profiles/registry.py``（``GenreProfile`` 用）そのものを指し、これはその新しい方の相方になる。
 移行が終わるまで2つの登録簿が並行する）。
 """

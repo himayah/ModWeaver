@@ -1,4 +1,4 @@
-"""EDM 系のビルドアップ（FRAMEWORK_REDESIGN.md §7 の ``Buildup``）。現行 ``band_common.buildup()`` と同じ
+"""EDM 系のビルドアップ（DESIGN.md §5.8 の ``Buildup``）。現行 ``band_common.buildup()`` と同じ
 規則: スネアの連打が 4分→8分→16分→``Retrig`` と加速し、音量が上がる。最後から2つ目の小節の頭に
 上昇音（``riser``、約2秒）を置く。現行は別チャンネルの ``riser``/``fx_ch`` を必要としたが、新しい設計では
 楽器名だけで区別できるので同じパートに書ける。"""

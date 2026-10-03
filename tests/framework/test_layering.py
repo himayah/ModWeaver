@@ -1,4 +1,4 @@
-"""依存の規則（FRAMEWORK_REDESIGN.md §13.1 I8）の検査。``ast`` でモジュールの import 文を調べる。
+"""依存の規則（DESIGN.md §10.1 I8）の検査。``ast`` でモジュールの import 文を調べる。
 
 ``mod_weaver/framework/`` 自身（``framework/realize/`` を除く）が ``core`` の形式系（writer・s3m・it・
 midi・render・verify・level）を import しないことを確かめる。``framework/realize/`` は Realizer そのもの

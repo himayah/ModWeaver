@@ -1,4 +1,4 @@
-"""``encode.Codec``（形式ごとの奏法・音高・コマンドの表。FRAMEWORK_REDESIGN.md §9.6）と、
+"""``encode.Codec``（形式ごとの奏法・音高・コマンドの表。DESIGN.md §7.6）と、
 その表を使うセル化の規則（優先順位・MOD の音量とエフェクトの排他・止め方）。"""
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_extended_formats_check_their_own_range(fmt):
     assert c.note(_spec(rate_note=0), hi - c.n_ref) == hi
 
 
-# ---- コマンドの表（§9.6）----
+# ---- コマンドの表（DESIGN.md §7.6）----
 
 @pytest.mark.parametrize("fmt, expected", [
     ("mod", ("4", 0x35)), ("s3m", ("H", 0x35)), ("xm", ("4", 0x35)), ("it", ("H", 0x35))])
@@ -104,7 +104,7 @@ def test_cut_ticks_validated():
         Codec("mod").cut(0)
 
 
-# ---- 止め方（§9.7）----
+# ---- 止め方（DESIGN.md §7.6）----
 
 def test_stop_cell_per_format():
     assert Codec("mod").stop_cell() == RCell(vol=0)          # Cxx 00

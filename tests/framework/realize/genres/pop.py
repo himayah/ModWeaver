@@ -1,4 +1,4 @@
-"""pop を新フレームワークへ試験移植したもの（FRAMEWORK_REDESIGN.md §15.1・§15.2 のグループA）。
+"""pop を新フレームワークへ試験移植したもの（DESIGN.md §6.14・§6 のグループA）。
 
 F3 の試験移植その1。旧 ``mod_weaver/genres/pop.py``（``PopProfile``）の宣言をそのまま写す。本番の
 ``mod_weaver/genres/`` には置かない（旧 ``GenreProfile`` 版と id が同じだが、レジストリが別なので

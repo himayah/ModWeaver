@@ -1,7 +1,7 @@
-"""架空の小さなジャンルで Score が作れることの確認（FRAMEWORK_REDESIGN.md §16.2 F2 の完了条件）。
+"""架空の小さなジャンルで Score が作れることの確認（DESIGN_HISTORY.md §15 F2 の完了条件）。
 
-``band_common`` の宣言（§6.4 の pop の例）に近い形の、ドラム・ベース・和音・旋律・パッド・エコーを持つ
-ジャンルを組み立て、``compose()`` が Score を作れること、骨格が決定的であること、§7 の部品が現行と
+``band_common`` の宣言（DESIGN.md §5.1 の pop の例）に近い形の、ドラム・ベース・和音・旋律・パッド・エコーを持つ
+ジャンルを組み立て、``compose()`` が Score を作れること、骨格が決定的であること、DESIGN.md §5.8 の部品が現行と
 同じ row・音量・確率で動くことを確かめる。
 """
 from __future__ import annotations
@@ -148,7 +148,7 @@ def test_echo_part_follows_lead_and_is_delayed_and_attenuated():
 
 
 def test_part_rng_is_independent_of_other_parts():
-    """あるパートの宣言を変えても、他のパートの乱数列（＝出す音）は変わらない（§6.8）。"""
+    """あるパートの宣言を変えても、他のパートの乱数列（＝出す音）は変わらない（DESIGN.md §5.5）。"""
     genre1 = make_toy_genre()
     plan1 = resolve_plan(genre1, seed=5)
     score1 = compose(genre1, plan1, seed=5, features=frozenset())
@@ -206,7 +206,7 @@ def test_class_definition_rejects_cyclic_depends():
 
 
 # ============================================================
-# 部品のテスト（§16.2 F2 の完了条件: 現行 band_common の型と同じ row・音量・確率が出る）
+# 部品のテスト（DESIGN_HISTORY.md §15 F2 の完了条件: 現行 band_common の型と同じ row・音量・確率が出る）
 # ============================================================
 
 def _chord():
@@ -254,7 +254,7 @@ def test_groove_humanize_and_probability_match_legacy_shape():
 
 
 def test_ctx_features_reflects_compose_argument():
-    """``ctx.features``（§4.3）は ``compose()`` に渡した features がそのまま見える。奏法の付け外しに
+    """``ctx.features``（DESIGN.md §3.2）は ``compose()`` に渡した features がそのまま見える。奏法の付け外しに
     しか使わない値だが、ジェネレータがちゃんと読めることを確認する。"""
     from mod_weaver.framework.context import SectionCtx
 

@@ -1,4 +1,4 @@
-"""MidiRealizer（FRAMEWORK_REDESIGN.md §11）の単体・結合テスト。SMF は ``core.midi.parse_midi`` で独立に読み戻す。"""
+"""MidiRealizer（DESIGN.md §7.7）の単体・結合テスト。SMF は ``core.midi.parse_midi`` で独立に読み戻す。"""
 from __future__ import annotations
 
 import struct
@@ -62,7 +62,7 @@ def test_length_matches_the_score(name):
 
 @pytest.mark.parametrize("name", GENRES)
 def test_all_parts_are_present_regardless_of_channel_budget(name):
-    """§11.1: min_channels・channel_cap に関係なく全パートを入れる（tracker では 4ch で外れるパートも入る）。"""
+    """DESIGN.md §7.7: min_channels・channel_cap に関係なく全パートを入れる（tracker では 4ch で外れるパートも入る）。"""
     data, score = _midi(GENRES[name])
     used = {p for s in score.sections.values() for p, ev in s.parts.items()
             if any(isinstance(e, NoteEvent) for e in ev)}

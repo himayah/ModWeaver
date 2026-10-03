@@ -1,4 +1,4 @@
-"""ジェネレータ部品が共有する小さな補助（FRAMEWORK_REDESIGN.md §7）。"""
+"""ジェネレータ部品が共有する小さな補助（DESIGN.md §5.8）。"""
 from __future__ import annotations
 
 from ...core.model import ChordDef

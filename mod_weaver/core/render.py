@@ -25,7 +25,7 @@ from pathlib import Path
 from ..errors import ExternalToolError
 
 FFMPEG_ENV = "MODWEAVER_FFMPEG"
-BITRATE = "320k"            # IT 経由で 320 kbps（§12）
+BITRATE = "320k"            # IT 経由で 320 kbps（DESIGN.md §7.8）
 QUALITY = 0                 # LAME の -q 0（最も丁寧な符号化）
 SAMPLE_RATE = 44100
 TIMEOUT_SEC = 600
@@ -70,13 +70,13 @@ def check_ffmpeg() -> str:
 
 
 def render_mp3_from_it(it_bytes: bytes, title: str) -> bytes:
-    """IT 経由の MP3（FRAMEWORK_REDESIGN.md §12）: Target は IT と同じ（64ch・16-bit・44.1 kHz）で作った IT の
+    """IT 経由の MP3（DESIGN.md §7.8）: Target は IT と同じ（64ch・16-bit・44.1 kHz）で作った IT の
     バイト列を、libopenmpt → libmp3lame（320 kbps・最も丁寧な符号化）で MP3 にする。"""
     return encode_mp3(it_bytes, ".it", title, BITRATE, quality=QUALITY)
 
 
 def encode_mp3(module: bytes, ext: str, title: str, bitrate: str, quality: int = -1) -> bytes:
-    """トラッカーのモジュール（``ext`` は ".xm"・".it" など）を ffmpeg で MP3 にする。音量は2パス（§7.8）。"""
+    """トラッカーのモジュール（``ext`` は ".xm"・".it" など）を ffmpeg で MP3 にする。音量は2パス（DESIGN.md §5.8）。"""
     exe = check_ffmpeg()
     with tempfile.TemporaryDirectory(prefix="modweaver-") as d:
         src, dst = Path(d) / f"song{ext}", Path(d) / "song.mp3"

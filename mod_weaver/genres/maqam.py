@@ -1,4 +1,4 @@
-"""maqam（旧 genres/maqam.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""maqam（旧 genres/maqam.py の移植。DESIGN.md §6 のグループC）。
 
 maqam Rast（G を主音 qarar とする）。1小節 = 16 step = 4/4。usul（リズム周期）は maqsum（``DUM . TEK . . DUM TEK .``）。
 和声は ``voice()`` を経由せず ``ChordDef`` を手組みする（``harmony=None``、``plan()`` を上書き）。
@@ -6,7 +6,7 @@ maqam Rast（G を主音 qarar とする）。1小節 = 16 step = 4/4。usul（�
 中立音程（中立3度 350 セント・中立7度 1050 セント）は、書かれた音高の**小数部**（``MicroScale.absolute_cents ÷ 100``）で
 表す（gamelan と同じ）。旧版の ``oud_n3``・``oud_n7`` という finetune の派生楽器は不要になった（MOD では Realizer が
 finetune の変種サンプルを作り、S3M・XM・IT は C5Speed・相対ノートで、MIDI はピッチベンドで出す）。
-旧版は finetune の刻みを 7.8125 セントと誤っていたので、微分音の出音が最大 20 セント以上ずれていた（§16.8）。
+旧版は finetune の刻みを 7.8125 セントと誤っていたので、微分音の出音が最大 20 セント以上ずれていた（DESIGN_HISTORY.md §15）。
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""Scream Tracker 3 ``.s3m`` の書き出しと検査（FRAMEWORK_REDESIGN.md §10.2・§10.5）。``RealizedSong`` 用。
+"""Scream Tracker 3 ``.s3m`` の書き出しと検査（DESIGN.md §7.4・§9.1）。``RealizedSong`` 用。
 
-換算は Realizer が済ませてある（§10 冒頭）ので、ここは形式の表記に並べ替えるだけ。旧 ``s3m.serialize_s3m``
-（``model.Song`` 用）は F8 まで並行して残る。バイナリの定数・補助・パーサは ``s3m.py`` のものを使う。
+換算は Realizer が済ませてある（DESIGN.md §7 冒頭）ので、ここは形式の表記に並べ替えるだけ。バイナリの定数・補助・
+パーサは ``s3m.py`` のものを使う。
 
 - サンプル: 8-bit unsigned。**C2Spd ＝ 基準ノート C-4 での再生レート（``rate_hz``）**。1 サンプル 64000 byte 以下。
 - note: 0 始まりの半音番号 k → ``((k // 12) << 4) | (k % 12)``。``NOTE_CUT`` は 254（^^^）。
@@ -17,7 +17,7 @@ from .native import NOTE_CUT, NOTE_OFF, RCell, RealizedSong
 from .verify import Issue, _Report
 
 MAX_SAMPLE_BYTES = 64000
-MIN_C2SPD, MAX_C2SPD = 1000, 65535     # 実用域の下限（F0 の注意点。§13.4）と ST3 の上限
+MIN_C2SPD, MAX_C2SPD = 1000, 65535     # 実用域の下限（F0 の注意点。DESIGN.md §9.2）と ST3 の上限
 NOTE_CUT_BYTE = 254
 
 

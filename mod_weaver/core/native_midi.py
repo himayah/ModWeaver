@@ -1,7 +1,7 @@
-"""新しい MidiRealizer（PPQ 480。``framework/realize/midi.py``）の出力の構造検査（FRAMEWORK_REDESIGN.md §11.3）。
+"""新しい MidiRealizer（PPQ 480。``framework/realize/midi.py``）の出力の構造検査（DESIGN.md §7.7）。
 
-読み戻しは ``core.midi.parse_midi``（PPQ に依存しない）。旧 ``midi.verify_midi``（PPQ 96）の検査に、同時発音数
-（GM1 が保証する 24 を超えたら WARN）・ドラムの音域・メロディのチャンネルの program 指定を加えた。
+読み戻しは ``core.midi.parse_midi``（PPQ に依存しない）。読める・EOT・note on/off の対応・テンポに加えて、同時発音数
+（GM1 が保証する 24 を超えたら WARN）・ドラムの音域・メロディのチャンネルの program 指定を検査する。
 """
 from __future__ import annotations
 

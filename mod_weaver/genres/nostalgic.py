@@ -1,4 +1,4 @@
-"""nostalgic（旧 genres/nostalgic.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""nostalgic（旧 genres/nostalgic.py の移植。DESIGN.md §6 のグループC）。
 
 和音は手組みの ``ChordDef(explicit=True)``（白鍵だけのメジャー7th・ドミナント7th）なので ``harmony=None`` とし、
 ``plan()`` で ``MeasurePlan.chord`` を直接作る（march と同じ）。旋律は旧 ``_melody_bar``（コードトーンと対位法の規則）を

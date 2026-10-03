@@ -1,4 +1,4 @@
-"""racing-breaks を新フレームワークへ試験移植したもの（FRAMEWORK_REDESIGN.md §15.1〜§15.3 のグループB）。
+"""racing-breaks を新フレームワークへ試験移植したもの（DESIGN.md §6.14〜§6.14 のグループB）。
 
 F3 の試験移植その2。旧 ``mod_weaver/genres/racing_breaks.py``（``RacingBreaksProfile``）の
 ``plan()``・``drums``・``bass``・``comp`` の上書きを、ジャンル内のジェネレータに書き直す。
@@ -89,7 +89,7 @@ GROOVE = frozenset({"drums", "bass", "comp", "pad"})
 
 
 # ============================================================
-# ジャンル内のジェネレータ（§15.3: racing-breaks）
+# ジャンル内のジェネレータ（DESIGN.md §6.14: racing-breaks）
 # ============================================================
 
 class BreaksBass(Generator):

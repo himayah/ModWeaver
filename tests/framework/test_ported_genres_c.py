@@ -1,4 +1,4 @@
-"""グループC（個別実装）12ジャンルの固有の性質（FRAMEWORK_REDESIGN.md §15.4・§16.9）。
+"""グループC（個別実装）12ジャンルの固有の性質（DESIGN.md §6・DESIGN_HISTORY.md §15）。
 
 旧 ``tests/profiles/test_<id>.py`` が確かめていた音楽上の約束を、Score と Realizer の言葉で書き直したもの
 （チャンネル番号・row・Cell の検査はここには無い）。旧版と同じ seed でも打点は一致しない（D9）ので、構造・音域・規則だけを見る。

@@ -1,10 +1,10 @@
-"""trap（旧 genres/trap.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""trap（旧 genres/trap.py の移植。DESIGN.md §6 のグループC）。
 
 1小節 = 32 step = 4/4（1 step = 32分音符、1拍 = 8 step。``Meter(32, 4)``）。1小節が8拍で、表示 BPM はハーフタイムの慣習
 （DESIGN.md §5.5）。各区間は 2 小節（＝ 64 step）で、進行は "i - VI" の2和音ループ（Cm-Ab）。
 
 808 のグライドは ``Glide(steps=1)``。先行音が鳴り終わっていれば普通の発音に変え、鳴っていれば直前の音の period から
-この音の period まで 1 step で届く速さ（``3xx``/``Gxx``）にするのは Realizer の責任（§5.3・§16.9）。ハットのロールは ``Retrig(3)``。
+この音の period まで 1 step で届く速さ（``3xx``/``Gxx``）にするのは Realizer の責任（DESIGN.md §3.3・DESIGN_HISTORY.md §15）。ハットのロールは ``Retrig(3)``。
 """
 from __future__ import annotations
 

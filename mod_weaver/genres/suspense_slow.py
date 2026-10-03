@@ -1,4 +1,4 @@
-"""suspense-slow（旧 genres/suspense_slow.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""suspense-slow（旧 genres/suspense_slow.py の移植。DESIGN.md §6 のグループC）。
 
 構成: hush → pedal → phrygian → pedal → shock → aftermath。文法の核は「心拍」「無音→突発アクセント（anvil）」
 「ペダルの持続音＋アルペジオ弦」。dropout・anvil・スタブの位置は ``plan()`` が決めて ``SectionPlan.extra`` に置き、

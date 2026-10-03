@@ -1,8 +1,8 @@
-"""F3 の試験移植（pop・racing-breaks・march）の完了条件（FRAMEWORK_REDESIGN.md §16.2 F3）。
+"""F3 の試験移植（pop・racing-breaks・march）の完了条件（DESIGN_HISTORY.md §15 F3）。
 
 - 3ジャンルが MOD の（それぞれの declared）全予算で生成・検査に通る。
 - ladder の結果が現行の ``ARRANGEMENTS``（pop・racing-breaks）／固定4ch構成（march）と一致する
-  （§15.1「編成の対応表」の簡易版。並びと lane の楽器構成だけを比べ、畳んだ結果の bit 一致は比べない
+  （DESIGN.md §6.14「編成の対応表」の簡易版。並びと lane の楽器構成だけを比べ、畳んだ結果の bit 一致は比べない
   ― 乱数の消費順が変わってよい（D9）ため、同じ seed でも打点そのものは一致しない）。
 - 聴き比べ用の .mod ファイルを生成する（実際の試聴はユーザーが行う。本テストは生成・検査のみ）。
 """
@@ -33,7 +33,7 @@ SEEDS = (1, 2, 3, 4, 5)
 GENRES = {
     "pop": (PopToy(), (4, 6, 8)),
     "racing-breaks": (RacingBreaksToy(), (4, 6, 8)),
-    "march": (MarchToy(), (4,)),   # 現行どおり 4ch 専用（§15.4）
+    "march": (MarchToy(), (4,)),   # 現行どおり 4ch 専用（DESIGN.md §6）
 }
 
 # 現行 ARRANGEMENTS の編成（チャンネル名の並び。drums は旧 ChannelDef 名、以下は現行 genres/*.py の宣言）
@@ -61,7 +61,7 @@ def _layout(genre, budget: int):
 @pytest.mark.parametrize("name", GENRES)
 def test_ladder_matches_old_arrangement_channel_count(name: str) -> None:
     """lane の物理チャンネル数が、現行 ``ARRANGEMENTS``（march は固定4ch構成）の編成の数と一致する
-    （§15.1「編成の対応表」の簡易版。楽器の組合せそのものは pop/racing-breaks で手動確認済み、
+    （DESIGN.md §6.14「編成の対応表」の簡易版。楽器の組合せそのものは pop/racing-breaks で手動確認済み、
     F3 の実装メモ参照）。"""
     genre, budgets = GENRES[name]
     for b in budgets:

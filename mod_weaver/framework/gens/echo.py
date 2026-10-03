@@ -1,4 +1,4 @@
-"""残響もどき（FRAMEWORK_REDESIGN.md §7 の ``Echo``）。現行 ``band_common.echo()`` と同じ規則: パートの
+"""残響もどき（DESIGN.md §5.8 の ``Echo``）。現行 ``band_common.echo()`` と同じ規則: パートの
 ``follow`` の NoteEvent を ``delay`` step 遅らせ、音量を ``ratio^k`` 倍にして写す。区間の外に出るものは
 捨てる。``dur``（NoteOff も）をそのまま写すので、現行の ``offs=True`` に相当する動作が既定になる。"""
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""区間の計画（FRAMEWORK_REDESIGN.md §5.4）。``default_plan()`` は既定の ``Genre.plan()``（§6.7）。"""
+"""区間の計画（DESIGN.md §3.3）。``default_plan()`` は既定の ``Genre.plan()``（§6.7）。"""
 from __future__ import annotations
 
 import random
@@ -93,11 +93,11 @@ class SongPlan:
 
 
 # ============================================================
-# 既定の plan()（FRAMEWORK_REDESIGN.md §6.7）
+# 既定の plan()（DESIGN.md §5.4）
 # ============================================================
 
 def default_plan(genre: "Genre", rng: random.Random) -> SongPlan:
-    """既定の ``Genre.plan()``。現行 ``BandProfile.plan`` と同じ規則（§6.7）。
+    """既定の ``Genre.plan()``。現行 ``BandProfile.plan`` と同じ規則（DESIGN.md §5.4）。
 
     1. ``bpm = rng.choice(tempo_choices)``（``--tempo`` があっても引いてから捨てる。DESIGN.md §5.5）。
     2. ``key_pc = rng.choice(harmony.keys)``。

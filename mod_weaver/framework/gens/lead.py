@@ -1,4 +1,4 @@
-"""旋律（FRAMEWORK_REDESIGN.md §7 の ``Lead``）。現行 ``band_common.lead()``・``begin_pattern()`` と同じ
+"""旋律（DESIGN.md §5.8 の ``Lead``）。現行 ``band_common.lead()``・``begin_pattern()`` と同じ
 4小節の楽節（A・A・B・終止）。区間ごとに ``MelodyGenerator`` と動機 A・B を新しく選ぶ（区間をまたいで
 旋律の終端音を引き継がない。現行どおり）。"""
 from __future__ import annotations

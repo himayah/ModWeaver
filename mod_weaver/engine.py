@@ -1,4 +1,4 @@
-"""生成エンジン（FRAMEWORK_REDESIGN.md §3.1）。
+"""生成エンジン（DESIGN.md §2.1）。
 
 ``Genre`` の ``plan()`` → ジェネレータ（``framework.compose``）で形式に依存しない ``Score`` を作り、
 形式ごとの Realizer（トラッカー系は ``framework.realize.tracker``、MIDI は ``framework.realize.midi``）でバイト列にし、

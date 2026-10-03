@@ -1,8 +1,8 @@
-"""F6〜F7 で移植したジャンル（``mod_weaver/genres/``）の共通検査（FRAMEWORK_REDESIGN.md §13.1・§15.1）。
+"""F6〜F7 で移植したジャンル（``mod_weaver/genres/``）の共通検査（DESIGN.md §10.1・§6.14）。
 
 - I1 骨格の不変・I2 決定性・I3 全予算 × 全形式で生成でき検査に ERROR が無い（MIDI を含む）。
 - 全パートが鳴る（宣言したパートが、どの区間でも鳴らないままになっていない。移植の取りこぼしの検出）。
-- 編成の対応表（§15.1）: 旧 ``ARRANGEMENTS`` の各編成（``port_layouts.LAYOUTS``。旧実装を消す前に旧クラスから生成して固定した
+- 編成の対応表（DESIGN.md §6.14）: 旧 ``ARRANGEMENTS`` の各編成（``port_layouts.LAYOUTS``。旧実装を消す前に旧クラスから生成して固定した
   もの）と、新しい ladder の lane の並び・楽器・パン・畳んだときの優先順位。
 """
 from __future__ import annotations
@@ -51,7 +51,7 @@ def test_every_f7_genre_is_registered_and_all_51_are_ported():
     assert PORTED_F7 <= set(IDS), sorted(PORTED_F7 - set(IDS))
     assert set(IDS) == PORTED and len(IDS) == 51, sorted(set(IDS) ^ PORTED)
 
-# 旧の編成から意図して変えたもの（§15.1: 一致しない場合は ladder の結果を採用してよいが、差を書く）
+# 旧の編成から意図して変えたもの（DESIGN.md §6.14: 一致しない場合は ladder の結果を採用してよいが、差を書く）
 # 並びだけが違う（lane の楽器・パンは同じ）ものを記録する。理由: 旧版は打楽器の論理チャンネルが離れていた（例: 6番目に
 # tom／shaker）が、新しい編成は打楽器を1つの drums パートにまとめるので打楽器の lane が先頭にまとまる。MOD はパンが
 # チャンネル番号で固定（L R R L）なので、並びの違いはステレオの配置がずれる（楽器の音自体は同じ）。

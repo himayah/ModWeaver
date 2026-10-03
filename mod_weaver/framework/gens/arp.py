@@ -1,4 +1,4 @@
-"""アルペジオ（FRAMEWORK_REDESIGN.md §7 の ``Arp``）。現行 ``band_common.arp()`` と同じ規則。"""
+"""アルペジオ（DESIGN.md §5.8 の ``Arp``）。現行 ``band_common.arp()`` と同じ規則。"""
 from __future__ import annotations
 
 from ..context import Generator, MeasureCtx

@@ -1,4 +1,4 @@
-"""acoustic-ssw（旧 genres/acoustic_ssw.py の宣言を機械変換したもの。FRAMEWORK_REDESIGN.md §15）。"""
+"""acoustic-ssw（旧 genres/acoustic_ssw.py の宣言を機械変換したもの。DESIGN.md §6）。"""
 from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules

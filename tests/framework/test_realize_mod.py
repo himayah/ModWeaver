@@ -1,7 +1,7 @@
-"""TrackerRealizer（MOD）の確認（FRAMEWORK_REDESIGN.md §16.2 F3 の完了条件）。
+"""TrackerRealizer（MOD）の確認（DESIGN_HISTORY.md §15 F3 の完了条件）。
 
-lane の需要・ladder（§9.3）・サンプル計画（§8.4）・セル化（§9.6〜§9.7）・サイドチェイン（§9.8）・
-pattern への分割（§9.9）を、kit・和音・double・sidechain を持つ小さな架空ジャンルで確認する。
+lane の需要・ladder（DESIGN.md §7.6）・サンプル計画（DESIGN.md §4.9）・セル化（DESIGN.md §7.6〜§7.6）・サイドチェイン（DESIGN.md §7.6）・
+pattern への分割（DESIGN.md §7.6）を、kit・和音・double・sidechain を持つ小さな架空ジャンルで確認する。
 最後に ``core.formats.get_format("mod")`` の serialize/verify を実際に通す。
 """
 from __future__ import annotations
@@ -78,7 +78,7 @@ def _score(genre, seed=1):
 
 
 # ============================================================
-# lane の需要と ladder（§9.3）
+# lane の需要と ladder（DESIGN.md §7.6）
 # ============================================================
 
 def test_layout_at_4ch_bakes_chord_and_merges_kit():
@@ -172,7 +172,7 @@ def test_sidechain_ducks_bass_near_kick_hits():
 
 
 # ============================================================
-# pattern への分割（§9.9）
+# pattern への分割（DESIGN.md §7.6）
 # ============================================================
 
 def _split_ctx(fmt):

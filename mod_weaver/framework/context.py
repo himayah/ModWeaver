@@ -1,4 +1,4 @@
-"""ジェネレータが使う文脈 ``SectionCtx``・``MeasureCtx`` と ``Generator`` 基底（FRAMEWORK_REDESIGN.md §6.5・§6.6）。"""
+"""ジェネレータが使う文脈 ``SectionCtx``・``MeasureCtx`` と ``Generator`` 基底（DESIGN.md §5.2・§5.2）。"""
 from __future__ import annotations
 
 import random
@@ -68,7 +68,7 @@ class SectionCtx:
         finish = self.genre.instruments[inst].patch.finish
         return finish.duration if isinstance(finish, _OneShot) else None
 
-    # --- 音量の換算（§6.6） ---
+    # --- 音量の換算（DESIGN.md §5.2） ---
     def scale_vol(self, vol: int) -> int:
         return max(1, min(64, round(vol * (0.55 + 0.45 * self.plan.intensity))))
 

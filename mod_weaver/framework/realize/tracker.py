@@ -1,4 +1,4 @@
-"""TrackerRealizer（MOD・S3M・XM・IT。FRAMEWORK_REDESIGN.md §9）。
+"""TrackerRealizer（MOD・S3M・XM・IT。DESIGN.md §7.6）。
 
 ``realize(genre, score, plan, target)`` が Score を ``core.native.RealizedSong`` にする。形式の差は
 ``encode.Codec`` の表と、``Target`` の上限（行数・pattern 数・サンプル数）だけで吸収する。
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mod_weaver")
 
-_TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（§9.9）
+_TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（DESIGN.md §7.6）
 
 
 # ============================================================
@@ -115,7 +115,7 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
 
 
 # ============================================================
-# 音符の書き込み（§9.6・§9.7）
+# 音符の書き込み（DESIGN.md §7.6・§7.6）
 # ============================================================
 
 def _looped(spec: SampleSpec) -> bool:
@@ -144,7 +144,7 @@ def _candidates(ctx: _Ctx, p: Placement, spec: SampleSpec, step_ticks: int, note
             out.append((PRIORITY["offset"], "offset", codec.offset(xx)))
         elif isinstance(art, Glide):
             # 直前の tracker note が分からないため厳密な portamento_param は計算できない（score 層は period を
-            # 知らない）。Glide.param が無指定のときは最小速度にする（§16.5）。
+            # 知らない）。Glide.param が無指定のときは最小速度にする（DESIGN_HISTORY.md §15）。
             out.append((PRIORITY["glide"], "glide", codec.glide(art.param if art.param is not None else 1)))
         elif isinstance(art, Arpeggio):
             top = (note or 0) + max(art.x, art.y)
@@ -178,7 +178,7 @@ def _write_note(ctx: _Ctx, grid: RGrid, lane: int, step: int, next_step: Optiona
                        where=f" (step {step}, lane {lane})")
 
     arts = list(p.arts)
-    if p.strum_ms > 0 and not p.chord:       # 和音の声部（§9.5）: 声部 i を Delay で遅らせる
+    if p.strum_ms > 0 and not p.chord:       # 和音の声部（DESIGN.md §7.6）: 声部 i を Delay で遅らせる
         tick_ms = 2500.0 / ctx.bpm
         ticks = min(step_ticks - 1, round(p.strum_ms / tick_ms))
         if ticks >= 1 and not any(isinstance(a, Delay) for a in arts):
@@ -193,7 +193,7 @@ def _write_note(ctx: _Ctx, grid: RGrid, lane: int, step: int, next_step: Optiona
         if vol is None or vol == spec.volume:
             vol = None                       # 既定音量と同じなので書かなくてよい（発音で既定に戻る）
         elif best[1] in ("vibrato", "tremolo"):
-            shifted.add(best[1])             # 音量を残して、奏法は次の row へ（§9.6 の2）
+            shifted.add(best[1])             # 音量を残して、奏法は次の row へ（DESIGN.md §7.6 の2）
             best = None
         else:
             vol = None                       # Delay・Glide・Retrig・Cut・Arpeggio・Offset: エフェクトを残す
@@ -233,7 +233,7 @@ def _write_note(ctx: _Ctx, grid: RGrid, lane: int, step: int, next_step: Optiona
 
 def _put_stop(ctx: _Ctx, grid: RGrid, lane: int, row: int, limit: int, release_s: Optional[float],
               step_ticks: int) -> None:
-    """lane の音を ``row`` で止める（§9.7）。``release_s`` が無ければ即時に止める。ある場合、XM・IT はキーオフ
+    """lane の音を ``row`` で止める（DESIGN.md §7.6）。``release_s`` が無ければ即時に止める。ある場合、XM・IT はキーオフ
     （エンベロープがリリースする）、MOD・S3M は音量スライド（``Axy``／``Dxy``）を ``release_s`` の間 row ごとに置き、
     終わりで止める（``limit`` 未満の、空いている row だけ）。"""
     codec = ctx.codec
@@ -275,7 +275,7 @@ def _glide_param(codec: Codec, prev_spec: SampleSpec, prev_note: int, spec: Samp
 
 def _prev_sounding(ctx: _Ctx, prev: Optional[Placement], prev_spec: Optional[SampleSpec], prev_note: Optional[int],
                    p: Placement, step_ticks: int) -> bool:
-    """``p`` の発音の時点で、同じ lane の直前の音がまだ鳴っているか（鳴り終わっていれば滑らせる音が無い。§5.3）。"""
+    """``p`` の発音の時点で、同じ lane の直前の音がまだ鳴っているか（鳴り終わっていれば滑らせる音が無い。DESIGN.md §3.3）。"""
     if prev is None or prev.kind != "note" or prev_spec is None or prev_note is None:
         return False
     if prev.dur is not None and prev.step + prev.dur <= p.step:
@@ -354,7 +354,7 @@ def _release_of_inst(ctx: _Ctx, inst_name: str) -> Optional[float]:
 
 
 # ============================================================
-# オートメーション（§9.8）
+# オートメーション（DESIGN.md §7.6）
 # ============================================================
 
 def _apply_automation(ctx: _Ctx, grid: RGrid, autos: list[AutomationPlacement]) -> None:
@@ -366,7 +366,7 @@ def _apply_automation(ctx: _Ctx, grid: RGrid, autos: list[AutomationPlacement]) 
             c = grid.get(a.step, lane)
             if a.kind == "volume":
                 if codec.exclusive_vol_fx and c.fx is not None:
-                    continue   # 効果を使っている行は潰さない（§9.8）
+                    continue   # 効果を使っている行は潰さない（DESIGN.md §7.6）
                 grid.put(a.step, lane, RCell(c.note, c.sample, max(0, min(64, a.value)), c.fx))
             else:
                 fx = codec.pan(a.value) if a.kind == "pan" else codec.cutoff(a.value)
@@ -376,7 +376,7 @@ def _apply_automation(ctx: _Ctx, grid: RGrid, autos: list[AutomationPlacement]) 
 
 
 # ============================================================
-# サイドチェイン（§9.8）
+# サイドチェイン（DESIGN.md §7.6）
 # ============================================================
 
 def _volume_at(ctx: _Ctx, grid: RGrid, lane: int, row: int) -> int:
@@ -416,14 +416,14 @@ def _apply_sidechain(ctx: _Ctx, grid: RGrid, sec_score) -> None:
                     ducked = max(0, round(base * (1 - frac)))
                     c = grid.get(row, lane)
                     if ctx.codec.exclusive_vol_fx and c.fx is not None:
-                        continue   # 効果を使っている行は潰さない（ポルタメント等を優先。§9.8）
+                        continue   # 効果を使っている行は潰さない（ポルタメント等を優先。DESIGN.md §7.6）
                     if c.note is not None and c.note < 0:
                         continue   # 止めるセルの音量は触らない
                     grid.put(row, lane, RCell(c.note, c.sample, ducked, c.fx))
 
 
 # ============================================================
-# テンポ（§9.9）
+# テンポ（DESIGN.md §7.6）
 # ============================================================
 
 def _insert_near_start(ctx: _Ctx, grid: RGrid, fx, label: str) -> None:
@@ -469,7 +469,7 @@ def _make_room(ctx: _Ctx, grid: RGrid, row: int) -> bool:
 
 
 def _write_swing(ctx: _Ctx, grid: RGrid, swing) -> None:
-    """スウィング（§9.9）: 偶数 step を ``long``、奇数 step を ``short`` tick の Speed にする（全 row に書く）。
+    """スウィング（DESIGN.md §7.6）: 偶数 step を ``long``、奇数 step を ``short`` tick の Speed にする（全 row に書く）。
     表示 BPM どおりに鳴らすには全 row に要るので、場所が無い row は作る。それでも作れなければその row だけ飛ばす
     （直前の Speed が続く。DEBUG ログ）。"""
     for row in range(grid.rows):
@@ -482,7 +482,7 @@ def _write_swing(ctx: _Ctx, grid: RGrid, swing) -> None:
 
 
 # ============================================================
-# pattern への分割（§9.9）
+# pattern への分割（DESIGN.md §7.6）
 # ============================================================
 
 def _pattern_rows(codec: Codec, length: int) -> int:

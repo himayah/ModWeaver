@@ -1,4 +1,4 @@
-"""パッド（FRAMEWORK_REDESIGN.md §7 の ``Pad``）。現行 ``band_common.pad()`` と同じ規則: 和音の変わり目に
+"""パッド（DESIGN.md §5.8 の ``Pad``）。現行 ``band_common.pad()`` と同じ規則: 和音の変わり目に
 ``dur=None``（次の発音まで＝ループなら区間の終わりまで鳴り続ける）だけ発音し直す。"""
 from __future__ import annotations
 

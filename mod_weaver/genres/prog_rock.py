@@ -1,4 +1,4 @@
-"""prog-rock（旧 genres/prog_rock.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""prog-rock（旧 genres/prog_rock.py の移植。DESIGN.md §6 のグループC）。
 
 主リフの拍子サイクルは 7/8 + 7/8 + 5/8（16分格子で 14+14+10 = 38 step の3小節）。E aeolian のモーダルなリフに対し、
 ``chorus`` だけ 4/4（16 step × 4 小節）へ戻り「変拍子↔直進」の対比を作る。小節ごとの step 数は ``Section.measure_steps``、

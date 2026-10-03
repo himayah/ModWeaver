@@ -1,9 +1,8 @@
-"""march（旧 genres/march.py の移植。FRAMEWORK_REDESIGN.md §15.4 のグループC）。
+"""march（旧 genres/march.py の移植。DESIGN.md §6 のグループC）。
 
-F3 の試験移植を F7 で本番に昇格した。旧 ``mod_weaver/genres/march.py``（``MarchProfile``）は
-``GenreProfile`` の素の機構を直接使う個別実装で、1 つの「区間ぶんの文法」関数が drums・tuba・harm・picc の
-4 チャンネルすべてを同時に書いていた。新フレームワークは1パート=1ジェネレータなので、その文法を
-``MarchDrums``・``MarchTuba``・``MarchHarm``・``MarchPicc`` の4つに分けて書き直す（§15.4 の想定どおり、
+旧実装は1つの「区間ぶんの文法」関数が drums・tuba・harm・picc の4チャンネルすべてを同時に書いていた。
+フレームワークは1パート=1ジェネレータなので、その文法を
+``MarchDrums``・``MarchTuba``・``MarchHarm``・``MarchPicc`` の4つに分けて書く（DESIGN.md §6 の想定どおり、
 同じ「どの measure で何を鳴らすか」の条件分岐が複数のジェネレータに現れるが、ジャンル固有の文法なので
 部品化はしない）。
 
@@ -112,7 +111,7 @@ def _section_plan(name: str, kind: str, prog_name: str, intensity: float, key_of
 
 
 # ============================================================
-# ジャンル内のジェネレータ（drums・tuba・harm・picc。§15.4）
+# ジャンル内のジェネレータ（drums・tuba・harm・picc。DESIGN.md §6）
 # ============================================================
 
 class MarchDrums(Generator):
@@ -161,7 +160,7 @@ class MarchDrums(Generator):
     @staticmethod
     def _snare_roll(m: MeasureCtx) -> None:
         """フレーズ末の4連打（vol 36→58）。row4 の通常スネアと同じ (inst, step) に ``prio=2`` で
-        勝つ（§9.5・§15.4: 現行の ``buf.replace`` に相当）。"""
+        勝つ（DESIGN.md §7.6・§6: 現行の ``buf.replace`` に相当）。"""
         for i, row in enumerate(range(4, 8)):
             vol = round(36 + (58 - 36) * i / 3)
             m.note(row, "sd", vel=vol, prio=2)
@@ -318,7 +317,7 @@ class MarchGenre(Genre):
              kit=Kit(groups=(("harm", ("horn", "section")),), priority={"section": 2})),
         Part("picc", MarchPicc("picc"), pan=96),
     )
-    mod_channels = {4: 1}   # 現行どおり 4ch 専用（§15.4。6ch・8ch 用の追加パートは本移植の範囲外）
+    mod_channels = {4: 1}   # 現行どおり 4ch 専用（DESIGN.md §6。6ch・8ch 用の追加パートは本移植の範囲外）
 
     def plan(self, rng: random.Random) -> SongPlan:
         key_pc = rng.choice(KEY_CHOICES)

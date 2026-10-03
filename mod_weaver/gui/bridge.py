@@ -177,11 +177,20 @@ def build_args(req: Request, catalog: Catalog) -> list[str]:
     return args
 
 
-def replay_request(song: SongResult, fmt: str, output_dir: Optional[Path]) -> Request:
+def replay_request(song: SongResult, fmt: str, output_dir: Optional[Path],
+                   catalog: Optional[Catalog] = None) -> Request:
     """生成済みの曲を別の形式で書き出す指定。再現コマンドと同じく、テンポは指定があったときだけ確定値、
-    チャンネル数は指定があったときだけ渡す（指定しなければ seed で同じになる。DESIGN.md §8.6）。"""
+    チャンネル数は指定があったときだけ渡す（指定しなければ seed で同じになる。DESIGN.md §8.6）。
+
+    ``--channels`` の意味は形式で違う（MOD は宣言された数から、S3M・XM・IT・MP3 は上限、MIDI は指定不可。§7.1）ので、
+    ``catalog`` があるときは、元の形式と同じ意味の形式にだけ引き継ぐ（MIDI など指定できない形式へは渡さない）。"""
     tempo = (song.bpm, song.bpm) if song.tempo_request is not None else None
-    return Request(song.genre, song.seed, fmt, tempo, song.channels_request, output_dir)
+    channels = song.channels_request
+    if channels is not None and catalog is not None:
+        src, dst = catalog.channel_spec(song.format), catalog.channel_spec(fmt)
+        if dst is None or src is None or ("choices" in src) != ("choices" in dst):
+            channels = None
+    return Request(song.genre, song.seed, fmt, tempo, channels, output_dir)
 
 
 def parse_int(text: str) -> Optional[int]:

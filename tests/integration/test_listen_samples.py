@@ -7,7 +7,7 @@ from mod_weaver.engine import channel_choices, get_genre, list_genres
 
 def test_song_list_is_fixed_and_uses_registered_genres():
     songs = L.songs()
-    assert len(songs) == 414 and len(set(songs)) == 414
+    assert len(songs) == 423 and len(set(songs)) == 423
     ids = {p.id for p in list_genres()}
     assert {g for _, g, _, _ in songs} <= ids
     assert [folder for folder, _, _ in L.ITEMS] == sorted(folder for folder, _, _ in L.ITEMS)

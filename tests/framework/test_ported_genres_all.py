@@ -42,10 +42,11 @@ PORTED_F7 = {
 }
 PORTED = PORTED_F6 | PORTED_F7
 
-# 新フレームワークで最初から書いた新ジャンル 14（NEW_GENRES_DESIGN.md）。
+# 新フレームワークで最初から書いた新ジャンル 18（DESIGN.md §6.19・§6.20）。
 NEW_GENRES = {
     "celtic", "russian-folk", "mood-kayo", "enka", "okinawan", "rokyoku", "gagaku",
     "trance", "gospel-shout", "klezmer", "tango", "fado", "baroque", "debayashi",
+    "reggae", "flamenco", "samba", "raga",
 }
 
 
@@ -53,9 +54,9 @@ def test_every_f6_genre_is_registered():
     assert PORTED_F6 <= set(IDS), sorted(PORTED_F6 - set(IDS))
 
 
-def test_every_f7_genre_is_registered_and_all_65_are_present():
+def test_every_f7_genre_is_registered_and_all_69_are_present():
     assert PORTED_F7 <= set(IDS), sorted(PORTED_F7 - set(IDS))
-    assert set(IDS) == PORTED | NEW_GENRES and len(IDS) == 65, sorted(set(IDS) ^ (PORTED | NEW_GENRES))
+    assert set(IDS) == PORTED | NEW_GENRES and len(IDS) == 69, sorted(set(IDS) ^ (PORTED | NEW_GENRES))
 
 # 旧の編成から意図して変えたもの（DESIGN.md §6.14: 一致しない場合は ladder の結果を採用してよいが、差を書く）
 # 並びだけが違う（lane の楽器・パンは同じ）ものを記録する。理由: 旧版は打楽器の論理チャンネルが離れていた（例: 6番目に

@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 65 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (36, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`, `celtic`, `trance`, `baroque`) and **styles** (20, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`, Okinawan folk style `okinawan`, rokyoku style `rokyoku`, mood kayo `mood-kayo`). `--genre random` picks one for you. **The format is chosen first and the song is composed for what that format can do** (16-bit, high-resolution samples and a wide note range for XM and IT, a looser channel limit for IT, XM, S3M and MIDI, and so on). With MOD, each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one). With XM, S3M, IT and MP3 every part of the genre is included and `--channels` is an upper limit. For the same genre, seed and tempo, the skeleton of the song (melody, chords, rhythm) is the same in every format. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 69 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (40, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`, `celtic`, `trance`, `baroque`) and **styles** (20, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`, Okinawan folk style `okinawan`, rokyoku style `rokyoku`, mood kayo `mood-kayo`). `--genre random` picks one for you. **The format is chosen first and the song is composed for what that format can do** (16-bit, high-resolution samples and a wide note range for XM and IT, a looser channel limit for IT, XM, S3M and MIDI, and so on). With MOD, each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one). With XM, S3M, IT and MP3 every part of the genre is included and `--channels` is an upper limit. For the same genre, seed and tempo, the skeleton of the song (melody, chords, rhythm) is the same in every format. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -115,6 +115,10 @@ python modweaver.py -e --genre celtic       # genre: Celtic dance tunes (jig, re
 python modweaver.py -e --genre gagaku       # genre: gagaku-style court music (jo-ha-kyu tempo)
 python modweaver.py -e --genre enka         # genre: enka (scoops and kobushi, final-chorus key change)
 python modweaver.py -e --genre okinawan     # style: Okinawan folk (Ryukyu scale; slow shima-uta or swung kachashi)
+python modweaver.py -e --genre reggae       # genre: reggae / ska (one drop, skank)
+python modweaver.py -e --genre samba        # genre: samba (surdo and tamborim; pagode or batucada)
+python modweaver.py -e --genre flamenco     # genre: flamenco (Andalusian cadence, 12-beat compas)
+python modweaver.py -e --genre raga         # genre: raga (tanpura and sitar, alap to gat)
 ```
 
 #### Pick a genre at random (`--genre random` / `-g r`):
@@ -221,7 +225,7 @@ https://github.com/himayah/ModWeaver
 | `uplifting` | – | 4/6/8 | Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords |
 | `warm` | – | 4/6 | Warm: acoustic guitar and piano in a gentle major key |
 
-**Genres (genre)** — 36
+**Genres (genre)** — 40
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
@@ -235,6 +239,7 @@ https://github.com/himayah/ModWeaver
 | `edm` | – | 4/6/8 | EDM: synth-driven builds that explode into the drop |
 | `enka` | – | 4/6/8 | Enka: pentatonic minor melody with scoops and kobushi, strings, plucked guitar, shamisen fills, final-chorus key change (no vocals) |
 | `fado` | – | 4/6 | Fado style: ornamented Portuguese-guitar-like melody, nylon arpeggios, slow minor key, a guitarrada interlude (no vocals) |
+| `flamenco` | – | 4/6 | Flamenco style: phrygian dominant with the Andalusian cadence, rasgueado, palmas and cajon, a 12-beat compas or 4/4 rumba |
 | `folk` | – | 4/6 | Folk: strummed acoustic guitar and fiddle over simple progressions |
 | `free-jazz` | – | 4 | Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes) |
 | `future-bass` | – | 4 | Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV |
@@ -252,9 +257,12 @@ https://github.com/himayah/ModWeaver
 | `orchestral` | – | 8 | Full orchestra / film score: 8 channels, six-voice strings + woodwinds + brass + timpani |
 | `pop` | – | 4/6/8 | Pop: bright major-key melodies, piano and a catchy chorus |
 | `prog-rock` | – | 4 | Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus |
+| `raga` | – | 4/6 | Hindustani raga style: tanpura drone, sitar-like melody, alap to gat with accelerating tabla (the raga is chosen by the seed) |
+| `reggae` | – | 4/6/8 | Reggae / ska style: one-drop beat, offbeat skank, heavy spacious bass, organ bubble and dub echo |
 | `rnb-soul` | – | 4/6/8 | R&B / soul: smooth extended chords and a singing melody in a slow jam |
 | `rock` | – | 4/6/8 | Rock: guitar riffs over a straight eight-beat |
 | `russian-folk` | – | 4/6/8 | Russian folk style: balalaika tremolo, bayan oom-pah, harmonic minor; a lyric song or an accelerating dance |
+| `samba` | – | 4/6/8 | Samba style: 2/4 surdo with tamborim, agogo and pandeiro sixteenths, cavaquinho strumming, 7th chords (relaxed pagode or full batucada) |
 | `swing-jazz` | – | 4 | Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA) |
 | `synthwave` | – | 4/6/8 | Synthwave: 80s synths, gated snare and a pulsing eighth-note bass |
 | `tango` | – | 4/6 | Argentine tango style: marcato four, 3-3-2 accents, dragging violin, bandoneon chords and a chan-chan ending |
@@ -366,7 +374,7 @@ or the per-genre sections in §6 of [DESIGN.md](DESIGN.md) (§6.16 for the 35 ba
 │   │                   #   native_midi / verify / render (mp3)), output loudness boost (native_level)
 │   ├── framework/     # The composition framework: Target (format capabilities), Score (format-independent score), Genre base,
 │   │                   #   generator parts (gens/), Realizers (realize/: tracker and MIDI), measured per-genre peaks (levels)
-│   ├── genres/        # Genre modules (one file = one genre; registered just by being there; 65 genres)
+│   ├── genres/        # Genre modules (one file = one genre; registered just by being there; 69 genres)
 │   └── gui/           # GUI (tkinter). Runs the CLI as a child process
 ├── tools/             # For development: calibrate_levels.py (re-measures per-genre peaks with ffmpeg; DESIGN.md §7.9),
 │                      #   update_golden.py (updates the output baseline tests/regression/golden.json; DESIGN.md §10)

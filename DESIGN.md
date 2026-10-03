@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`・GUI `modweaver_gui.pyw`） |
 | 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) |
-| 最終更新 | 2026-10-03（新ジャンル14〔§6.19。DESIGN_HISTORY.md §16〕を追加。フレームワークの再設計を統合: 形式を最初に決めて作曲する新しい枠組み〔`framework/`〕と、全51ジャンルの移植、形式ごとの Realizer・書き出し。再設計の決定の経緯と実装中に分かったことは DESIGN_HISTORY.md §15。統合前の原文は git 履歴で参照できる） |
+| 最終更新 | 2026-10-03（新ジャンル14〔§6.19〕と第2弾4〔§6.20。DESIGN_HISTORY.md §16〕を追加。フレームワークの再設計を統合: 形式を最初に決めて作曲する新しい枠組み〔`framework/`〕と、全51ジャンルの移植、形式ごとの Realizer・書き出し。再設計の決定の経緯と実装中に分かったことは DESIGN_HISTORY.md §15。統合前の原文は git 履歴で参照できる） |
 
 ---
 
@@ -46,7 +46,7 @@ Python 標準ライブラリだけで、波形合成から作曲・シーケン�
 
 | ID | 要件 |
 |:---|:---|
-| FR-1 | `--genre` で65ジャンルから選んで生成する（区分: 気分・ジャンル・〜風。§6）。`random` / `r` なら指定できるジャンルからランダムに選ぶ（§8.3） |
+| FR-1 | `--genre` で69ジャンルから選んで生成する（区分: 気分・ジャンル・〜風。§6）。`random` / `r` なら指定できるジャンルからランダムに選ぶ（§8.3） |
 | FR-2 | 同じ genre・seed・format・tempo からは常に同じファイルを出力する。加えて、同じ genre・seed・tempo なら、形式が違っても**骨格は同じ**（調・進行・各パートの音符の時刻と高さ。§10 I1） |
 | FR-3 | 出力形式を `mod`（既定）/ `xm` / `s3m` / `it` / `midi` / `mp3` から選べる（§7） |
 | FR-4 | テンポを BPM または範囲（範囲内からランダム）で指定できる。未指定ならジャンルが決める（§5.5） |
@@ -139,7 +139,7 @@ cli.py ──▶ engine.py ──▶ framework/（Target・Score・Genre・部�
 | `framework/realize/encode.py` | 奏法 → 形式ごとのエフェクト・ボリューム列（`Codec`。§7.6） |
 | `framework/realize/midi.py` | `MidiRealizer`（§7.7） |
 | `framework/levels.py` | 音量の底上げの根拠になる、ジャンル × 形式の最大振幅の測定値（§7.9） |
-| `genres/*.py` | 65ジャンル（§6）。`_suspense.py`（suspense 2ジャンルの共通部分）・`_ornament.py`（新ジャンルの共有部品。§6.19）はジャンルではない |
+| `genres/*.py` | 69ジャンル（§6）。`_suspense.py`（suspense 2ジャンルの共通部分）・`_ornament.py`（新ジャンルの共有部品。§6.19）はジャンルではない |
 | `core/pitch.py` | Period 表・音名・スケール・和音の型・微分音（§4.1） |
 | `core/model.py` | `GmVoice`・`Cell`・`Pattern`・`SampleSpec`・`Song`（MOD の writer が読む表現）・`ChordSpec`・`ChordDef`（§3.4） |
 | `core/harmony.py` | 和音の具体化 `voice()`（§4.2） |
@@ -394,7 +394,7 @@ class SampleSpec:
 ### 4.1 音高・スケール・微分音（`core/pitch.py`）
 
 - `PERIODS`（36音、標準 PAL 表）、`NOTE_NAMES`、`name(t)` / `parse("C#2")`、`hz(n)`、`fold_into_range(n, lo, hi)`（オクターブ単位で音域へ折返し）、`nearest`、`lowest_note_with_pc`、`notes_with_pcs`、`note_for_hz`。
-- `Scale(tonic_pc, intervals)` と `MODES`（ionian / aeolian / dorian / mixolydian / lydian / phrygian / locrian / dim_wh / harmonic_minor / melodic_minor / major_pent / minor_pent / blues、新ジャンル用の ritsu / ryukyu / miyakobushi / phrygian_dominant / ukrainian_dorian〔§6.19〕）。
+- `Scale(tonic_pc, intervals)` と `MODES`（ionian / aeolian / dorian / mixolydian / lydian / phrygian / locrian / dim_wh / harmonic_minor / melodic_minor / major_pent / minor_pent / blues、新ジャンル用の ritsu / ryukyu / miyakobushi / phrygian_dominant / ukrainian_dorian / todi〔§6.19・§6.20〕）。
 - `CHORD_QUALITIES`（maj / min / dim / maj7 / m7 / dom7 など。半音オフセット）。
 - 微分音: `MicroScale(tonic_pc, degrees_cents)` はセントで定義する音律（`degree_cents`・`absolute_cents(degree, tonic_note)`）。書かれた音高の小数部（`absolute_cents ÷ 100`）が微分音になる。MOD は finetune の変種サンプル（**finetune の刻みは実プレイヤーで測って 12.5 セント**＝-8 で -100、+7 で +87。50 セントのクォータートーンは ±4 で正確に出る）、S3M・IT は再生レートにセントを掛けた変種、XM はサンプルの finetune、MIDI はピッチベンド（§4.8・§7.6・§7.7）。`MOD_FINETUNE_CENTS = 12.5` は `framework/realize/samples.py`。
 
@@ -450,7 +450,7 @@ class SampleSpec:
 - `pitched` は自動判定しない。`pitched=False` のとき `ToneLayer` の `mult` は絶対 Hz、True のとき `f0 = hz(rate_note + shift)` への比率（OneShot のみ）。
 - **知覚寄りのファクトリ（1つのノブで複数パラメータを連動させる関数）は core に置かない**。連動が欲しければそのジャンルのファイル内にローカルな関数を書く。
 - パンは音色ではなく配置の判断なので `Patch` には持たせず、`render()` の結果に `dataclasses.replace(spec, pan=...)` で付ける。
-- `synth_presets/`（パッケージ）: 動作・音質を確認済みの `Patch` 158 個（`PRESETS`・`DESCRIPTIONS`、`find(keyword)`。どのモジュールの定数も `synth_presets.<定数名>` で参照できる）。`genre_kits.py` は第３段階より前の12ジャンルの音色（60個。`NOSTALGIC_*`・`SUSPENSE_*`・`MARCH_*`・`SWING_*`・`PROG_*`・`TRAP_*`・`MAQAM_*`・`MIN_*`・`FB_*`・`FREE_*`・`ORCH_*`）。第３段階の共有音色（54個）は**楽器の種類**で命名して系統ごとのモジュールに置き、複数のジャンルで使い回す: `drums.py`（`drum_*`）・`perc.py`（`perc_*`）・`bass.py`（`bass_*`）・`keys.py`（`keys_*`）・`guitar.py`（`gtr_*`）・`synths.py`（`syn_*`）・`pads.py`（`pad_*`・`vox_*`）・`orch.py`（`wind_*`・`str_*`・`brass_*`）・`fx.py`（`fx_*`。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す）・`metal.py`（`gamelan_*`・`ind_metal_*`。非調和の部分音と長い減衰の金属打楽器）。チップチューン（`chip_*`）・インダストリアル（`ind_*`）の音色は §6.17 のジャンルのために足したもの（計22個）。`asia_court.py`（`jp_*`・`oki_*`。雅楽・沖縄・演歌・浪曲・出囃子の楽器）と `folk_world.py`（`ru_*`・`klez_*`・`celt_*`・`mood_*`・`baroque_*`）は §6.19 の14ジャンルのために足したもの（計22個）。
+- `synth_presets/`（パッケージ）: 動作・音質を確認済みの `Patch` 166 個（`PRESETS`・`DESCRIPTIONS`、`find(keyword)`。どのモジュールの定数も `synth_presets.<定数名>` で参照できる）。`genre_kits.py` は第３段階より前の12ジャンルの音色（60個。`NOSTALGIC_*`・`SUSPENSE_*`・`MARCH_*`・`SWING_*`・`PROG_*`・`TRAP_*`・`MAQAM_*`・`MIN_*`・`FB_*`・`FREE_*`・`ORCH_*`）。第３段階の共有音色（54個）は**楽器の種類**で命名して系統ごとのモジュールに置き、複数のジャンルで使い回す: `drums.py`（`drum_*`）・`perc.py`（`perc_*`）・`bass.py`（`bass_*`）・`keys.py`（`keys_*`）・`guitar.py`（`gtr_*`）・`synths.py`（`syn_*`）・`pads.py`（`pad_*`・`vox_*`）・`orch.py`（`wind_*`・`str_*`・`brass_*`）・`fx.py`（`fx_*`。ノイズはループにできないので、長い OneShot を小節頭で鳴らし直す）・`metal.py`（`gamelan_*`・`ind_metal_*`。非調和の部分音と長い減衰の金属打楽器）。チップチューン（`chip_*`）・インダストリアル（`ind_*`）の音色は §6.17 のジャンルのために足したもの（計22個）。`asia_court.py`（`jp_*`・`oki_*`。雅楽・沖縄・演歌・浪曲・出囃子の楽器）と `folk_world.py`（`ru_*`・`klez_*`・`celt_*`・`mood_*`・`baroque_*`）は §6.19 の14ジャンルのために足したもの（計22個。第2弾〔§6.20〕で `folk_world.py` に `latin_*`・`raga_*` の8個を足した）。
 - **新しい音色の作り方**: ① `find()` で近いプリセットを探す → ② `dataclasses.replace()` で差分を調整して `render()`・試聴 → ③ 良ければプリセットに登録。無ければ既存の3 Layer・2 Finish の組合せで `Patch` を組む（core に新しい Layer 種別を足さない）。
 
 
@@ -673,7 +673,7 @@ class Generator:
 
 ## 6. ジャンル
 
-65ジャンル。§6.1〜6.13 は個別の実装を持つ12ジャンル（文法を `Genre` の宣言とジャンル内のジェネレータとして書いたもの）、§6.14〜6.16 は共通の部品（`framework/gens/`）の上に宣言で書く35ジャンル、§6.17 は音色空間の疎な領域を埋めるために追加した3ジャンル、§6.18 はサウンドトラックの解析から作った1ジャンル、§6.19 は世界の音楽・舞曲系の14ジャンル。
+69ジャンル。§6.1〜6.13 は個別の実装を持つ12ジャンル（文法を `Genre` の宣言とジャンル内のジェネレータとして書いたもの）、§6.14〜6.16 は共通の部品（`framework/gens/`）の上に宣言で書く35ジャンル、§6.17 は音色空間の疎な領域を埋めるために追加した3ジャンル、§6.18 はサウンドトラックの解析から作った1ジャンル、§6.19 は世界の音楽・舞曲系の14ジャンル、§6.20 はその第2弾の4ジャンル。
 
 **用語の対応**: 以降の各ジャンルの記述にある `4xy`・`0xy`・`3xx`・`9xx`・`E9x`・`EDx` は奏法の MOD での表記で、ジャンルは `Vibrato`・`Arpeggio`・`Glide`・`Offset`・`Retrig`・`Delay` として書く（§3.3）。また「チャンネル」「row」「measure」は、それぞれパート・step・小節に当たる。
 
@@ -1404,6 +1404,22 @@ A=`pedal`、B=`tritone` 固定。intro（pizz オスティナートのクレッ�
 
 **検査**: 共通検査（`test_ported_genres_all.py` の `NEW_GENRES`。I1〜I3・全パートが鳴る・全予算×全形式・実プレイヤー I5/I6）と、個別検査 `tests/framework/test_new_genres.py`（音階・拍子・ハネ・系統・構成・テンポの動き・装飾の規則・チャン・チャン・ゼクエンツの下行・和音なし・決定性）。音量は `tools/calibrate_levels.py`、golden は `tools/update_golden.py` で更新済み。試聴は `listen_samples.py` の `17_world-genres`（系統を持つジャンルは系統ごとに1例）。
 
+### 6.20 新ジャンル第2弾（reggae・flamenco・samba・raga）
+
+2026-10-03 に追加（経緯は DESIGN_HISTORY.md §16.5）。§6.19 の共有部品（`OrnamentedLead`・`Heterophony`・`WithTempo`・`retime`）の上に宣言で書き、core の変更は音階 `todi` と音色8個（`folk_world.py`: `latin_tamborim`・`latin_agogo_hi`・`latin_agogo_lo`・`raga_tanpura`・`raga_sitar`・`raga_tabla_ge`・`raga_tabla_na`・`raga_tabla_tin`）だけ。系統の書き方・「風」の方針は §6.19 と同じ。
+
+| id | 区分 | 系統・BPM | 拍子・格子 | 音階 | 重み（4/6/8） |
+|:---|:---|:---|:---|:---|:---|
+| `reggae` | genre | roots 66–82（ワンドロップ）・ska 150–172 | 4/4 | aeolian | 1/2/1 |
+| `flamenco` | genre | solea 96–110（1拍の数）・rumba 104–122 | 12拍＝24 step（`Meter(24, 2, (12, 8))`）・4/4 | phrygian_dominant | 1/2/– |
+| `samba` | genre | pagode 84–94・batucada 100–112 | 2/4（8 step＝16分格子） | ionian（m7＝dorian・dom7＝mixolydian） | 1/2/1 |
+| `raga` | genre | 88–104（区間ごとに 0.45〜1.6 倍） | 1小節＝ティーンタール16拍＝64 step（`Meter(64, 4, (16, 4))`） | seed でラーガを選ぶ（yaman＝lydian・bhairav＝phrygian_dominant・bhairavi＝phrygian・kafi＝dorian・todi） | 1/2/– |
+
+- **`reggae`**: roots は**ワンドロップ**（キックとリムを3拍目〔step 8〕だけ）と8分のハット、ska はキック 0・8・スネア 4・12。スキャンク（`gtr_clean_cut` の短い和音、裏拍 2・6・10・14）、重く間のあるベース（`bass_deep`。roots は根音・5度・根音・オクターブ）、melodica 風の旋律（`wind_flute`）、オルガンのバブル（6ch〜）、**dub 区間はスキャンクの `Echo`（6 step 遅れ・2回、8ch）**で旋律を止める。intro, verse, chorus, verse, dub, chorus, outro。
+- **`flamenco`**: solea はコンパスの強勢（3・6・8・10・12 拍＝step 4・10・14・18・22）にパルマ（`fb_clap`）とカホンの slap、1拍目と6拍目に低いカホン。rumba は 4/4。ギターのラスゲアード（和音を 8 ms のストロークで強勢に）、ファルセータ（`OrnamentedLead`: 前打音 0.35・ロール 0.3）、低いオクターブの2本目のギター（`Heterophony`・6ch〜）、bass（6ch〜）。進行は**アンダルシア進行 iv–III–II–I**・I–bII・I–bII–bIII–bII。b は強いグルーヴ（サパテアードを足す）で、solea の b は 1.0→1.15 倍へ加速。曲の並び: solea＝intro, a, b, a, outro／rumba＝intro, a, a, b, b, a, outro。
+- **`samba`**: スルド（拍1は抑え〔34〕、拍2で強く〔52〜58〕）、パンデイロ・シェイカーの16分は両系統、**batucada だけタンボリン（0・3・4・6）とアゴゴ（高 0・3・6／低 2・4・7）**を足す。カヴァキーニョの刻み（`gtr_clean_cut` の和音を 0・2・3・4・6・7）、7弦ギターの低音（拍1根音・拍2の5度・裏の根音）、flute の旋律（前打音 0.25）、solo 区間は 6ch〜のギターを足す。iim7–V7–Imaj7–VI7 など7thの進行。
+- **`raga`**: 区間は alap（2小節・タンプーラとシタールだけ、0.45 倍）→ jor（2小節、0.6→0.8 倍、拍が現れる）→ gat1（3小節、タブラが入る、1.0 倍）→ gat2（3小節、1.0→1.15 倍、16分の装飾）→ jhala（2小節、1.3→1.6 倍、最速）→ outro（1小節、1.2→0.6 倍）。タンプーラは4拍ごとに Pa・Sa・Sa・低い Sa（`Tanpura`）。タブラは**ティーンタールのテカー**（dha dhin dhin dha | dha dhin dhin dha | dha tin tin ta | ta dhin dhin dha。dha＝na+ge、dhin＝tin+ge、tin、ta＝na。第3区分の「空」は ge が無い）。シタールの旋律は `OrnamentedLead`（メーンド＝しゃくり 0.45・前打音 0.35・ムルキー＝ロール 0.25）。ラーガは `plan()` が seed で選び、`SectionPlan.scale` と各小節の `chord_tones`・`scale_tones` を**そのラーガの音だけ**に差し替える（強拍もどのラーガの音でもよい）。bansuri（`Heterophony`・6ch〜）。平均律の近似で微分音は使わない（`MicroScale` で書けば拡張できる）。
+- 検査: `test_ported_genres_all.py`（NEW_GENRES）の共通検査と `test_new_genres.py`（ワンドロップ・コンパス・スルド・ラーガの音・加速・テカー・全ラーガの選択）。試聴は `listen_samples.py` の `18_more-genres`。
 ---
 
 ## 7. 出力形式
@@ -1686,9 +1702,9 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 |:---|:---|
 | 音高（I4） | 全プリセットのうち基本周波数が一意に測れる持続音（34音色）について、音域の両端と中央の音を MOD・S3M・XM・IT で鳴らし、FFT（放物線補間）で測った基本周波数が §3.1 の基準（平均律）と一致する。許容は XM・IT 7 セント、MOD 9、S3M 12（§7.4）。MOD の finetune の変種が 12.5 セント刻みで音高を動かすことも測る |
 | 形式間の等価性 | 同じ曲を MOD と XM/S3M/IT で再生し、曲長（±1%＋0.1 秒）・RMS 包絡の相関（>0.75）が一致。ビブラートの深さが形式で一致（同じ実音で比べる）。orchestral は XM を基準に MOD/S3M/IT を比較。曲全体の零交差の平均周波数は、形式でサンプルの高域が違うので比べない（音高は I4） |
-| テンポと長さ（I5） | 全65ジャンルの MOD（最大の予算）と IT を libopenmpt で鳴らした長さが Score の時間軸（テンポの変化〔free-jazz〕・スウィングを含む）と一致する（±0.5%＋0.2 秒） |
+| テンポと長さ（I5） | 全69ジャンルの MOD（最大の予算）と IT を libopenmpt で鳴らした長さが Score の時間軸（テンポの変化〔free-jazz〕・スウィングを含む）と一致する（±0.5%＋0.2 秒） |
 | `Glide`（§7.6） | MOD・S3M・XM・IT で 7・12 半音のグライドが、`tracker._glide_param` が見込んだ step 数で届く（97% 到達の時刻が ±0.12 秒） |
-| 音割れ（I6） | 全65ジャンル × MOD/XM/S3M/IT × 3 seed（1 つは音量の測定に使っていない seed）、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。全ジャンルの MOD・IT は −0.5 dBFS 以下。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認。S3M/IT は底上げが効いていること（最大振幅 > −8 dBFS）も見る |
+| 音割れ（I6） | 全69ジャンル × MOD/XM/S3M/IT × 3 seed（1 つは音量の測定に使っていない seed）、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。全ジャンルの MOD・IT は −0.5 dBFS 以下。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認。S3M/IT は底上げが効いていること（最大振幅 > −8 dBFS）も見る |
 | MP3 | 作れること、デコードした長さ（±0.5 秒）・ステレオ・無音でないこと・音割れ率 < 0.1%。静かなジャンルも平均が目標（−14 dBFS）の 4 dB 以内に上がり、0 dBFS を超えないこと |
 
 ### 9.3 目で・耳で確かめること（自動化の対象外）
@@ -1718,7 +1734,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 | 層 | 場所 | 主な検査 |
 |:---|:---|:---|
 | 単体 | `tests/unit/` | pitch・dsp・synth（高解像度）・model（Cell の直列化、範囲検査）・writer（MOD のレイアウト・原子的書込）・verify（ミューテーションで各コードが出る）・harmony・composer・groove・engine（build・generate・検査器との接続・`--channels` の検証）・tempo（`--tempo` の確定、同じ seed・別テンポ＝同じ曲、全ジャンル × `tempo_range` の全域で生成できる）・registry（自動検出・登録時の検査）・native_writers（S3M・XM・IT の書き出しと検査器）・native_level |
-| フレームワーク | `tests/framework/` | 宣言・Score・部品の値（`BassLine`・`Comp`・`Groove` が耳で調整した値どおり）・ladder の単体テスト・lane の割当・セルの衝突の規則・`Glide` の速さと鳴り終わりの判定・MIDI（`tests/framework/realize/`）。**全65ジャンルの共通検査**（`test_ported_genres_all.py`: I1〜I3・全パートが鳴る・編成の対応表〔`port_layouts.py`〕・畳んだ打楽器の優先度・区間で鳴らさないパートに音が無い・`--tempo`・seed による編成の選択と範囲外の拒否・classical の 3/4・swing の Speed が全 row）と、**新ジャンル14の固有の性質**（`test_new_genres.py`: 音階・拍子・ハネ・系統・構成・テンポの動き・装飾の規則・共有部品 `_ornament`）と、**個別実装の12ジャンルの固有の性質**（`test_ported_genres_c.py`: 位相ずれ・ルバート・中立音程・usul・無音の位置・次の和音へのウォーキング・変拍子・グライドとロール・サイドチェイン） |
+| フレームワーク | `tests/framework/` | 宣言・Score・部品の値（`BassLine`・`Comp`・`Groove` が耳で調整した値どおり）・ladder の単体テスト・lane の割当・セルの衝突の規則・`Glide` の速さと鳴り終わりの判定・MIDI（`tests/framework/realize/`）。**全69ジャンルの共通検査**（`test_ported_genres_all.py`: I1〜I3・全パートが鳴る・編成の対応表〔`port_layouts.py`〕・畳んだ打楽器の優先度・区間で鳴らさないパートに音が無い・`--tempo`・seed による編成の選択と範囲外の拒否・classical の 3/4・swing の Speed が全 row）と、**新ジャンル14の固有の性質**（`test_new_genres.py`: 音階・拍子・ハネ・系統・構成・テンポの動き・装飾の規則・共有部品 `_ornament`）と、**個別実装の12ジャンルの固有の性質**（`test_ported_genres_c.py`: 位相ずれ・ルバート・中立音程・usul・無音の位置・次の和音へのウォーキング・変拍子・グライドとロール・サイドチェイン） |
 | 結合 | `tests/integration/` | CLI（終了コード、引数なし、random、`-e`、`--version`、出力先、各形式、mp3 の ffmpeg 不足、`--json`・`--output-dir`、`--channels` の形式ごとの意味）。全ジャンルの MIDI（mido で独立にパース）。試聴用の曲の一覧（`listen_samples.py` がジャンルの編成の宣言とずれていない）。GUI の `bridge`（本物の CLI を子プロセスで動かす）と画面の通し確認（画面が出せない環境では skip） |
 | 回帰 | `tests/regression/` | **出力の基準**: 全ジャンル × 全形式（MOD は宣言された全予算、MP3 は除く）× seed 1 の出力の SHA-256 を `golden.json` に保存し、一致を検査する。意図して出力を変えたとき（音色・生成規則・Realizer の変更）は `python tools/update_golden.py [ジャンル id …]` で更新し、そのコミットで理由を書く。浮動小数点を使う合成なので、別の OS・Python の版では値が違うことがある |
 | 実プレイヤー | `tests/realplayer/` | §9.2 |
@@ -1745,7 +1761,7 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 「試聴で調整」の項目（下表の状態が「試聴で再調整可」「同上」「試聴で調整」のもの）は、リポジトリ直下の **`listen_samples.py`**（`python listen_samples.py`。Windows は **`listen_samples.bat`** のダブルクリックでも可）で確かめる曲をまとめて作れる。項目・見出し・曲の一覧は `listen_samples.py` の `ITEMS` にあり、バッチは Python を起動するだけ（ASCII だけで書く。§12 と同じ）。
 
 - 出力先は `output\listen\<番号_項目>\<ジャンル>_<シード>.<拡張子>`（`output\` は git の管理外）。シードは 101・202・303 に固定しているので、何度作っても同じ曲になる（調整の前後で同じ曲を聴き比べられる）。
-- 項目ごとに3例（racing-breaks はリズムの系統ごとに1例になるよう、シードを 101・102・113 にしている）。複数のジャンルにまたがる項目（第３段階の35ジャンルの釣り合い、新しい3ジャンル）はジャンルごとに3例、編成はジャンルごとに3例 × 選べる編成（同じシードの曲をチャンネル数だけ変えて `<ジャンル>_<シード>_<数>ch` で出す）。全 414 曲。
+- 項目ごとに3例（racing-breaks はリズムの系統ごとに1例になるよう、シードを 101・102・113 にしている）。複数のジャンルにまたがる項目（第３段階の35ジャンルの釣り合い、新しい3ジャンル）はジャンルごとに3例、編成はジャンルごとに3例 × 選べる編成（同じシードの曲をチャンネル数だけ変えて `<ジャンル>_<シード>_<数>ch` で出す）。全 423 曲。
 - 環境変数 `FMT`（`mod`〜`mp3`。既定 `mod`）で形式を、`PY`（バッチだけ。既定 `python`）で Python を変えられる。曲は同じプロセスで `cli.main` を呼んで作る。最後に成功・失敗の件数を出す（失敗があれば終了コード 1）。
 - 下表に試聴の項目を足したら、`listen_samples.py` の `ITEMS` にも足す。
 

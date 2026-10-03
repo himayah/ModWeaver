@@ -52,6 +52,12 @@ NEW_GENRES = (
 ).split()
 
 
+# 第2弾 4ジャンル（18_more-genres）。系統: reggae 101＝ska・102＝roots／flamenco 101＝rumba・105＝solea／samba 101＝pagode・102＝batucada。raga は
+# ラーガが seed で決まるので 3 例（101・202・303）。
+MORE_SEEDS = {"reggae": (101, 102), "flamenco": (101, 105), "samba": (101, 102)}
+MORE_GENRES = "reggae flamenco samba raga".split()
+
+
 def _one(genre: str, seeds=SEEDS) -> list[tuple[str, int, int | None]]:
     return [(genre, s, None) for s in seeds]
 
@@ -83,6 +89,9 @@ ITEMS: list[tuple[str, str, list[tuple[str, int, int | None]]]] = [
     ("17_world-genres", "新ジャンル14（ケルト・ロシア民謡・ムード歌謡・演歌・沖縄民謡・浪曲・雅楽・トランス・ゴスペル・クレズマー・タンゴ・"
      "ファド・バロック・出囃子）の音色・装飾・テンポの動き・音量の釣り合い（ジャンルごとに3例。系統を持つものは系統ごとに1例）",
      [x for g in NEW_GENRES for x in _one(g, NEW_GENRES_SEEDS.get(g, SEEDS))]),
+    ("18_more-genres", "第2弾4ジャンル（レゲエ／スカ・フラメンコ・サンバ・ラーガ）の音色・リズム・テンポの動き・音量の釣り合い"
+     "（系統を持つものは系統ごとに1例、raga はラーガの違いで3例）",
+     [x for g in MORE_GENRES for x in _one(g, MORE_SEEDS.get(g, SEEDS))]),
 ]
 
 

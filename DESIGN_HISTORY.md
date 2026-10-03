@@ -679,3 +679,10 @@ CLI でできることを画面から使いたい（Windows 11 / macOS / Linux�
 | okinawan の三線の調弦（本調子・二上り）の音の並び、celtic のロール（5音）の厳密な形 | 見送り（近似）。`OrnamentedLead` の `roll` は「本命・上・本命」の3音 |
 | バロックのフーガの模倣、klezmer の krekhts の細かい表現、tango のバンドネオンの蛇腹の息継ぎ | 見送り（旧検討の決定を維持） |
 
+### 16.5 第2弾: reggae・flamenco・samba・raga（2026-10-03）
+
+- ユーザーの要求: 追加すべきバリエーションの提案を求め（低コスト: reggae・flamenco・samba、中コスト: raga ほか）、「1，2を順に」＝reggae・flamenco・samba、続けて raga を実装した（計69）。
+- 設計の判断: 系統（reggae の roots/ska、flamenco の solea/rumba、samba の pagode/batucada）は §16 の仕組み（`retime`・`plan()` の系統選択）をそのまま使った。**raga はラーガ（音階）を `plan()` で差し替える**: `harmony.mode` は1つしか宣言できないので、`default_plan` の後で各区間の `scale` と全小節の `chord_tones`・`scale_tones` を選んだラーガの音だけにした（`MelodyGenerator` の強拍が和音の構成音を要求しても、ラーガの音のどれでもよくなる）。raga の拍子は1小節＝ティーンタール16拍（64 step）にして、タブラのテカーを小節に合わせた。
+- 実測: 4ジャンルとも共通検査・ファズ（compose 60 seed、MOD 最大・最小・IT・MIDI × 12 seed）でエラー 0。既存ジャンルの golden・音量は変わらない。
+- 見送り: ラーガの微分音（平均律の近似）、タールの種類（ティーンタールだけ）、タブラの bol の細かい音色の違い、samba のクイーカ、reggae のホーン（ska の吹奏）。
+

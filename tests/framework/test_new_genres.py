@@ -305,3 +305,71 @@ def test_new_genre_is_deterministic_and_varies_with_the_seed(gid):
     def flat(s):
         return [(n, p, e) for n, sec in s.sections.items() for p, ev in sec.parts.items() for e in ev]
     assert flat(a) == flat(b) and flat(a) != flat(c)
+
+
+# ---------------- 第2弾（reggae・flamenco・samba・raga。DESIGN.md §6.20） ----------------
+
+def test_reggae_one_drop_and_ska():
+    _g, plan, score = _family_of("reggae", "roots")
+    assert 66 <= plan.bpm <= 82
+    kicks = {e.step % 16 for e in _notes(score, "drums", "verse") if e.inst == "kick"}
+    assert kicks == {8}                                              # ワンドロップ: 3拍目だけ
+    assert {e.step % 16 for e in _notes(score, "comp", "verse")} == {2, 6, 10, 14}       # 裏拍のスキャンク
+    assert _notes(score, "dub echo", "dub") and not _notes(score, "lead", "dub")
+    _g, plan, score = _family_of("reggae", "ska")
+    assert 150 <= plan.bpm <= 172
+    assert {e.step % 16 for e in _notes(score, "drums", "verse") if e.inst == "kick"} == {0, 8}
+
+
+def test_flamenco_compas_and_andalusian_cadence():
+    g, plan, score = _family_of("flamenco", "solea")
+    assert all(sp.meter == Meter(24, 2, (12, 8)) for sp in plan.sections.values())
+    assert plan.order == ["intro", "a", "b", "a", "outro"]
+    palmas = {e.step % 24 for e in _notes(score, "drums", "a") if e.inst == "clap"}
+    assert palmas <= {4, 10, 14, 18, 22} and len(palmas) >= 4        # 12拍の強勢（3・6・8・10・12 拍）
+    assert score.sections["b"].tempo[-1].bpm > score.sections["b"].tempo[0].bpm       # b は加速
+    assert g.harmony.mode == "phrygian_dominant"
+    _g, plan, _ = _family_of("flamenco", "rumba")
+    assert all(sp.meter == Meter(16, 4) for sp in plan.sections.values()) and plan.order.count("a") == 3
+
+
+def test_flamenco_andalusian_progression_is_declared():
+    g = _genre("flamenco")
+    labels = [[c.label for c in specs] for _n, specs in g.harmony.progressions]
+    assert ["iv", "III", "II", "I"] in labels
+
+
+def test_samba_surdo_and_families():
+    _g, plan, score = _family_of("samba", "batucada")
+    assert plan.bpm >= 100 and all(sp.meter.steps == 8 for sp in plan.sections.values())
+    surdo = {e.step % 8: e.vel for e in _notes(score, "drums", "a") if e.inst == "surdo"}
+    assert surdo[0] < surdo[4]                                       # 1拍目は抑え、2拍目で強く
+    assert any(e.inst == "tamborim" for e in _notes(score, "drums", "a"))
+    _g, plan, score = _family_of("samba", "pagode")
+    assert plan.bpm <= 94 and not any(e.inst in ("tamborim", "agogo_hi") for e in _notes(score, "drums", "a"))
+
+
+def test_raga_melody_stays_in_the_raga_and_the_form_accelerates():
+    from mod_weaver.genres.raga import RAGAS, THEKA
+    for seed in range(1, 12):
+        g, plan, score = _score("raga", seed)
+        mode = RAGAS[plan.extra["raga"]][0]
+        for name in ("jor", "gat1"):
+            sp = plan.sections[name]
+            allowed = {(sp.tonic + i) % 12 for i in MODES[mode]}
+            for e in _notes(score, "sitar", name):
+                if e.prio != 0 and e.dur != 1:                       # しゃくりの下の音・前打音は除く
+                    assert round(e.pitch) % 12 in allowed, (seed, name, e.pitch, mode)
+    g, plan, score = _score("raga", 1)
+    assert not _notes(score, "tabla", "alap") and not _notes(score, "tabla", "jor")
+    assert len({e.step for e in _notes(score, "tabla", "gat1") if e.inst in ("ge", "na", "tin")}) >= 16
+    mult = {n: score.sections[n].tempo[0].bpm for n in plan.order}
+    assert mult["alap"] < mult["jor"] < mult["gat1"] < mult["jhala"]
+    tan = _notes(score, "tanpura", "gat1")[:4]
+    assert [e.step for e in tan] == [0, 16, 32, 48] and tan[1].pitch == tan[2].pitch and tan[3].pitch < tan[2].pitch
+    assert len(THEKA) == 16
+
+
+def test_raga_choice_covers_every_raga():
+    seen = {_score("raga", s)[1].extra["raga"] for s in range(1, 40)}
+    assert seen == {"yaman", "bhairav", "bhairavi", "kafi", "todi"}

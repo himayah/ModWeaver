@@ -131,6 +131,7 @@ MODES: dict[str, tuple[int, ...]] = {
     "miyakobushi": (0, 1, 5, 7, 8),              # 都節音階
     "phrygian_dominant": (0, 1, 4, 5, 7, 8, 10), # フリギア・ドミナント（クレズマーの freygish）
     "ukrainian_dorian": (0, 2, 3, 6, 7, 9, 10),  # ウクライナ・ドリアン（クレズマーの mi sheberakh）
+    "todi": (0, 1, 3, 6, 7, 8, 11),              # ラーガ・トーディ（ヒンドゥスターニー）
 }
 
 CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット

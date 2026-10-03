@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral`・`celtic`・`trance`・`baroque` など36種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、90年代のレースゲーム風 `racing-breaks`、サスペンス `suspense-slow`、沖縄民謡風 `okinawan`、浪曲風 `rokyoku`、ムード歌謡風 `mood-kayo` など20種）の計65ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。**形式を最初に選び、その形式の能力に合わせて曲を作ります**（XM・IT は 16-bit・高解像度のサンプルと広い音域、IT・XM・S3M・MIDI はチャンネル数の制約が緩い、など）。MOD ではチャンネル数がジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります。XM・S3M・IT・MP3 ではジャンルのパートがすべて入り、`--channels` はその上限になります。同じジャンル・シード・テンポなら、形式が違っても旋律・和音・リズムの骨格は同じです。
+**ModWeaver** は、外部ライブラリ（サードパーティ製パッケージ）を一切使用せず、**Python標準ライブラリのみ** でトラッカー音楽ファイルを波形合成からシーケンスまで完全自動生成するツールです。出力形式は ProTracker `.mod`（既定）、FastTracker II `.xm`、Scream Tracker 3 `.s3m`、Impulse Tracker `.it`、General MIDI `.mid`、`.mp3` から `--format` で選べます（`.mp3` のみ外部プログラム ffmpeg が必要）。ノスタルジック（`nostalgic`）だけでなく、**気分**（落ち着き `calm`、物悲しい `melancholic`、集中 `focus`、高揚 `uplifting` など9種）、**ジャンル**（`rock`・`pop`・`jazz`・`bossa-nova`・`city-pop`・`house`・`classical`・`cinematic`・`gamelan`・`industrial`・`trap`・`orchestral`・`celtic`・`trance`・`baroque` など40種）、**〜風**（80年代 J-POP 風 `jpop-80s`、JRPG 風 `jrpg`、映画予告編風 `trailer`、8bit ゲーム音楽風 `chiptune`、90年代のレースゲーム風 `racing-breaks`、サスペンス `suspense-slow`、沖縄民謡風 `okinawan`、浪曲風 `rokyoku`、ムード歌謡風 `mood-kayo` など20種）の計69ジャンルを `--genre` で切り替えて生成できます（`--genre random` でランダムに選ぶことも可能。旧名: TwilightPad MOD Generator。指定できるジャンルの最新一覧は `--list-genres` 参照）。**形式を最初に選び、その形式の能力に合わせて曲を作ります**（XM・IT は 16-bit・高解像度のサンプルと広い音域、IT・XM・S3M・MIDI はチャンネル数の制約が緩い、など）。MOD ではチャンネル数がジャンルに合わせて 4・6・8 から選ばれ、多くのジャンルは曲ごとに編成（小編成 4ch〜厚い 8ch）も変わります。XM・S3M・IT・MP3 ではジャンルのパートがすべて入り、`--channels` はその上限になります。同じジャンル・シード・テンポなら、形式が違っても旋律・和音・リズムの骨格は同じです。
 
 既定の `nostalgic` ジャンルでは、夕暮れの街並みや家路を想起させる情緒的なコード進行と、オルゴールや包み込むようなアナログパッド、Lo-Fiビートが織りなす「懐かしさと切なさ」を持った楽曲を出力します。
 
@@ -113,6 +113,10 @@ python modweaver.py --genre celtic       # ジャンル: ケルト音楽（ジ�
 python modweaver.py --genre gagaku       # ジャンル: 雅楽風（笙・篳篥・龍笛風。序破急でテンポが上がる）
 python modweaver.py --genre enka         # ジャンル: 演歌（しゃくり・こぶし、最後のサビで転調）
 python modweaver.py --genre okinawan     # 〜風: 沖縄民謡（琉球音階。島唄とカチャーシー）
+python modweaver.py --genre reggae       # ジャンル: レゲエ／スカ（ワンドロップ、スキャンク）
+python modweaver.py --genre samba        # ジャンル: サンバ（スルドとタンボリン、パゴーヂ／バトゥカーダ）
+python modweaver.py --genre flamenco     # ジャンル: フラメンコ（アンダルシア進行、12拍のコンパス）
+python modweaver.py --genre raga         # ジャンル: ラーガ（タンプーラとシタール、アーラープからガットへ）
 ```
 
 #### ジャンルをランダムに選ぶ（`--genre random` / `-g r`）:
@@ -219,7 +223,7 @@ https://github.com/himayah/ModWeaver
 | `uplifting` | – | 4/6/8 | 上げていく高揚感。4つ打ちとアルペジオ、明るいスーパーソウのコード |
 | `warm` | – | 4/6 | 温かい。アコースティックギターとピアノ、長調の穏やかな伴奏 |
 
-**ジャンル（genre）** — 36 種類
+**ジャンル（genre）** — 40 種類
 
 | ジャンル id | 別名 | ch | 説明 |
 |:---|:---|:---|:---|
@@ -233,6 +237,7 @@ https://github.com/himayah/ModWeaver
 | `edm` | – | 4/6/8 | EDM。シンセ主体、ビルドアップで溜めてドロップで弾ける |
 | `enka` | – | 4/6/8 | 演歌。ヨナ抜き短音階、しゃくり・こぶし、ストリングスと爪弾くギター、合いの手、最後のサビで転調（歌は含まない） |
 | `fado` | – | 4/6 | ファド風。ポルトガルギター風の装飾的な旋律、ガットギターのアルペジオ、ゆっくりした短調、ギターラーダの間奏（歌は含まない） |
+| `flamenco` | – | 4/6 | フラメンコ風。フリギア・ドミナントとアンダルシア進行、ラスゲアード、パルマとカホン、12拍のコンパスか4/4のルンバ |
 | `folk` | – | 4/6 | フォーク。アコースティックギターのストロークとフィドル、素朴な進行 |
 | `free-jazz` | – | 4 | フリージャズ。トーンクラスター、確率密度のテクスチャ、ルバート（連続テンポ変化） |
 | `future-bass` | – | 4 | フューチャーベース。キック連動サイドチェイン、ヴォーカルチョップ、Eb I-V-vi-IV |
@@ -250,9 +255,12 @@ https://github.com/himayah/ModWeaver
 | `orchestral` | – | 8 | フルオーケストラ／劇伴。8chマルチチャンネル、6声の弦+木管+金管+ティンパニ |
 | `pop` | – | 4/6/8 | ポップ。長調の明るいメロディとピアノ、覚えやすいサビ |
 | `prog-rock` | – | 4 | 変拍子プログレ／マスロック。7/8+7/8+5/8 のリフ、4/4 のコーラスとの対比 |
+| `raga` | – | 4/6 | ヒンドゥスターニー古典風。タンプーラのドローン、シタール風の旋律、アーラープからガットへ加速するタブラ（ラーガは seed で選ぶ） |
+| `reggae` | – | 4/6/8 | レゲエ／スカ風。ワンドロップ、裏拍のスキャンク、重く間のあるベース、オルガンのバブルとダブのエコー |
 | `rnb-soul` | – | 4/6/8 | R&B／ソウル。滑らかなテンションコードと歌うような旋律のスロー・ジャム |
 | `rock` | – | 4/6/8 | ロック。ギターのリフと8ビート、4/4 の中〜速いテンポ |
 | `russian-folk` | – | 4/6/8 | ロシア民謡風。バラライカのトレモロとバヤンのオン・パッ、和声的短音階。叙情歌と加速する舞曲（実在の民謡は使わない） |
+| `samba` | – | 4/6/8 | サンバ風。2/4 のスルドとタンボリン・アゴゴ・パンデイロの16分、カヴァキーニョの刻み、7thの和声（パゴーヂとバトゥカーダ） |
 | `swing-jazz` | – | 4 | スウィング・ジャズ。ライド＋ウォーキングベース＋ピアノコンピング、Bbリズムチェンジ AABA |
 | `synthwave` | – | 4/6/8 | シンセウェイブ。80年代のシンセとゲートスネア、8分で脈打つベース |
 | `tango` | – | 4/6 | アルゼンチン・タンゴ風。マルカートの4拍、3-3-2 のアクセント、アラストレのヴァイオリン、バンドネオン、チャン・チャンの終止 |
@@ -363,7 +371,7 @@ Windows では **`modweaver_gui.bat` をダブルクリック**すると起動�
 │   │                   #        verify / render(mp3)）・出力音量の底上げ（native_level）
 │   ├── framework/     # 新しい枠組み: Target（形式の能力）・Score（形式に依存しない楽譜）・Genre の基底・
 │   │                   #        ジェネレータの部品集（gens/）・Realizer（realize/: トラッカー用と MIDI 用）・音量の測定値（levels）
-│   ├── genres/        # ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。65ジャンル）
+│   ├── genres/        # ジャンルモジュール（1ファイル＝1ジャンル。置くだけで自動登録。69ジャンル）
 │   └── gui/           # GUI（tkinter）。CLI を子プロセスとして呼ぶ
 ├── tools/             # 開発用: calibrate_levels.py（ジャンル別の最大振幅を ffmpeg で測り直す。DESIGN.md §7.9）、
 │                      #        update_golden.py（出力の基準 tests/regression/golden.json を更新する。DESIGN.md §10）

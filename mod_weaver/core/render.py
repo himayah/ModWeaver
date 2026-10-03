@@ -1,7 +1,7 @@
 """MP3 出力（DESIGN.md §7.8）。外部の ffmpeg に委譲する。
 
-Song をいったん XM（任意チャンネル数・サンプルパン・チャンネルパンを保持できる形式）にし、ffmpeg 内蔵の
-libopenmpt（OpenMPT の再生エンジン）で再生・libmp3lame で MP3 に符号化する。自前の再生エンジンは持たない
+Realizer が IT（64ch・16-bit・44.1 kHz。サンプルパン・チャンネルパンを保持できる形式）を作り、ffmpeg 内蔵の
+libopenmpt（OpenMPT の再生エンジン）で再生・libmp3lame（320 kbps）で MP3 に符号化する。自前の再生エンジンは持たない
 （音質・互換性は libopenmpt が最も高く、「自作 writer を自作 player で確かめる」自己一致の罠も避けられる）。
 
 音量は2パスで整える（DESIGN.md §7.8）: 1回目に ``volumedetect`` で平均（RMS）と最大振幅を測り、2回目に
@@ -23,14 +23,10 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..errors import ExternalToolError
-from . import writer
-from .model import Song
 
-MAX_CHANNELS = writer.XM_MAX_CHANNELS
 FFMPEG_ENV = "MODWEAVER_FFMPEG"
-BITRATE = "192k"
-NEW_BITRATE = "320k"        # 新しい経路（IT 経由。§12）
-NEW_QUALITY = 0             # LAME の -q 0（最も丁寧な符号化）
+BITRATE = "320k"            # IT 経由で 320 kbps（§12）
+QUALITY = 0                 # LAME の -q 0（最も丁寧な符号化）
 SAMPLE_RATE = 44100
 TIMEOUT_SEC = 600
 TARGET_MEAN_DB = -14.0      # 目標の平均音量（volumedetect の mean_volume、dBFS）
@@ -73,16 +69,10 @@ def check_ffmpeg() -> str:
     return exe
 
 
-def render_mp3(song: Song, opts) -> bytes:
-    """Song を MP3 のバイト列にする。``opts`` は ``formats.WriteOptions``（旧経路。XM 経由・192 kbps）。"""
-    xm = writer.serialize_xm(song, channel_pans=opts.channel_pans, initial_bpm=opts.initial_bpm)
-    return encode_mp3(xm, ".xm", song.title, BITRATE)
-
-
 def render_mp3_from_it(it_bytes: bytes, title: str) -> bytes:
-    """新しい経路（FRAMEWORK_REDESIGN.md §12）: Target は IT と同じ（64ch・16-bit・44.1 kHz）で作った IT の
+    """IT 経由の MP3（FRAMEWORK_REDESIGN.md §12）: Target は IT と同じ（64ch・16-bit・44.1 kHz）で作った IT の
     バイト列を、libopenmpt → libmp3lame（320 kbps・最も丁寧な符号化）で MP3 にする。"""
-    return encode_mp3(it_bytes, ".it", title, NEW_BITRATE, quality=NEW_QUALITY)
+    return encode_mp3(it_bytes, ".it", title, BITRATE, quality=QUALITY)
 
 
 def encode_mp3(module: bytes, ext: str, title: str, bitrate: str, quality: int = -1) -> bytes:

@@ -8,7 +8,7 @@ import pytest
 
 from mod_weaver.core import native, render, writer
 from mod_weaver.framework.compose import compose, resolve_plan
-from mod_weaver.framework.realize.tracker import realize, realize_mod
+from mod_weaver.framework.realize.tracker import realize
 from mod_weaver.framework.target import resolve
 from tests.framework.realize.test_all_formats import GENRES
 from tests.realplayer import decode, peak, requires_openmpt
@@ -25,9 +25,6 @@ def _build(name, fmt, channels, seed=1):
     plan = resolve_plan(genre, seed=seed)
     score = compose(genre, plan, seed=seed, features=frozenset())
     target = resolve(fmt, channels, genre, seed=seed)
-    if fmt == "mod":
-        song, _opts = realize_mod(genre, score, plan, target)
-        return writer.serialize(song), score
     return native.serialize(realize(genre, score, plan, target)), score
 
 

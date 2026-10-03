@@ -23,7 +23,8 @@ from racing_breaks import RacingBreaksToy  # noqa: E402
 from mod_weaver.core.formats import get_format  # noqa: E402
 from mod_weaver.framework.compose import compose, resolve_plan  # noqa: E402
 from mod_weaver.framework.realize import lanes as lanesmod  # noqa: E402
-from mod_weaver.framework.realize.tracker import realize_mod  # noqa: E402
+from mod_weaver.core import native  # noqa: E402
+from mod_weaver.framework.realize.tracker import realize  # noqa: E402
 from mod_weaver.framework.target import resolve as resolve_target  # noqa: E402
 
 FMT = get_format("mod")
@@ -76,11 +77,9 @@ def test_realize_mod_passes_verify_across_declared_budgets(name: str) -> None:
         score = compose(genre, plan, seed=seed, features=frozenset())
         for b in budgets:
             target = resolve_target("mod", b, genre, seed=seed)
-            song, opts = realize_mod(genre, score, plan, target)
-            assert song.patterns[0].channels == b
-            data = FMT.serialize(song, opts)
-            issues = FMT.verify(data)
-            errors = [i for i in issues if getattr(i, "code", "")[:1] == "E"]
+            rs = realize(genre, score, plan, target)
+            assert rs.patterns[0].channels == b
+            errors = [i for i in native.verify("mod", native.serialize(rs)) if i.level == "ERROR"]
             assert not errors, (name, seed, b, errors)
 
 
@@ -97,10 +96,8 @@ def test_generate_reference_files_for_listening(tmp_path) -> None:
             plan = resolve_plan(genre, seed=seed)
             score = compose(genre, plan, seed=seed, features=frozenset())
             target = resolve_target("mod", b, genre, seed=seed)
-            song, opts = realize_mod(genre, score, plan, target)
-            data = FMT.serialize(song, opts)
-            issues = FMT.verify(data)
-            assert not [i for i in issues if getattr(i, "code", "")[:1] == "E"]
+            data = native.serialize(realize(genre, score, plan, target))
+            assert not [i for i in native.verify("mod", data) if i.level == "ERROR"]
             path = out_dir / f"{name}.{b}ch.mod"
             writer.write_file(path, data)
             assert path.exists() and path.stat().st_size > 0

@@ -1,16 +1,8 @@
-"""Scream Tracker 3 ``.s3m`` のシリアライザと構造検査（DESIGN.md §7.4）。
+"""Scream Tracker 3 ``.s3m`` の定数・補助と読み戻し（DESIGN.md §7.4）。
 
-スコープは XM と同じ方針: 1 Instrument = 1 PCM サンプル、アドリブ音色・S3M 固有機能は使わない。
-
-- 音高: tracker note t（0=ProTracker C-1＝period 856）→ ST3 の C-3（t=12＝period 428＝ST3 の C-4 が
-  C2Spd で鳴る音）。note byte = ``(octave << 4) | semitone``。
-- 音量: ``Cell.vol`` は volume column（S3M には Set Volume エフェクトが無い）。
-- パン: ヘッダのチャンネル設定（L1..L8／R1..R8）＋パンテーブル（``dp=0xFC`` で有効）。
-- サンプル: 8bit **unsigned**（``ffi=2``）。C2Spd は MOD finetune（1/8 半音単位）から計算する。
-- エフェクト: ``core/effects.py`` の変換表。
-
-``parse_s3m``/``verify_s3m`` は writer とは独立に読み戻す構造検査。仕様の誤解（writer と parser が共有する
-誤り）は検出できないため、tests/realplayer/ の libopenmpt による再生比較が正しさの本当の根拠。
+書き出しは ``core/native_s3m.py``（Realizer の ``RealizedSong`` から）、構造検査もそちら。ここは両者が共有する形式の定数・
+小さな補助と、writer とは独立に ``.s3m`` を読む ``parse_s3m`` だけを持つ。仕様の誤解（writer と parser が共有する誤り）は
+検出できないため、tests/realplayer/ の libopenmpt による再生比較が正しさの本当の根拠。
 """
 from __future__ import annotations
 
@@ -18,9 +10,6 @@ import struct
 from dataclasses import dataclass, field
 
 from ..errors import PlanError
-from . import effects
-from .model import Cell, Pattern, SampleSpec, Song
-from .pitch import NOTE_MAX
 
 MAX_CHANNELS = 16          # PCM チャンネルは L1..L8＋R1..R8 の 16 まで
 MAX_INSTRUMENTS = 99
@@ -37,15 +26,6 @@ ORDER_END = 255
 CHANNEL_UNUSED = 255
 PAN_TABLE_ENABLED = 0xFC
 STEREO = 0x80              # マスター音量の bit7。下位7bit は WriteOptions.mix_volume（ST3 の既定 48）
-
-
-def note_byte(t: int) -> int:
-    return ((t // 12 + NOTE_T0_OCTAVE) << 4) | (t % 12)
-
-
-def c2spd(finetune: int) -> int:
-    """MOD finetune（-8..7、1 単位＝1/8 半音）→ C2Spd（Hz）。"""
-    return round(BASE_C2SPD * 2 ** (finetune / 96))
 
 
 def _align16(buf: bytearray) -> int:
@@ -65,118 +45,11 @@ def _channel_settings(pans) -> bytes:
     return bytes(out + [CHANNEL_UNUSED] * (32 - len(out)))
 
 
-def _pack_cell(ch: int, cell: Cell) -> bytes:
-    what = 0
-    body = bytearray()
-    if cell.note is not None or cell.sample:
-        what |= 0x20
-        body += bytes([EMPTY_NOTE if cell.note is None else note_byte(cell.note), cell.sample])
-    if cell.vol is not None:
-        what |= 0x40
-        body.append(cell.vol)
-    command, info = effects.to_st(cell.effect, cell.param)
-    if command:
-        what |= 0x80
-        body += bytes([command, info])
-    if not what:
-        return b""
-    return bytes([what | ch]) + bytes(body)
-
-
-def _pack_pattern(pat: Pattern) -> bytes:
-    if pat.rows != 64:
-        raise PlanError(f"S3M patterns must have 64 rows: {pat.rows}")
-    body = bytearray()
-    for r in range(pat.rows):
-        for c in range(pat.channels):
-            body += _pack_cell(c, pat.get(r, c))
-        body.append(0)                                  # row 終端
-    return struct.pack("<H", len(body) + 2) + bytes(body)
-
-
-def _sample_header(spec: SampleSpec, data_pointer: int) -> bytes:
-    spec.validate()
-    has_loop = spec.loop is not None
-    start_words, len_words = spec.loop_header
-    h = bytearray()
-    h.append(1)                                          # type: PCM sample
-    h += bytes(12)                                        # DOS filename（未使用）
-    h += bytes([(data_pointer >> 16) & 0xFF]) + struct.pack("<H", data_pointer & 0xFFFF)
-    h += struct.pack("<I", len(spec.data))
-    h += struct.pack("<I", start_words * 2 if has_loop else 0)
-    h += struct.pack("<I", (start_words + len_words) * 2 if has_loop else 0)
-    h += bytes([spec.volume, 0, 0, 1 if has_loop else 0])   # volume, reserved, pack=0, flags(bit0=loop)
-    h += struct.pack("<I", c2spd(spec.finetune))
-    h += bytes(12)                                        # internal
-    h += _ascii(spec.name, 28, "sample name")
-    h += b"SCRS"
-    assert len(h) == SAMPLE_HEADER_SIZE, len(h)
-    return bytes(h)
-
-
 def _ascii(text: str, size: int, what: str) -> bytes:
     if len(text) >= size or not text.isascii():
         raise PlanError(f"{what} must be ASCII and < {size} chars: {text!r}")
     return text.encode("ascii").ljust(size, b"\x00")
 
-
-def serialize_s3m(song: Song, opts) -> bytes:
-    """Song を ``.s3m`` 形式のバイト列へ変換する。``opts`` は ``formats.WriteOptions``。"""
-    n_channels = song.patterns[0].channels if song.patterns else 0
-    if not 1 <= n_channels <= MAX_CHANNELS:
-        raise PlanError(f"S3M channel count must be 1..{MAX_CHANNELS}: {n_channels}")
-    if not song.order or min(song.order) < 0:
-        raise PlanError(f"invalid order: {song.order}")
-    n_patterns = max(song.order) + 1
-    if n_patterns > min(len(song.patterns), MAX_PATTERNS):
-        raise PlanError(f"order refers to pattern {n_patterns - 1} but only {len(song.patterns)} patterns exist")
-    if len(song.samples) > MAX_INSTRUMENTS:
-        raise PlanError(f"too many instruments: {len(song.samples)} > {MAX_INSTRUMENTS}")
-    orders = list(song.order)
-    if len(orders) % 2:
-        orders.append(ORDER_END)                          # ST3 は偶数個の order を前提にする
-    if len(orders) > MAX_ORDERS:
-        raise PlanError(f"too many orders: {len(orders)}")
-    pans = opts.channel_pans
-
-    out = bytearray()
-    out += _ascii(song.title, 28, "title")
-    out += bytes([0x1A, 16, 0, 0])
-    out += struct.pack("<HHHHHH", len(orders), len(song.samples), n_patterns, 0, CWT_V, FFI_UNSIGNED)
-    out += b"SCRM"
-    out += bytes([64, 6, opts.initial_bpm, STEREO | opts.mix_volume, 16, PAN_TABLE_ENABLED])
-    out += bytes(8) + struct.pack("<H", 0)
-    out += _channel_settings(pans)
-    assert len(out) == HEADER_SIZE
-    out += bytes(orders)
-    ins_ptr_pos = len(out)
-    out += bytes(2 * len(song.samples))
-    pat_ptr_pos = len(out)
-    out += bytes(2 * n_patterns)
-    out += bytes(0x20 | (p >> 4) for p in pans) + bytes(32 - len(pans))   # パンテーブル（bit5=有効）
-
-    # サンプルヘッダ → パターン → サンプルデータ（いずれも 16 byte 境界）
-    header_ptrs = []
-    for _ in song.samples:
-        header_ptrs.append(_align16(out))
-        out += bytes(SAMPLE_HEADER_SIZE)                   # データ位置が決まってから書き戻す
-    pattern_ptrs = []
-    for pat in song.patterns[:n_patterns]:
-        pattern_ptrs.append(_align16(out))
-        out += _pack_pattern(pat)
-    for ptr, spec in zip(header_ptrs, song.samples):
-        data_ptr = _align16(out)
-        out += bytes(b ^ 0x80 for b in spec.data)          # signed → unsigned
-        out[ptr * 16:ptr * 16 + SAMPLE_HEADER_SIZE] = _sample_header(spec, data_ptr)
-
-    struct.pack_into(f"<{len(header_ptrs)}H", out, ins_ptr_pos, *header_ptrs)
-    struct.pack_into(f"<{len(pattern_ptrs)}H", out, pat_ptr_pos, *pattern_ptrs)
-    return bytes(out)
-
-
-# ============================================================
-# 読み戻しと構造検査
-# ============================================================
 
 @dataclass(frozen=True)
 class ParsedS3MCell:
@@ -272,57 +145,3 @@ def parse_s3m(data: bytes) -> ParsedS3M:
             rows.append(row)
         pm.patterns.append(rows)
     return pm
-
-
-_DESCRIPTIONS = {
-    "V01": "ファイル構造が読めない（パラポインタ・長さの不整合）",
-    "V02": "マジックが不正",
-    "V03": "order が不正",
-    "V04": "サンプルヘッダが不正",
-    "V05": "note が本プロジェクトの音域（C-3..B-5）外",
-    "V06": "未定義のインストゥルメント番号を参照",
-    "V07": "note を持つセルにインストゥルメント番号がない",
-    "V08": "エフェクト／音量が不正（volume>64 または A00/T<32）",
-    "V09": "チャンネルに許可されていないインストゥルメント",
-    "V10": "order[0] の pattern にテンポ設定（Txx, xx≥32）がない",
-}
-
-
-def verify_s3m(data: bytes, plan=None) -> list:
-    from .verify import Issue, _Report
-
-    try:
-        pm = parse_s3m(data)
-    except (S3MParseError, struct.error) as e:
-        return [Issue("ERROR", "V01", str(e))]
-    rep = _Report()
-    if pm.magic != b"SCRM":
-        rep.add("ERROR", "V02", f"magic={pm.magic!r}")
-    real_orders = [o for o in pm.orders if o < 254]
-    if not real_orders or any(o >= len(pm.patterns) for o in real_orders):
-        rep.add("ERROR", "V03", f"orders={pm.orders}")
-    for i, s in enumerate(pm.samples, start=1):
-        if s.volume > 64 or len(s.data) != s.length or (s.flags & 1 and not s.loop_start < s.loop_end <= s.length):
-            rep.add("ERROR", "V04", f"sample {i}")
-    lo, hi = note_byte(0), note_byte(NOTE_MAX)
-    for p, pat in enumerate(pm.patterns):
-        for r, row in enumerate(pat):
-            for c, cell in enumerate(row):
-                where = f"pattern {p} row {r} ch{c + 1}"
-                has_note = cell.note != EMPTY_NOTE
-                if has_note and not (lo <= cell.note <= hi and (cell.note & 0x0F) < 12):
-                    rep.add("ERROR", "V05", f"{where}: note 0x{cell.note:02X}")
-                if cell.instrument > len(pm.samples):
-                    rep.add("ERROR", "V06", f"{where}: instrument {cell.instrument}")
-                if has_note and not cell.instrument:
-                    rep.add("ERROR", "V07", where)
-                if cell.volume > 64 or (cell.command == effects.letter("A") and cell.info == 0) or \
-                        (cell.command == effects.letter("T") and cell.info < 32):
-                    rep.add("ERROR", "V08", where)
-                if plan is not None and cell.instrument and cell.instrument not in plan[c].allowed:
-                    rep.add("ERROR", "V09", f"{where}: instrument {cell.instrument} on {plan[c].name}")
-    if real_orders and real_orders[0] < len(pm.patterns):
-        first = pm.patterns[real_orders[0]]
-        if not any(c.command == effects.letter("T") and c.info >= 32 for row in first for c in row):
-            rep.add("ERROR", "V10", f"pattern {real_orders[0]}")
-    return rep.issues(_DESCRIPTIONS)

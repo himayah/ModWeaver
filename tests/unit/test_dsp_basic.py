@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from mod_weaver.core import dsp
-from tests.conftest import load_reference
 
 
 def test_sample_rate_values():
@@ -12,16 +11,10 @@ def test_sample_rate_values():
     assert dsp.sample_rate(12) == pytest.approx(4143.6, abs=0.1)
 
 
-def test_sample_rate_equals_legacy_SR():
-    assert dsp.sample_rate(24) == load_reference().SR  # bit-exact（D11 の前提）
-
-
-def test_clamp_and_pad_match_legacy():
-    ref = load_reference()
-    for x in [-1000, -128.5, -128, -0.5, 0, 0.5, 1.5, 126.5, 127, 127.4, 500, 2.5, 3.5]:
-        assert dsp.clamp(x) == ref.clamp(x)
-    for b in [b"", b"a", b"ab", b"abc"]:
-        assert dsp.pad_even(b) == ref.pad_even(b)
+def test_clamp_rounds_half_to_even_and_pads_to_even_length():
+    xs = [-1000, -128.5, -128, -0.5, 0, 0.5, 1.5, 126.5, 127, 127.4, 500, 2.5, 3.5]
+    assert [dsp.clamp(x) for x in xs] == [-128, -128, -128, 0, 0, 0, 2, 126, 127, 127, 127, 2, 4]
+    assert [dsp.pad_even(b) for b in [b"", b"a", b"ab", b"abc"]] == [b"", b"a\x00", b"ab", b"abc\x00"]
 
 
 def test_to_pcm():

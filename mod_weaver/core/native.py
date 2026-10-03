@@ -136,7 +136,7 @@ def to_mod_song(rs: RealizedSong):
 
     pats = []
     for g in rs.patterns:
-        pat = Pattern(plan=None, strict=False, rows=g.rows, channels=g.channels)
+        pat = Pattern(rows=g.rows, channels=g.channels)
         for r in range(g.rows):
             for ch in range(g.channels):
                 c = g.get(r, ch)

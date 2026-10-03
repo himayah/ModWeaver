@@ -17,7 +17,8 @@ from mod_weaver.framework.gens import BassLine, Comp, Groove, hits
 from mod_weaver.framework.gens.lead import Lead
 from mod_weaver.framework.genre import Double, Genre, Harmony, Instrument, Kit, Part, Section, Sidechain
 from mod_weaver.framework.realize import lanes as lanesmod
-from mod_weaver.framework.realize.tracker import realize_mod
+from mod_weaver.core import native
+from mod_weaver.framework.realize.tracker import realize
 from mod_weaver.framework.score import NoteEvent
 from mod_weaver.framework.target import resolve as resolve_target
 
@@ -123,21 +124,17 @@ def test_channel_order_is_part_declaration_order():
 
 
 # ============================================================
-# realize_mod() の結合テスト
+# realize()（MOD）の結合テスト
 # ============================================================
 
 def test_realize_mod_passes_verify_at_every_budget():
     genre = make_genre()
     plan, score = _score(genre, seed=3)
-    fmt = get_format("mod")
     for budget in (4, 6, 8):
         target = resolve_target("mod", budget, genre, seed=3)
-        song, opts = realize_mod(genre, score, plan, target)
-        assert song.patterns[0].channels == budget
-        data = fmt.serialize(song, opts)
-        issues = fmt.verify(data)
-        errors = [i for i in issues if i.severity == "ERROR"] if issues and hasattr(issues[0], "severity") else \
-            [i for i in issues if getattr(i, "code", "").startswith("E")]
+        rs = realize(genre, score, plan, target)
+        assert rs.patterns[0].channels == budget
+        errors = [i for i in native.verify("mod", native.serialize(rs)) if i.level == "ERROR"]
         assert not errors, errors
 
 
@@ -145,7 +142,7 @@ def test_sample_count_matches_used_instruments_and_chord_shapes():
     genre = make_genre()
     plan, score = _score(genre, seed=3)
     target = resolve_target("mod", 4, genre, seed=3)
-    song, _opts = realize_mod(genre, score, plan, target)
+    song = realize(genre, score, plan, target)
     # drums(kick,snare,hat) + bass + comp の焼いた和音の形（1つだけのはず、progressions が1つだけなので）
     assert len(song.samples) == 3 + 1 + 1
 
@@ -154,7 +151,7 @@ def test_sidechain_ducks_bass_near_kick_hits():
     genre = make_genre()
     plan, score = _score(genre, seed=3)
     target = resolve_target("mod", 8, genre, seed=3)
-    song, _opts = realize_mod(genre, score, plan, target)
+    song = realize(genre, score, plan, target)
     layout = lanesmod.compute_layout(genre, score, budget=8)
     bass_lane = lanesmod.assign_events(genre, layout, score)   # 触れるだけで例外が出ないことも確認
     assert bass_lane is not None

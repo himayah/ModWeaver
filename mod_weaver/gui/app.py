@@ -42,7 +42,8 @@ class App(tk.Tk):
         self.tempo_fixed = tk.StringVar(value="120")
         self.tempo_lo = tk.StringVar(value="80")
         self.tempo_hi = tk.StringVar(value="120")
-        self.channels = tk.StringVar(value="auto")        # auto | "4" | "6" | "8"
+        self.channels = tk.StringVar(value="auto")        # auto | チャンネル数（形式による。上限か、MOD の選択肢）
+        self.channel_limit = tk.StringVar(value="")       # 上限を指定する形式（XM・S3M・IT・MP3）の入力欄
         self.seed_random = tk.BooleanVar(value=True)
         self.seed = tk.StringVar()
         self.fmt = tk.StringVar()
@@ -285,7 +286,7 @@ class App(tk.Tk):
             meta.append(self.t("usual_tempo", lo=g.usual_tempo[0], hi=g.usual_tempo[1], typ=g.typical_tempo))
             if not self.catalog.is_full_tempo_range(g):
                 meta.append(self.t("tempo_limit", lo=g.tempo_range[0], hi=g.tempo_range[1]))
-            meta.append(self.t("channel_choices", choices="/".join(map(str, g.channel_choices))))
+            meta.append(self.t("channel_choices", choices="/".join(map(str, g.mod_channels))))
             self.detail_title.configure(text=g.display_name)
             self.detail_meta.configure(text="   ·   ".join(meta))
             self.detail_desc.configure(text=g.describe(lang))
@@ -337,14 +338,12 @@ class App(tk.Tk):
         self.tempo_spins[-1].pack(side=tk.LEFT)
 
         ttk.Label(box, text=self.t("channels")).grid(row=1, column=0, sticky="w", pady=2)
-        row = ttk.Frame(box)
-        row.grid(row=1, column=1, sticky="w")
-        ttk.Radiobutton(row, text=self.t("auto_genre"), value="auto", variable=self.channels).pack(side=tk.LEFT)
-        self.channel_buttons: dict[int, ttk.Radiobutton] = {}
-        for n in (self.catalog.channels if self.catalog else ()):
-            b = ttk.Radiobutton(row, text=str(n), value=str(n), variable=self.channels)
-            b.pack(side=tk.LEFT, padx=(12, 0))
-            self.channel_buttons[n] = b
+        self.channel_row = ttk.Frame(box)
+        self.channel_row.grid(row=1, column=1, sticky="w")
+        self._build_channel_row()
+        if not getattr(self, "_fmt_traced", False):
+            self.fmt.trace_add("write", lambda *_: self._build_channel_row())
+            self._fmt_traced = True
 
         ttk.Label(box, text=self.t("seed")).grid(row=2, column=0, sticky="w", pady=2)
         row = ttk.Frame(box)
@@ -370,11 +369,49 @@ class App(tk.Tk):
         ttk.Button(row, text=self.t("browse"), command=self._browse_output_dir).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(row, text=self.t("open"), command=self._open_output_dir).pack(side=tk.LEFT, padx=(6, 0))
 
+    def _build_channel_row(self) -> None:
+        """チャンネルの入力欄を、選んでいる形式の ``--channels`` の意味（CLI が教える）で作り直す。
+        ``choices``（MOD）はジャンルが選べる数のボタン、``max``（XM・S3M・IT・MP3）は上限の入力欄、``None``（MIDI）は指定不可。"""
+        row = getattr(self, "channel_row", None)
+        if row is None or not row.winfo_exists():
+            return
+        for w in row.winfo_children():
+            w.destroy()
+        self.channel_buttons: dict[int, ttk.Radiobutton] = {}
+        self.channel_limit_entry = None
+        spec = self.catalog.channel_spec(self.fmt.get()) if self.catalog else None
+        if self.channels.get() != "auto" and (spec is None or ("choices" in spec) != self._channels_is_choice):
+            self.channels.set("auto")
+        ttk.Radiobutton(row, text=self.t("auto_genre"), value="auto", variable=self.channels).pack(side=tk.LEFT)
+        if spec is None:
+            self.channels.set("auto")
+            ttk.Label(row, text=self.t("channels_na"), style="Muted.TLabel").pack(side=tk.LEFT, padx=(12, 0))
+        elif "choices" in spec:
+            for n in spec["choices"]:
+                b = ttk.Radiobutton(row, text=str(n), value=str(n), variable=self.channels)
+                b.pack(side=tk.LEFT, padx=(12, 0))
+                self.channel_buttons[n] = b
+        else:
+            ttk.Radiobutton(row, text=self.t("channels_limit"), value="limit", variable=self.channels,
+                            command=self._sync_channel_limit).pack(side=tk.LEFT, padx=(12, 0))
+            self.channel_limit_entry = ttk.Spinbox(row, from_=1, to=spec["max"], width=4,
+                                                   textvariable=self.channel_limit, command=self._sync_channel_limit)
+            self.channel_limit_entry.pack(side=tk.LEFT, padx=(6, 0))
+            ttk.Label(row, text=self.t("channels_max", n=spec["max"]), style="Muted.TLabel").pack(side=tk.LEFT,
+                                                                                                    padx=(6, 0))
+        self._channels_is_choice = spec is not None and "choices" in spec
+        self._update_channel_buttons()
+
+    _channels_is_choice = True
+
+    def _sync_channel_limit(self) -> None:
+        self.channels.set("limit")
+
     def _update_channel_buttons(self) -> None:
-        """ジャンルが選べないチャンネル数は押せなくし、選ばれていたら「任せる」に戻す。"""
+        """ジャンルが選べない MOD のチャンネル数は押せなくし、選ばれていたら「任せる」に戻す。"""
         g = self._current_genre()
         for n, b in getattr(self, "channel_buttons", {}).items():
-            ok = g is None or n in g.channel_choices      # ランダムジャンルは CLI が合うジャンルから選ぶ
+            ok = g is None or n in g.mod_channels      # ランダムジャンルは CLI が合うジャンルから選ぶ
             b.configure(state=tk.NORMAL if ok else tk.DISABLED)
             if not ok and self.channels.get() == str(n):
                 self.channels.set("auto")
@@ -443,7 +480,14 @@ class App(tk.Tk):
             tempo = bridge.parse_tempo(self.tempo_lo.get(), self.tempo_hi.get(), bounds)
         if self.tempo_mode.get() != "auto" and tempo is None:
             return self._invalid("invalid_tempo", lo=bounds[0], hi=bounds[1])
-        channels = None if self.channels.get() == "auto" else int(self.channels.get())
+        channels = None
+        if self.channels.get() == "limit":
+            channels = bridge.parse_int(self.channel_limit.get())
+            spec = cat.channel_spec(self.fmt.get())
+            if channels is None or spec is None or not 1 <= channels <= spec.get("max", 0):
+                return self._invalid("invalid_channels", n=(spec or {}).get("max", 0))
+        elif self.channels.get() != "auto":
+            channels = int(self.channels.get())
         out = self.output_dir.get().strip()
         return Request(genre, seed, self.fmt.get(), tempo, channels, Path(out) if out else None)
 
@@ -629,8 +673,15 @@ class App(tk.Tk):
         else:
             self.tempo_mode.set("fixed")
             self.tempo_fixed.set(str(s.bpm))
-        self.channels.set("auto" if s.channels_request is None else str(s.channels_request))
-        self.fmt.set(s.format)
+        self.fmt.set(s.format)           # 形式を先に（チャンネルの入力欄が形式で作り直されるため）
+        spec = self.catalog.channel_spec(s.format) if self.catalog else None
+        if s.channels_request is None:
+            self.channels.set("auto")
+        elif spec is not None and "max" in spec:
+            self.channel_limit.set(str(s.channels_request))
+            self.channels.set("limit")
+        else:
+            self.channels.set(str(s.channels_request))
         self.search.set("")                   # 一覧を作り直して選び直す
         self.category.set("")
         self._build()

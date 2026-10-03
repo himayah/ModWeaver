@@ -1358,7 +1358,7 @@ S3M・XM・IT・MP3 を `core/native*.py` と `framework/realize/{encode,tracker
 - **音量の底上げ（§9.10）は F4 の後に前倒しで実装した**（ユーザーの指摘: MP3 に比べて他形式が小さい）。`core/native_level.py`
   （音量の値を一律に倍 ＋ S3M・IT のマスター音量。旧 `level.py` の `RealizedSong` 版）、実測表 `framework/levels.py`
   （形式＋チャンネル数ごとの最悪の最大振幅。鍵が無いチャンネル数は同形式の最悪値で代用）、較正ツール
-  `tools/calibrate_native_levels.py`。`realize(level=True)` が既定で持ち上げる。**効果は形式で違う**: S3M・IT は
+  `tools/calibrate_levels.py`。`realize(level=True)` が既定で持ち上げる。**効果は形式で違う**: S3M・IT は
   マスター音量（127/128 まで）で約 −2〜−3.5 dBFS まで上がった（以前は −4〜−6）。**XM と MOD は上がらない**（XM −4〜−5、
   MOD 8ch −7〜−8、MOD 4ch −3.5 前後）: ヘッダのマスター音量が無く、音量の値は最大の発音（kick・bass が 59〜61）が
   すでに上限 64 に近く、サンプル波形の最大値も 0.9〜0.95 で余裕がほぼ無いため。MP3 は ffmpeg の平均音量合わせ＋リミッタ
@@ -1454,7 +1454,7 @@ GROOVES・各 Spec・SIDECHAIN …）を読み、§15.1 の表のとおりに新
   （旧版は黙って無視していた。`ctx.note()` は厳格な検査のまま）。
 - **MIDI**: 打楽器と旋律の楽器が混在するパート（chiptune のジャンプ音）は、打楽器の音を ch10、他を旋律のチャンネルに分ける。
 - `--channels` が範囲外のときは `ChannelCountError`（終了コード 2。設計書 §9.2 のとおり。それまでは `PlanError` だった）。
-- 音量の較正表（`framework/levels.py`）を全39ジャンル＋march 分に作り直した（`tools/calibrate_native_levels.py`）。
+- 音量の較正表（`framework/levels.py`）を全39ジャンル＋march 分に作り直した（`tools/calibrate_levels.py`）。
 
 **検査**（`tests/framework/test_ported_genres_all.py`・`tests/realplayer/test_ported_genres_real_player.py`）:
 I1（骨格の不変）・I2（決定性）・I3（MOD の全予算、S3M・XM・IT の既定と `min(mod_channels)`、MIDI）・全パートが鳴る・
@@ -1473,7 +1473,7 @@ I1（骨格の不変）・I2（決定性）・I3（MOD の全予算、S3M・XM�
 
 **置き場所**: 12 ジャンルとも `mod_weaver/genres_next/`（F6 と同じ。F8 で `genres/` に改名）。試験の march は
 `tests/framework/realize/genres/` から `genres_next/march.py` に昇格した（F3 の試験用のクラス名 `MarchToy` は `MarchGenre`。
-`tools/calibrate_native_levels.py`・`test_all_formats.py`・`test_ported_genres.py` の march の特別扱いは外した）。suspense の2ジャンルの
+`tools/calibrate_levels.py`・`test_all_formats.py`・`test_ported_genres.py` の march の特別扱いは外した）。suspense の2ジャンルの
 共通部分（音色・和声・語彙）は `genres_next/_suspense.py`（`_` 始まりなので `discover()` はジャンルとして読まない）。
 `tools/port_band_genre.py`（変換ツール）は C には使えない（旧版が `BandProfile` ではない）ので、旧 `genres/<id>.py` と旧テストを見ながら手で書いた。
 

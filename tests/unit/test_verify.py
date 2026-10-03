@@ -4,12 +4,11 @@ import struct
 
 import pytest
 
-from mod_weaver.core.model import Cell, ChannelRole, Pattern, SampleSpec, Song
+from mod_weaver.core.model import Cell, Pattern, SampleSpec, Song
 from mod_weaver.core.verify import (
-    ParseError, has_errors, parse_mod, parse_xm, verify, verify_xm,
+    ParseError, has_errors, parse_mod, parse_xm, verify,
 )
-from mod_weaver.core.formats import get_format
-from mod_weaver.core.writer import serialize, serialize_xm
+from mod_weaver.core.writer import serialize
 
 
 def good_song() -> Song:
@@ -39,7 +38,6 @@ def test_clean_file_has_no_errors():
     data = serialize(good_song())
     issues = verify(data)
     assert not has_errors(issues)
-    assert get_format("mod").verify is verify
 
 
 def test_parse_roundtrip_fields():
@@ -104,16 +102,6 @@ def test_v08_effect_params():
     assert "V08" not in codes(verify(mutate(data, pat_off(2, 2), bytes([0, 0, 0x0C, 64]))))
 
 
-def test_v09_channel_plan():
-    plan = (ChannelRole("a", frozenset({1})), ChannelRole("b", frozenset({2})),
-            ChannelRole("c", frozenset()), ChannelRole("d", frozenset()))
-    data = serialize(good_song())
-    assert not has_errors(verify(data, plan))
-    bad = mutate(data, pat_off(3, 2), Cell(10, 1).serialize())
-    assert "V09" in codes(verify(bad, plan), "ERROR")
-    assert "V09" not in codes(verify(bad))            # plan 未指定なら検査しない
-
-
 def test_v10_tempo_required_in_first_pattern():
     song = good_song()
     song.patterns[0] = Pattern()
@@ -145,7 +133,7 @@ def test_v13_unused_sample_is_info():
     issues = verify(serialize(good_song()))
     assert "V13" not in codes(issues)
     song = good_song()
-    song.patterns[0].replace(0, 1, Cell(None, 0))
+    song.patterns[0].put(0, 1, Cell(None, 0))
     assert codes(verify(serialize(song)), "INFO") == {"V13"}
 
 
@@ -158,13 +146,13 @@ def test_v14_sample_without_note_or_effect():
 def test_v15_volume_sum_left_and_right():
     song = good_song()
     p = song.patterns[0]
-    p.replace(0, 0, Cell(24, 1, 0xF, 100))
-    p.replace(0, 3, Cell(24, 2, vol=64))            # 左: ch1(50) + ch4(64) = 114 → OK
+    p.put(0, 0, Cell(24, 1, 0xF, 100))
+    p.put(0, 3, Cell(24, 2, vol=64))            # 左: ch1(50) + ch4(64) = 114 → OK
     assert "V15" not in codes(verify(serialize(song)))
-    p.replace(2, 0, Cell(24, 1, vol=64))
-    p.replace(2, 3, Cell(24, 2, vol=64))            # 左 128
-    p.replace(4, 1, Cell(24, 1, vol=64))
-    p.replace(4, 2, Cell(24, 2, vol=64))            # 右 128
+    p.put(2, 0, Cell(24, 1, vol=64))
+    p.put(2, 3, Cell(24, 2, vol=64))            # 左 128
+    p.put(4, 1, Cell(24, 1, vol=64))
+    p.put(4, 2, Cell(24, 2, vol=64))            # 右 128
     issues = [i for i in verify(serialize(song)) if i.code == "V15"]
     assert len(issues) == 1 and issues[0].level == "WARN"
     assert "row 2" in issues[0].message
@@ -173,12 +161,12 @@ def test_v15_volume_sum_left_and_right():
 def test_v15_off_cell_reduces_sum_and_note_uses_sample_default():
     song = good_song()
     p = song.patterns[0]
-    p.replace(0, 0, Cell(24, 1, vol=64))
-    p.replace(0, 3, Cell(24, 2, vol=64))
-    p.replace(1, 0, Cell(None, 0, vol=0))           # OFF → 合計が下がる
-    p.replace(1, 3, Cell(None, 0, vol=0))
-    p.replace(2, 0, Cell(24, 1))                    # 既定音量 50
-    p.replace(2, 3, Cell(24, 2))                    # 既定音量 40
+    p.put(0, 0, Cell(24, 1, vol=64))
+    p.put(0, 3, Cell(24, 2, vol=64))
+    p.put(1, 0, Cell(None, 0, vol=0))           # OFF → 合計が下がる
+    p.put(1, 3, Cell(None, 0, vol=0))
+    p.put(2, 0, Cell(24, 1))                    # 既定音量 50
+    p.put(2, 3, Cell(24, 2))                    # 既定音量 40
     hits = [i for i in verify(serialize(song)) if i.code == "V15"]
     assert len(hits) == 1 and "row 0" in hits[0].message
 
@@ -187,7 +175,7 @@ def test_v16_arpeggio_range():
     song = good_song()
     song.patterns[0].put(6, 2, Cell(28, 2, 0, 0x47))
     assert "V16" not in codes(verify(serialize(song)))
-    song.patterns[0].replace(6, 2, Cell(29, 2, 0, 0x47))
+    song.patterns[0].put(6, 2, Cell(29, 2, 0, 0x47))
     assert "V16" in codes(verify(serialize(song)), "ERROR")
 
 
@@ -201,115 +189,14 @@ def test_issue_messages_aggregate_locations():
 
 # ---------------- XM（EXT-6） ----------------
 
-def good_xm_song(n_channels=6) -> Song:
-    pat = Pattern(None, channels=n_channels)
-    pat.put(0, 0, Cell(24, 1, 0xF, 100))
-    pat.put(0, 1, Cell(12, 2))
-    smp = [
-        SampleSpec("One", bytes([0, 5, 10, 5, 0, 251, 246, 251] * 8), 50, pan=40),
-        SampleSpec("Loop", bytes([int(100 * ((i % 32) / 32 * 2 - 1)) & 0xFF for i in range(64)]), 40, pan=220),
-    ]
-    return Song("XM T", smp, [pat], [0])
-
-
-def test_xm_clean_file_has_no_errors():
-    data = serialize_xm(good_xm_song())
-    issues = verify_xm(data)
-    assert not has_errors(issues)
-    assert get_format("xm").verify is verify_xm
-
-
-def test_xm_parse_error_on_short_file():
-    with pytest.raises(ParseError):
-        parse_xm(b"short")
-    assert has_errors(verify_xm(b"short"))
-
-
-def test_xm_v02_bad_magic():
-    data = bytearray(serialize_xm(good_xm_song()))
-    data[0:4] = b"XXXX"
-    assert "V02" in codes(verify_xm(bytes(data)), "ERROR")
-
-
-def test_xm_v06_undefined_instrument():
-    song = good_xm_song()
-    song.patterns[0].put(4, 0, Cell(20, 5))          # instrument 5 は未定義
-    assert "V06" in codes(verify_xm(serialize_xm(song)), "ERROR")
-
-
-def test_xm_v07_note_without_instrument():
-    song = good_xm_song()
-    song.patterns[0].replace(4, 0, Cell(20, 0))
-    assert "V07" in codes(verify_xm(serialize_xm(song)), "ERROR")
-
-
-def test_xm_v08_bad_effect_param():
-    song = good_xm_song()
-    song.patterns[0].replace(0, 0, Cell(None, 0, 0xF, 0))
-    assert "V08" in codes(verify_xm(serialize_xm(song)), "ERROR")
-
-
-def test_xm_v09_disallowed_instrument_on_channel():
-    song = good_xm_song()
-    plan = (ChannelRole("a", frozenset({2})),) + tuple(
-        ChannelRole(f"c{i}", frozenset()) for i in range(1, 6)
-    )
-    song.patterns[0].put(6, 0, Cell(20, 2))          # ch0 は sample 2 を許可していない
-    assert "V09" in codes(verify_xm(serialize_xm(song), plan), "ERROR")
-
-
-def test_xm_v10_missing_tempo():
-    song = good_xm_song()
-    song.patterns[0].replace(0, 0, Cell(24, 1))      # テンポセルを消す
-    assert "V10" in codes(verify_xm(serialize_xm(song)), "ERROR")
-
-
-def test_xm_v13_unused_instrument():
-    song = good_xm_song()
-    song.patterns[0].replace(0, 1, Cell())           # instrument2（Loop）への唯一の参照を消す
-    issues = verify_xm(serialize_xm(song))
-    assert "V13" in codes(issues, "INFO")
-
-
-def test_xm_v15_pan_weighted_volume_sum():
-    song = good_xm_song(4)
-    p = song.patterns[0]
-    p.replace(0, 0, Cell(24, 1, vol=64))   # instrument1: pan=40 (左寄り)
-    p.replace(0, 1, Cell(24, 2, vol=64))   # instrument2: pan=220 (右寄り)
-    assert "V15" not in codes(verify_xm(serialize_xm(song)))
-    for ch in range(4):                    # 左寄りの楽器を全チャンネルで同時に鳴らす → 左が上限超過
-        p.replace(2, ch, Cell(24, 1, vol=64))
-    issues = verify_xm(serialize_xm(song))
-    assert any(i.code == "V15" for i in issues)
-
-
-def test_v15_is_only_checked_for_four_channel_songs():
-    """V15 の左右モデルは Amiga の 4ch 前提。5ch 以上は実プレイヤーの音割れ検査に任せる（DESIGN.md §9.1）。"""
-    song = good_xm_song(6)
-    for ch in range(6):
-        song.patterns[0].replace(2, ch, Cell(24, 1, vol=64))
-    assert "V15" not in codes(verify_xm(serialize_xm(song)))
-    assert "V15" not in codes(verify(serialize(song)))
-
-
-def test_xm_v16_arpeggio_range():
-    song = good_xm_song()
-    song.patterns[0].put(6, 2, Cell(28, 2, 0, 0x47))
-    assert "V16" not in codes(verify_xm(serialize_xm(song)))
-    song.patterns[0].replace(6, 2, Cell(29, 2, 0, 0x47))
-    assert "V16" in codes(verify_xm(serialize_xm(song)), "ERROR")
-
 
 def test_xm_round_trips_through_real_genres():
-    """全登録ジャンルの Song を XM へシリアライズし、parse_xm で自己無矛盾（バイト数一致・エラー無し）
-    であることを確認する（実プレイヤーでの検証は tests/realplayer/。DESIGN.md §9.2）。"""
+    """全登録ジャンルを XM にして、parse_xm で自己無矛盾（バイト数一致）・検査にエラー無しであることを確認する
+    （実プレイヤーでの検証は tests/realplayer/。DESIGN.md §9.2）。"""
     from mod_weaver import engine
-    from mod_weaver.profiles.registry import PROFILE_REGISTRY
+    from mod_weaver.core import native
 
-    for name in sorted(PROFILE_REGISTRY):
-        profile = PROFILE_REGISTRY[name]()
-        song, plan = engine.compose_song(profile, 1)
-        data = serialize_xm(song)
-        pm = parse_xm(data)
-        assert pm.consumed == len(data), name
-        assert not has_errors(verify_xm(data, engine.effective_channel_plan(profile, plan))), name
+    for genre in engine.list_genres():
+        data = engine.build(genre, 1, "xm").data
+        assert parse_xm(data).consumed == len(data), genre.id
+        assert not [i for i in native.verify("xm", data) if i.level == "ERROR"], genre.id

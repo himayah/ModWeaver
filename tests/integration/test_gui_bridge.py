@@ -32,7 +32,9 @@ def test_load_catalog_matches_the_cli(catalog):
     assert loaded.random_genre == "random" and loaded.default_genre == cli.DEFAULT_GENRE
     assert loaded.extension("midi") == ".mid"
     calm = loaded.genre("calm")
-    assert calm.channel_choices == (4,) and loaded.category_label("mood", "en") == "Mood"
+    assert calm.mod_channels == (4,) and loaded.channel_spec("mod") == {"choices": [4, 6, 8]}
+    assert loaded.channel_spec("xm") == {"max": 32} and loaded.channel_spec("midi") is None
+    assert loaded.category_label("mood", "en") == "Mood"
     assert loaded.is_full_tempo_range(calm)
     assert calm.tempo_choices == (68, 70, 72, 74, 76, 78)
     assert calm.usual_tempo == (68, 78) and calm.typical_tempo == 72     # 候補の中央（偶数個なら下側）
@@ -66,7 +68,7 @@ def test_parse_tempo_and_int(catalog):
 
 def _song(**kw) -> SongResult:
     base = dict(genre="pop", display_name="Pop", random_genre=True, format="mod", seed=5, bpm=111,
-                tempo_request=None, channels=6, channels_request=None, summary=(), path=Path("x.mod"),
+                tempo_request=None, channels=6, channels_request=None, channel_budget=6, sample_bits=8, summary=(), path=Path("x.mod"),
                 repro="python modweaver.py --genre pop --seed 5")
     base.update(kw)
     return SongResult(**base)
@@ -92,19 +94,20 @@ def test_job_generates_and_result_parses(tmp_path, catalog):
     assert out.ok, out.stderr
     song = SongResult.from_json(out.json())
     assert song.path == (tmp_path / "pop_5.xm").resolve() and song.path.exists()
-    assert (song.genre, song.seed, song.format, song.channels) == ("pop", 5, "xm", 6)
+    assert (song.genre, song.seed, song.format, song.channel_budget) == ("pop", 5, "xm", 6)
+    assert 1 <= song.channels <= 6 and song.sample_bits == 16
     assert 100 <= song.bpm <= 120 and song.repro.startswith("python modweaver.py --genre pop")
 
     # 別の形式で書き出しても同じ曲（テンポ・編成・和声の要約が同じ）
     again = _run_job(bridge.build_args(bridge.replay_request(song, "it", tmp_path), catalog))
     other = SongResult.from_json(again.json())
-    assert (other.bpm, other.channels, other.summary) == (song.bpm, song.channels, song.summary)
+    assert (other.bpm, other.summary) == (song.bpm, song.summary) and other.sample_bits == 16
     assert other.path.suffix == ".it"
 
 
 def test_job_reports_cli_errors_with_exit_code(tmp_path, catalog):
     out = _run_job(bridge.build_args(Request("calm", channels=8, output_dir=tmp_path), catalog))
-    assert out.code == 2 and not out.ok and "cannot use 8 channels" in out.stderr
+    assert out.code == 2 and not out.ok and "not supported by calm" in out.stderr
     assert bridge.EXIT_KINDS[out.code] == "exit_args"
 
 

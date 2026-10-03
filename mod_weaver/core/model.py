@@ -1,34 +1,22 @@
 """データモデル（DESIGN.md §3）。
 
-- ``Cell``: 1 セル（note / sample / effect / param / vol）。frozen。
-- ``MeasureBuffer`` / ``Pattern``: 行×チャンネルの作業領域（共通基底 ``CellGrid``）。
-- ``SampleSpec`` / ``Song`` / ``Instrument``。
-- 計画系（``ChordSpec`` … ``RngStreams``）: プロファイルとエンジンの間で受け渡す純粋データ。
-
-行数・チャンネル数は定数 ``ROWS_PER_PATTERN`` / ``NUM_CHANNELS`` を既定値とするだけで、
-``CellGrid`` は任意の値を受け付ける（可変小節は ``ChordSlot.rows``／``MeasureCtx.measure_rows``、
-多チャンネルは ``ChannelPlan`` の要素数で使っている。DESIGN.md §3.2・§4.7）。
+- ``GmVoice``: 楽器 1 つの GM 音色（ジャンルの宣言が使う。形式系ではないのでここ）。
+- ``Cell`` / ``Pattern``: MOD の 1 セルと、行×チャンネルの領域（MOD の writer が読む。Realizer は ``core/native.py`` の
+  ``RealizedSong`` を作り、MOD だけ ``native.to_mod_song`` でこの表現に直して ``core/writer.py`` に渡す）。
+- ``SampleSpec`` / ``Song``: サンプルと、MOD の曲。
+- ``ChordSpec`` / ``ChordDef``: 和音の記述と、調・音域を適用して具体化したもの（``core/harmony.py`` の ``voice()``）。
 """
 from __future__ import annotations
 
-import copy
 import logging
-import random
-from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Optional
+from dataclasses import dataclass
+from typing import Optional
 
-from ..errors import (
-    CellConflictError,
-    ChannelConflictError,
-    PitchRangeError,
-    SampleConstraintError,
-)
+from ..errors import CellConflictError, PitchRangeError, SampleConstraintError
 from .pitch import NOTE_MAX, NOTE_MIN, PERIODS
 
 log = logging.getLogger("mod_weaver")
 
-ROWS_PER_PATTERN = 64
-NUM_CHANNELS = 4
 MAX_SAMPLES = 31
 MAX_SAMPLE_BYTES = 131070  # 65535 words
 
@@ -36,10 +24,9 @@ MAX_SAMPLE_BYTES = 131070  # 65535 words
 # ============================================================
 # GmVoice
 # ============================================================
-# core/midi.py（形式系）ではなくここに置く理由: FRAMEWORK_REDESIGN.md の新しい枠組みでは
-# genres/*.py が core の形式系（writer・s3m・it・midi・render・verify・level）を import しない
-# （§3.1・§13.1 I8）。Instrument.gm の型として genres が GmVoice を参照する必要があるので、
-# 形式系ではないここに置く。core/midi.py は ``from .model import GmVoice`` で使う。
+# 形式系（writer・native*・render・verify）ではなくここに置く理由: genres/*.py が core の形式系を import しない
+# （FRAMEWORK_REDESIGN.md §3.1・§13.1 I8）。Instrument.gm の型として genres が GmVoice を参照する必要があるので、
+# 形式系ではないここに置く。
 
 @dataclass(frozen=True)
 class GmVoice:
@@ -118,179 +105,33 @@ EMPTY_CELL = Cell()
 
 
 # ============================================================
-# ChannelPlan
+# Pattern
 # ============================================================
 
-@dataclass(frozen=True)
-class ChannelRole:
-    name: str                              # "drums"/"bass"/"pad"/"lead"
-    allowed: frozenset[int]                # 許可する sample 番号（0 は常に可）
-    priority: Mapping[int, int] = field(default_factory=dict)  # sample番号→優先度（未記載は 1、sample=0 は 0）
+class Pattern:
+    """行×チャンネルのセルの領域（MOD の 1 pattern。既定 64 row × 4 ch）。"""
 
-
-ChannelPlan = tuple[ChannelRole, ...]
-
-
-# ============================================================
-# CellGrid / MeasureBuffer / Pattern
-# ============================================================
-
-class CellGrid:
-    """行×チャンネルのセル領域。put / replace / get の規則を共有する（DESIGN.md §3.2）。"""
-
-    def __init__(
-        self,
-        rows: int,
-        plan: Optional[ChannelPlan] = None,
-        strict: bool = False,
-        channels: Optional[int] = None,
-    ) -> None:
-        if rows <= 0:
-            raise ValueError(f"rows must be positive: {rows}")
+    def __init__(self, rows: int = 64, channels: int = 4) -> None:
+        if rows < 1 or channels < 1:
+            raise ValueError(f"pattern needs positive rows and channels: {rows}x{channels}")
         self.rows = rows
-        self.plan = plan
-        self.strict = strict
-        self.channels = len(plan) if plan is not None else (channels or NUM_CHANNELS)
-        self._cells: list[list[Cell]] = [
-            [EMPTY_CELL] * self.channels for _ in range(rows)
-        ]
+        self.channels = channels
+        self._cells: list[list[Cell]] = [[EMPTY_CELL] * channels for _ in range(rows)]
 
-    # --- 内部 ---
-    def _check_pos(self, row: int, ch: int) -> None:
-        if not 0 <= row < self.rows:
-            raise ChannelConflictError(f"row out of range: {row} (rows={self.rows})")
-        if not 0 <= ch < self.channels:
-            raise ChannelConflictError(f"channel out of range: {ch}")
-
-    def _check_allowed(self, row: int, ch: int, cell: Cell) -> None:
-        if self.plan is None or cell.sample == 0:
-            return
-        role = self.plan[ch]
-        if cell.sample not in role.allowed:
-            raise ChannelConflictError(
-                f"sample {cell.sample} not allowed on ch{ch + 1} ({role.name}) at row {row}"
-            )
-
-    def _priority(self, ch: int, cell: Cell) -> int:
-        if cell.sample == 0 or self.plan is None:
-            return 0 if cell.sample == 0 else 1
-        return self.plan[ch].priority.get(cell.sample, 1)
-
-    # --- 公開 ---
     def put(self, row: int, ch: int, cell: Cell) -> None:
-        """セルを置く。
-
-        strict=False: 無条件上書き（Nostalgic 互換）。
-        strict=True : 優先度は ChannelPlan から自動導出（sample=0 は 0）。
-            空 → 書く / 新>既存 → 置換 / 新<既存 → 書かない /
-            同一セル → no-op / 同値で異なるセル → ChannelConflictError。
-        """
-        self._check_pos(row, ch)
-        self._check_allowed(row, ch, cell)
-        if not self.strict:
-            self._cells[row][ch] = cell
-            return
-        existing = self._cells[row][ch]
-        if cell.is_empty or cell == existing:
-            return
-        if existing.is_empty:
-            self._cells[row][ch] = cell
-            return
-        new_p, old_p = self._priority(ch, cell), self._priority(ch, existing)
-        if new_p > old_p:
-            self._cells[row][ch] = cell
-        elif new_p < old_p:
-            log.debug("cell dropped by priority at row %d ch%d: %s", row, ch + 1, cell)
-        else:
-            raise ChannelConflictError(
-                f"conflicting cells at row {row} ch{ch + 1}: {existing} vs {cell}"
-            )
-
-    def replace(self, row: int, ch: int, cell: Cell) -> None:
-        """意図的な上書き（優先度・同値を問わず置換）。"""
-        self._check_pos(row, ch)
-        self._check_allowed(row, ch, cell)
+        if not (0 <= row < self.rows and 0 <= ch < self.channels):
+            raise IndexError(f"cell position out of range: row={row} ch={ch} ({self.rows}x{self.channels})")
         self._cells[row][ch] = cell
 
-    def insert_command(self, row: int, effect: int, param: int) -> None:
-        """row の空きチャンネルへ ``(effect, param)`` を書き込む（``vol`` は使わない）。
-
-        探索順序（DESIGN.md §3.2）:
-          ① is_empty なチャンネルのうち最小番号
-          ② なければ、note を持つが vol も effect も持たないチャンネル
-             （そのチャンネルの note/sample はそのまま残し、サンプル既定音量で鳴り続ける）
-        いずれも無ければ ChannelConflictError。``engine.apply_tempo`` や EXT-1/EXT-5（スウィング・
-        テンポカーブ）の row 単位コマンド挿入が共用する（`Song`/プロファイルに依存しないため
-        `CellGrid` のメソッドとして持つ。DESIGN_HISTORY.md §7.2）。
-        """
-        for ch in range(self.channels):
-            if self.get(row, ch).is_empty:
-                self.replace(row, ch, Cell(None, 0, effect, param))
-                return
-        for ch in range(self.channels):
-            c = self.get(row, ch)
-            if c.note is not None and c.vol is None and not c.has_effect:
-                self.replace(row, ch, Cell(c.note, c.sample, effect, param))
-                return
-        raise ChannelConflictError(f"no channel available for row command at row {row}")
-
-    def try_insert_command(self, row: int, effect: int, param: int) -> bool:
-        """``insert_command`` の非送出版。装飾的な row コマンド（EXT-1 スウィング／EXT-5 テンポ
-        カーブ等、「空きが無ければその row だけ諦めてよい」処理）が共通して使う、失敗を bool で
-        返すだけの薄いラッパ（探索ロジック自体は ``insert_command`` のものをそのまま使う）。"""
-        try:
-            self.insert_command(row, effect, param)
-            return True
-        except ChannelConflictError:
-            return False
-
     def get(self, row: int, ch: int) -> Cell:
-        self._check_pos(row, ch)
         return self._cells[row][ch]
-
-    def mapped(self, fn: Callable[[Cell], Cell]) -> "CellGrid":
-        """全セルに ``fn`` を適用した複製（配置を変えない変換用。音量の一律変更など）。"""
-        new = copy.copy(self)
-        new._cells = [[fn(c) for c in row] for row in self._cells]
-        return new
 
     def serialize(self) -> bytes:
         return b"".join(c.serialize() for r in self._cells for c in r)
 
 
-class MeasureBuffer(CellGrid):
-    """rows_per_measure × チャンネルの作業領域。"""
-
-
-class Pattern(CellGrid):
-    """64 row パターン（既定）。``finalize_pattern`` 用に put / replace / get を持つ。"""
-
-    def __init__(
-        self,
-        plan: Optional[ChannelPlan] = None,
-        strict: bool = False,
-        rows: int = ROWS_PER_PATTERN,
-        channels: Optional[int] = None,
-    ) -> None:
-        super().__init__(rows, plan, strict, channels)
-
-    def blit(self, buf: CellGrid, base_row: int) -> None:
-        """``buf`` の非空セルを ``base_row`` 以降へ転記する（buf 側で検査済みのため直接コピー）。"""
-        if base_row < 0 or base_row + buf.rows > self.rows:
-            raise ChannelConflictError(
-                f"blit out of range: base_row={base_row}, rows={buf.rows}, pattern rows={self.rows}"
-            )
-        if buf.channels != self.channels:
-            raise ChannelConflictError("blit channel count mismatch")
-        for r in range(buf.rows):
-            for c in range(buf.channels):
-                cell = buf.get(r, c)
-                if not cell.is_empty:
-                    self._cells[base_row + r][c] = cell
-
-
 # ============================================================
-# SampleSpec / Song / Instrument
+# SampleSpec / Song
 # ============================================================
 
 @dataclass
@@ -361,60 +202,8 @@ class Song:
     samples: list[SampleSpec]      # 位置=sample番号-1
     patterns: list[Pattern]
     order: list[int]               # 1..128 エントリ
-    instrument_names: tuple[str, ...] = ()   # build_samples() のキー（sample 番号順）。MIDI の音色表引き用
+    instrument_names: tuple[str, ...] = ()   # 楽器名（sample 番号順）
 
-
-@dataclass(frozen=True)
-class Instrument:
-    """プロファイルが Cell を作る唯一の入口（DESIGN.md §3.3）。"""
-
-    slot: int                      # 1..31
-    spec: SampleSpec
-
-    def cell(
-        self,
-        n: Optional[int] = None,
-        *,
-        vol: Optional[int] = None,
-        effect: int = 0,
-        param: int = 0,
-        keep_sample: bool = False,
-    ) -> Cell:
-        """logical note ``n`` を発音する Cell を作る。
-
-        - pitched=False: ``n`` は無視され ``rate_note`` で発音（sample=slot）
-        - pitched=True で ``n`` あり: ``t = n - shift``。``t`` が 0..35 外なら PitchRangeError。
-          アルペジオ（effect=0, param≠0）は ``t + max(X, Y) ≤ 35`` も検査
-        - pitched=True で ``n`` なし: 休符 / 効果・音量専用セル。原則 sample=0。
-          ``keep_sample=True``（ポルタメント継続など）のとき sample=slot
-        """
-        spec = self.spec
-        if not spec.pitched:
-            return Cell(spec.rate_note, self.slot, effect, param, vol)
-        if n is None:
-            sample = self.slot if keep_sample else 0
-            return Cell(None, sample, effect, param, vol)
-        t = n - spec.shift
-        if not NOTE_MIN <= t <= NOTE_MAX:
-            raise PitchRangeError(
-                f"{spec.name}: logical note {n} -> tracker note {t} out of range (shift={spec.shift})"
-            )
-        if effect == 0 and param != 0:
-            top = t + max(param >> 4, param & 0xF)
-            if top > NOTE_MAX:
-                raise PitchRangeError(
-                    f"{spec.name}: arpeggio {param:02X} on tracker note {t} exceeds {NOTE_MAX}"
-                )
-        return Cell(t, self.slot, effect, param, vol)
-
-    def off(self) -> Cell:
-        """持続（ループ）音色の消音セル ``Cell(None, 0, vol=0)``。"""
-        return Cell(None, 0, vol=0)
-
-
-# ============================================================
-# 和声・構造データ（計画系）
-# ============================================================
 
 @dataclass(frozen=True)
 class ChordSpec:                   # 調非依存の和音記述（度数ではなく半音オフセット）
@@ -433,71 +222,3 @@ class ChordDef:                    # 具体化済み（調・音域適用後）
     scale_tones: tuple[int, ...]   # 経過音用
     arp: Optional[int] = None      # 0xy の param（新ジャンルのみ）
     explicit: bool = False         # True: 手書きボイシング（Nostalgic）
-
-
-@dataclass(frozen=True)
-class ChordSlot:
-    chord: ChordDef
-    measures: int = 1              # 何 measure この和音が続くか
-    rows: Optional[int] = None     # この slot の1 measureあたりの row 数。None=profile.rows_per_measure
-                                    # （EXT-2 可変小節。variable_meter=False のプロファイルは常に None）
-
-
-@dataclass
-class PatternPlan:
-    kind: str                      # "intro"|"a"|"b"|"outro"|"trio"|"climax"|…（プロファイル定義）
-    slots: list[ChordSlot]         # Σ(measures) × rows_per_measure == 64
-    intensity: float = 0.5         # 0..1（音量・密度の目安）
-    key_offset: int = 0            # 転調（半音、トリオ用）
-    extra: dict = field(default_factory=dict)
-
-
-@dataclass
-class SongPlan:
-    bpm: int
-    patterns: list[PatternPlan]    # 作成順（旧実装の rng 消費順を規定）
-    order: list[int]               # PatternPlan の index 列
-    key_pc: Optional[int] = None
-    summary: list[str] = field(default_factory=list)   # バナー表示用の行
-    channel_plan: Optional[ChannelPlan] = None   # 曲ごとの物理チャンネル構成（GenreProfile.arrange が決める）。None ならジャンルの宣言
-    channel_pans: Optional[tuple[int, ...]] = None   # channel_plan と組になるパン（None なら §7.1 の規則）
-
-
-@dataclass(frozen=True)
-class PatternCtx:
-    kind: str                      # "intro"|"a"|"b"|"outro"|...
-    index: int                     # PatternPlan 作成順のインデックス
-    bpm: int
-    key_pc: Optional[int]
-    key_offset: int
-    intensity: float
-    is_first_in_order: bool        # 曲順 order[0] に配置されるパターンか
-    extra: Mapping[str, Any] = field(default_factory=dict)   # PatternPlan.extra の写し
-
-
-@dataclass(frozen=True)
-class MeasureCtx:
-    pattern: PatternCtx
-    measure_idx: int               # pattern 内 0..
-    n_measures: int
-    chord: ChordDef
-    chord_measure_offset: int      # 現和音内での位置
-    is_last: bool                  # pattern 最終 measure
-    instruments: Mapping[str, Instrument]
-    measure_rows: int = 16         # 現在の measure の実際の row 数（= buf.rows と同値。EXT-2）
-
-
-@dataclass(frozen=True)
-class RngStreams:                  # 用途別乱数ストリーム（D9・T18）
-    plan: random.Random
-    drums: random.Random
-    bass: random.Random
-    harmony: random.Random
-    melody: random.Random
-
-    STREAM_NAMES = ("plan", "drums", "bass", "harmony", "melody")
-
-    @classmethod
-    def for_seed(cls, seed: int, profile_id: str) -> "RngStreams":
-        """``random.Random(f"{seed}:{profile_id}:{name}")``（文字列シードは Python バージョン間で安定）。"""
-        return cls(**{n: random.Random(f"{seed}:{profile_id}:{n}") for n in cls.STREAM_NAMES})

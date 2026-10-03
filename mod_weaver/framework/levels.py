@@ -1,6 +1,6 @@
 """ジャンル × 形式 × チャンネル数ごとの実プレイヤーでの最大振幅（dBFS、音量の底上げ前）。``core/native_level.py`` が使う。
 
-``tools/calibrate_native_levels.py`` が生成する。手で編集しない（ジャンルの音量・音色を変えたら作り直す）。
+``tools/calibrate_levels.py`` が生成する。手で編集しない（ジャンルの音量・音色を変えたら作り直す）。
 """
 PEAK_DB: dict[str, dict[str, float]] = {'acoustic-ssw': {'it4': -9.0,
                   'it8': -8.7,

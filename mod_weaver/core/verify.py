@@ -1,7 +1,7 @@
 """独立パーサ ``parse_mod`` と構造検査 ``verify``（DESIGN.md §9.1）。
 
 書込側（``writer`` / ``model``）とは独立に、バイト列を ``struct`` で直接読む。
-参照するのは Period 表（``pitch``）と ``ChannelPlan`` の型のみ。
+参照するのは Period 表（``pitch``）のみ。
 
 出力形式ごとの検査関数は ``core/formats.py`` の ``FORMATS`` から引く。
 """
@@ -166,7 +166,6 @@ _DESCRIPTIONS = {
     "V06": "未定義のサンプル番号を参照",
     "V07": "note を持つセルにサンプル番号がない",
     "V08": "エフェクト param が不正（0xC>64 または 0xF=0）",
-    "V09": "チャンネルに許可されていないサンプル",
     "V10": "order[0] の pattern にテンポ設定（Fxx, param≥32）がない",
     "V11": "ループ境界の段差が大きい（クリックの恐れ）",
     "V12": "pattern 数が 64 を超える",
@@ -235,7 +234,7 @@ def _check_loop_boundary(idx: int, s: ParsedSample, rep: _Report) -> None:
         rep.add("WARN", "V11", f"sample {idx}: 境界段差 {step} > 許容 {limit:.1f}")
 
 
-def _check_cells(pm: ParsedMod, plan, rep: _Report) -> set[int]:
+def _check_cells(pm: ParsedMod, rep: _Report) -> set[int]:
     """全セルの検査。使用されたサンプル番号の集合を返す。"""
     defined = max((i for i, s in enumerate(pm.samples, start=1) if s.length_words > 0), default=0)
     used: set[int] = set()
@@ -255,8 +254,6 @@ def _check_cells(pm: ParsedMod, plan, rep: _Report) -> set[int]:
                     rep.add("ERROR", "V08", f"{where}: C{cell.param:02X}")
                 if cell.effect == 0xF and cell.param == 0:
                     rep.add("ERROR", "V08", f"{where}: F00")
-                if plan is not None and cell.sample and cell.sample not in plan[c].allowed:
-                    rep.add("ERROR", "V09", f"{where}: sample {cell.sample} on {plan[c].name}")
                 if not cell.period and cell.sample and cell.effect == 0 and cell.param == 0:
                     rep.add("WARN", "V14", f"{where}: sample {cell.sample}")
                 if cell.effect == 0 and cell.param and cell.period in _PERIOD_TO_INDEX:
@@ -304,8 +301,8 @@ def _check_volume_sum(pm: ParsedMod, rep: _Report) -> None:
                 rep.add("WARN", "V15", f"pattern {p} row {r}: L={left} R={right}")
 
 
-def verify(data: bytes, plan=None) -> list[Issue]:
-    """構造検査。``plan``（ChannelPlan）を渡すと V09 も検査する。"""
+def verify(data: bytes) -> list[Issue]:
+    """構造検査。"""
     try:
         pm = parse_mod(data)
     except ParseError as e:
@@ -313,7 +310,7 @@ def verify(data: bytes, plan=None) -> list[Issue]:
     rep = _Report()
     _check_header(pm, rep)
     _check_samples(pm, rep)
-    used = _check_cells(pm, plan, rep)
+    used = _check_cells(pm, rep)
     _check_tempo(pm, rep)
     _check_volume_sum(pm, rep)
     for i, s in enumerate(pm.samples, start=1):
@@ -491,150 +488,3 @@ def parse_xm(data: bytes) -> ParsedXM:
 
     pm.consumed = pos
     return pm
-
-
-_XM_DESCRIPTIONS = {
-    "V01": "ファイルサイズが宣言内容と不一致",
-    "V02": "マジックが不正",
-    "V03": "曲長・order が不正",
-    "V04": "サンプルヘッダが不正",
-    "V05": "note が本プロジェクトの音域（C-3..B-5）外",
-    "V06": "未定義のインストゥルメント番号を参照",
-    "V07": "note を持つセルにインストゥルメント番号がない",
-    "V08": "エフェクト param が不正（0xC>64 または 0xF=0）",
-    "V09": "チャンネルに許可されていないインストゥルメント",
-    "V10": "order[0] の pattern にテンポ設定（Fxx, param≥32）がない",
-    "V11": "ループ境界の段差が大きい（クリックの恐れ）",
-    "V12": "pattern 数が 64 を超える",
-    "V13": "未使用のインストゥルメントがある",
-    "V14": "note を持たない無効果セルにインストゥルメント番号がある",
-    "V15": "パン加重した左右合計音量が上限を超える",
-    "V16": "アルペジオが note 上限を超える",
-}
-
-
-def _check_xm_header(pm: ParsedXM, rep: _Report) -> None:
-    if pm.magic != b"Extended Module: ":
-        rep.add("ERROR", "V02", f"magic={pm.magic!r}")
-    if not 1 <= pm.song_length <= len(pm.order):
-        rep.add("ERROR", "V03", f"song_length={pm.song_length}")
-    for i, p in enumerate(pm.order[:pm.song_length]):
-        if p >= len(pm.patterns):
-            rep.add("ERROR", "V03", f"order[{i}]={p} は実 pattern 数 {len(pm.patterns)} 以上")
-    if pm.n_patterns > 64:
-        rep.add("ERROR", "V12", f"pattern 数={pm.n_patterns}")
-    if pm.size != pm.consumed:
-        rep.add("ERROR", "V01", f"size={pm.size} consumed={pm.consumed}")
-
-
-def _check_xm_samples(pm: ParsedXM, rep: _Report) -> None:
-    for i, inst in enumerate(pm.instruments, start=1):
-        for s in inst.samples:
-            if s.length == 0:
-                continue
-            if s.volume > 64:
-                rep.add("ERROR", "V04", f"instrument {i}: volume={s.volume}")
-            if (s.sample_type & 0x03) and s.loop_start + s.loop_length > s.length:
-                rep.add("ERROR", "V04", f"instrument {i}: loop {s.loop_start}+{s.loop_length} > {s.length}")
-            if (s.sample_type & 0x03) and s.loop_length > 2:
-                _check_xm_loop_boundary(i, s, rep)
-
-
-def _check_xm_loop_boundary(idx: int, s: ParsedXMSample, rep: _Report) -> None:
-    lo, hi = s.loop_start, s.loop_start + s.loop_length
-    if hi > len(s.data):
-        return
-    result = _loop_boundary_step(s.data[lo:hi])
-    if result is None:
-        return
-    step, limit = result
-    if step > limit:
-        rep.add("WARN", "V11", f"instrument {idx}: 境界段差 {step} > 許容 {limit:.1f}")
-
-
-def _check_xm_cells(pm: ParsedXM, plan, rep: _Report) -> set[int]:
-    defined = len(pm.instruments)
-    used: set[int] = set()
-    for p, pat in enumerate(pm.patterns):
-        for r, row in enumerate(pat):
-            for c, cell in enumerate(row):
-                where = f"pattern {p} row {r} ch{c + 1}"
-                if cell.instrument:
-                    used.add(cell.instrument)
-                    if cell.instrument > defined:
-                        rep.add("ERROR", "V06", f"{where}: instrument {cell.instrument}")
-                if cell.note and cell.instrument == 0:
-                    rep.add("ERROR", "V07", where)
-                if cell.effect == 0xC and cell.param > 64:
-                    rep.add("ERROR", "V08", f"{where}: C{cell.param:02X}")
-                if cell.effect == 0xF and cell.param == 0:
-                    rep.add("ERROR", "V08", f"{where}: F00")
-                if plan is not None and cell.instrument and cell.instrument not in plan[c].allowed:
-                    rep.add("ERROR", "V09", f"{where}: instrument {cell.instrument} on {plan[c].name}")
-                if not cell.note and cell.instrument and cell.effect == 0 and cell.param == 0:
-                    rep.add("WARN", "V14", f"{where}: instrument {cell.instrument}")
-                if cell.note and not XM_NOTE_T0 <= cell.note <= XM_NOTE_T0 + NOTE_MAX:
-                    rep.add("ERROR", "V05", f"{where}: note {cell.note}")
-                if cell.effect == 0 and cell.param and cell.note:
-                    t = cell.note - XM_NOTE_T0
-                    top = t + max(cell.param >> 4, cell.param & 0xF)
-                    if top > NOTE_MAX:
-                        rep.add("ERROR", "V16", f"{where}: t={t} arp={cell.param:02X}")
-    return used
-
-
-def _check_xm_tempo(pm: ParsedXM, rep: _Report) -> None:
-    if not pm.order or pm.order[0] >= len(pm.patterns):
-        return
-    first = pm.patterns[pm.order[0]]
-    if not any(c.effect == 0xF and c.param >= 32 for row in first for c in row):
-        rep.add("ERROR", "V10", f"pattern {pm.order[0]}")
-
-
-def _check_xm_volume_sum(pm: ParsedXM, rep: _Report) -> None:
-    """再生順に各チャンネルの音量を追跡し、instrument.pan で加重した左右合計を検査する
-    （MOD の固定 L/R チャンネル割当の一般化。DESIGN.md §9.1）。MOD と同じく 4ch の曲だけが対象。"""
-    n = pm.n_channels
-    if n != VOLUME_SUM_CHANNELS:
-        return
-    vol = [0] * n
-    pan = [128] * n
-    seen: set[tuple[int, int]] = set()
-    for p in pm.order[:pm.song_length]:
-        if p >= len(pm.patterns):
-            continue
-        for r, row in enumerate(pm.patterns[p]):
-            for c, cell in enumerate(row):
-                if cell.effect == 0xC:
-                    vol[c] = cell.param
-                if cell.note and cell.instrument and cell.effect != 0xC:
-                    inst = pm.instruments[cell.instrument - 1] if cell.instrument <= len(pm.instruments) else None
-                    if inst and inst.samples:
-                        vol[c] = inst.samples[0].volume
-                        pan[c] = inst.samples[0].pan
-                if cell.volume & 0xF0 == 0xC0:                  # vol column Px（チャンネルパン）
-                    pan[c] = (cell.volume & 0x0F) * 17
-            left = sum(vol[c] * (255 - pan[c]) / 255.0 for c in range(n))
-            right = sum(vol[c] * pan[c] / 255.0 for c in range(n))
-            if (left > VOLUME_SUM_LIMIT or right > VOLUME_SUM_LIMIT) and (p, r) not in seen:
-                seen.add((p, r))
-                rep.add("WARN", "V15", f"pattern {p} row {r}: L={left:.0f} R={right:.0f}")
-
-
-def verify_xm(data: bytes, plan=None) -> list[Issue]:
-    """XM の構造検査。``plan``（ChannelPlan）を渡すと V09 も検査する。"""
-    try:
-        pm = parse_xm(data)
-    except ParseError as e:
-        return [Issue("ERROR", "V01", str(e))]
-    rep = _Report()
-    _check_xm_header(pm, rep)
-    _check_xm_samples(pm, rep)
-    used = _check_xm_cells(pm, plan, rep)
-    _check_xm_tempo(pm, rep)
-    _check_xm_volume_sum(pm, rep)
-    for i, inst in enumerate(pm.instruments, start=1):
-        if inst.samples and inst.samples[0].length > 0 and i not in used:
-            rep.add("INFO", "V13", f"instrument {i}")
-    return rep.issues(_XM_DESCRIPTIONS)
-

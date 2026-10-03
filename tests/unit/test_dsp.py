@@ -7,7 +7,6 @@ import pytest
 
 from mod_weaver.core import dsp, pitch
 from mod_weaver.errors import SampleConstraintError
-from tests.conftest import load_reference
 
 
 def test_content_spc_matches_design_table():

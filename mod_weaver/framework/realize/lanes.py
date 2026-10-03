@@ -10,7 +10,7 @@ import dataclasses as dc
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Mapping, Optional
 
-from ...errors import PlanError
+from ...errors import ChannelCountError, PlanError
 from ..score import Automation, Event, NoteEvent, NoteOff
 
 if TYPE_CHECKING:
@@ -146,7 +146,7 @@ def _apply_ladder(genre: "Genre", demands: dict[str, "_PartDemand"], active: lis
 
     total = _total(demands, active)
     if total > budget:
-        raise PlanError(f"{genre.id}: {budget} channels cannot hold the declared parts (need {total})")
+        raise ChannelCountError(f"{genre.id}: {budget} channels cannot hold the declared parts (need {total})")
 
 
 def _can_bake_chord(genre: "Genre", pd: "_PartDemand") -> bool:

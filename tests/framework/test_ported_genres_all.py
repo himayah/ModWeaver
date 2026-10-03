@@ -16,7 +16,7 @@ from mod_weaver.framework import registry as new_registry
 from mod_weaver.framework.compose import compose, resolve_plan
 from mod_weaver.framework.realize import lanes as lanesmod
 from mod_weaver.framework.realize.midi import realize_midi
-from mod_weaver.framework.realize.tracker import realize, realize_mod
+from mod_weaver.framework.realize.tracker import realize
 from mod_weaver.framework.score import Automation, NoteEvent, NoteOff
 from mod_weaver.framework.target import resolve
 from tests.framework.port_layouts import LAYOUTS
@@ -120,7 +120,6 @@ def test_generates_and_verifies_in_every_format(gid):
     for seed in (1, 2):
         plan, score = _score(genre, seed)
         for b in _budgets(genre):
-            song, opts = realize_mod(genre, score, plan, resolve("mod", b, genre, seed))
             data = native.serialize(realize(genre, score, plan, resolve("mod", b, genre, seed)))
             errors = [i for i in native.verify("mod", data) if i.level == "ERROR"]
             assert not errors, (gid, "mod", b, seed, errors)

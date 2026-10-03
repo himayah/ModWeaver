@@ -70,6 +70,11 @@ _SAMPLE_CAPS = {
 _MOD_SAMPLE_CAPS = SampleCaps(bits=8, target_rate=0.0, max_bytes=131070, max_samples=31)
 
 
+def tracker_limits(fmt: str) -> tuple[int, int, int, int]:
+    """形式の (最大チャンネル数, 最大 row 数, 最大 pattern 数, 最大 order 数)。MP3 は IT 経由なので IT の値。"""
+    return _TRACKER_LIMITS["it" if fmt == "mp3" else fmt]
+
+
 def _mod_budget(genre: "Genre", channels_request: Optional[int], seed: int) -> int:
     choices = sorted(genre.mod_channels)
     if not choices:

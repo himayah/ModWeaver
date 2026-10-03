@@ -42,14 +42,16 @@ def test_gui_loads_catalog_generates_and_exports(app, tmp_path):
     app.search.set("")
 
     app.genre_id.set("pop")
-    app.channels.set("6")
     app.output_dir.set(str(tmp_path))
-    app.fmt.set("xm")
+    app.fmt.set("xm")                            # 形式で「チャンネル数」の入力欄が変わる（XM は上限の入力欄）
+    assert not app.channel_buttons and app.channel_limit_entry is not None
+    app.channels.set("limit")
+    app.channel_limit.set("6")
     app._build()
     app._generate()
     _pump(app, lambda: app.job is None and app.songs)
     song = app.songs[0][1]
-    assert song.genre == "pop" and song.channels == 6 and song.path.exists()
+    assert song.genre == "pop" and song.channel_budget == 6 and 1 <= song.channels <= 6 and song.path.exists()
 
     app._export("it")
     _pump(app, lambda: app.job is None and len(app.songs) == 2)
@@ -68,6 +70,9 @@ def test_gui_loads_catalog_generates_and_exports(app, tmp_path):
     assert app.tempo_fixed.get() == "100"
 
     # ジャンルが選べないチャンネル数は「任せる」に戻る
+    app.fmt.set("mod")
+    assert set(app.channel_buttons) == {4, 6, 8}
+    app.channels.set("8")
     app.genre_id.set("calm")
     app._on_genre_changed()
     assert app.channels.get() == "auto" and str(app.channel_buttons[8].cget("state")) == "disabled"

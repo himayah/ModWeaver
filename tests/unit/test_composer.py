@@ -5,10 +5,10 @@ import random
 import pytest
 
 from mod_weaver.core.composer import (
-    MelodyGenerator, NoteEvent, RhythmMotif, ScaleRules, articulate, fade_cells, ramp,
+    MelodyGenerator, NoteEvent, RhythmMotif, ScaleRules, ramp,
 )
 from mod_weaver.core.harmony import Registers, voice
-from mod_weaver.core.model import Cell, ChannelRole, ChordSpec, Instrument, MeasureBuffer, SampleSpec
+from mod_weaver.core.model import ChordSpec
 from mod_weaver.core.pitch import MODES, Scale
 from mod_weaver.errors import PlanError
 
@@ -169,7 +169,7 @@ def test_single_tone_pool_edge_cases():
     assert all(REG[0] <= e.note <= REG[1] for e in ev)
 
 
-# ---------------- ramp / fade_cells ----------------
+# ---------------- ramp ----------------
 
 def test_ramp_endpoints_and_monotonic():
     assert ramp(10, 60, 0, 6) == 10 and ramp(10, 60, 5, 6) == 60
@@ -177,55 +177,3 @@ def test_ramp_endpoints_and_monotonic():
     assert vals == sorted(vals) and vals[5] == 35
     assert ramp(60, 10, 3, 6) < ramp(60, 10, 0, 6)
     assert ramp(7, 50, 0, 1) == 7 and ramp(7, 50, 0, 0) == 7
-
-
-PLAN = (ChannelRole("a", frozenset({1})), ChannelRole("b", frozenset({2})),
-        ChannelRole("c", frozenset({3})), ChannelRole("d", frozenset({4})))
-
-
-def test_fade_cells_rewrites_only_vol_cells():
-    buf = MeasureBuffer(8, PLAN, strict=False)
-    for r in range(8):
-        buf.put(r, 0, Cell(24, 1, vol=40))
-    buf.put(3, 0, Cell(24, 1, 0, 0x47))          # vol を持たないセルは対象外
-    buf.put(5, 0, Cell())                        # 空
-    fade_cells(buf, 0, 0, 7, 60, 10)
-    vols = [buf.get(r, 0).vol for r in range(8)]
-    assert vols[0] == 60 and vols[7] == 10 and vols[3] is None and vols[5] is None
-    assert buf.get(3, 0) == Cell(24, 1, 0, 0x47) and buf.get(5, 0).is_empty
-    assert buf.get(0, 0).note == 24 and buf.get(0, 0).sample == 1
-
-
-# ---------------- articulate ----------------
-
-def inst(pitched=True):
-    return Instrument(4, SampleSpec("L", bytes(64), 40, loop=(0, 30), shift=0, pitched=pitched))
-
-
-def test_articulate_places_off_only_for_rests_at_gate_1():
-    events = [NoteEvent(0, 30, 50, 3), NoteEvent(4, 32, 40, 4), NoteEvent(8, 31, 40, 8)]
-    buf = MeasureBuffer(16, PLAN, strict=True)
-    articulate(buf, 3, events, inst())
-    assert buf.get(3, 3) == Cell(None, 0, vol=0)                 # 0+3 < 4: 休符 → OFF
-    assert buf.get(4, 3) == Cell(30 + 2, 4, vol=40)
-    assert buf.get(8, 3).note == 31
-    assert buf.get(8, 3) != inst().off() and buf.get(12, 3).is_empty     # 最終音は measure 末まで → OFF なし
-    assert sum(1 for r in range(16) if buf.get(r, 3) == inst().off()) == 1
-
-
-def test_articulate_gate_creates_staccato_off():
-    events = [NoteEvent(0, 30, 50, 4), NoteEvent(4, 31, 50, 4), NoteEvent(8, 32, 50, 8)]
-    buf = MeasureBuffer(16, PLAN, strict=True)
-    articulate(buf, 3, events, inst(), gate=0.5)
-    assert buf.get(2, 3) == Cell(None, 0, vol=0) and buf.get(6, 3) == Cell(None, 0, vol=0)
-    assert buf.get(12, 3) == Cell(None, 0, vol=0)                # 8*0.5=4 → row 12 < 16
-    buf2 = MeasureBuffer(16, PLAN, strict=True)
-    articulate(buf2, 3, events, inst(), gate=0.9)                # round(4*0.9)=4 → 次の発音と同位置 → 置かない
-    assert buf2.get(4, 3).sample == 4 and not any(buf2.get(r, 3) == inst().off() for r in (3, 4, 5, 6, 7))
-    assert buf2.get(8 + 7, 3) == Cell(None, 0, vol=0)            # 8*0.9=7.2→7 → row 15
-
-
-def test_articulate_min_gate_is_one_row():
-    buf = MeasureBuffer(16, PLAN, strict=True)
-    articulate(buf, 3, [NoteEvent(0, 30, 50, 1), NoteEvent(4, 31, 50, 4)], inst(), gate=0.1)
-    assert buf.get(1, 3) == Cell(None, 0, vol=0)

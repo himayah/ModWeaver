@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 from ...core import dsp
 from ...core import groove as groovemod
 from ...core.model import SampleSpec
-from ...core.native import RCell, RealizedSong, RGrid, to_mod_song
+from ...core.native import RCell, RealizedSong, RGrid
 from ...core.pitch import PERIODS
 from ...errors import PlanError
 from ..score import Arpeggio, Cut, Delay, Glide, NoteEvent, Offset, Retrig, TempoEvent, Tremolo, Vibrato
@@ -23,7 +23,6 @@ from .encode import PRIORITY, Codec
 from .lanes import AutomationPlacement, LaneLayout, Placement
 
 if TYPE_CHECKING:
-    from ...core.formats import WriteOptions
     from ..genre import Genre
     from ..plan import SectionPlan, SongPlan
     from ..score import Score
@@ -113,21 +112,6 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
         from ..levels import PEAK_DB
         rs = native_level.lift(rs, PEAK_DB.get(genre.id))
     return rs
-
-
-def realize_mod(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target"
-                ) -> tuple["object", "WriteOptions"]:
-    """MOD 用の薄い入口: ``realize()`` の結果を ``core.model.Song`` + ``WriteOptions`` にする（F3 の形）。"""
-    from ...core.formats import WriteOptions
-
-    if target.format != "mod":
-        raise NotImplementedError(f"realize_mod only supports format='mod' (got {target.format!r})")
-    rs = realize(genre, score, plan, target)
-    gm_voices = {name: genre.instruments[name].gm for name in dict.fromkeys(rs.instrument_names)}
-    opts = WriteOptions(channel_pans=rs.channel_pans, initial_bpm=rs.initial_bpm,
-                         instrument_names=rs.instrument_names, gm_voices=gm_voices,
-                         rows_per_measure=rs.rows_per_measure, measure_rows=rs.measure_rows)
-    return to_mod_song(rs), opts
 
 
 # ============================================================
@@ -467,9 +451,12 @@ def _make_room(ctx: _Ctx, grid: RGrid, row: int) -> bool:
     """全チャンネルが埋まった row に、row コマンドを書ける場所を1つ作る（旧 ``make_room_for_row_commands``）。
     番号の大きいチャンネルから、①発音もボリュームも無い効果だけのセル（ビブラートの継続など）を消し、②MOD では
     効果の無い発音の音量を外す（その音はサンプルの既定音量で鳴る）。作れたら True。"""
+    codec = ctx.codec
+    control = {codec.speed(0)[0], codec.tempo(0)[0]}      # Speed・Tempo（Fxx／Axx・Txx）は row コマンドそのもの。消さない
     for ch in reversed(range(grid.channels)):
         c = grid.get(row, ch)
-        if c.note is None and not c.sample and c.vol is None and c.fx is not None:
+        if (c.note is None and not c.sample and c.vol is None and c.fx is not None
+                and c.fx[0] not in control and c.fx != codec.pattern_break()):
             grid.put(row, ch, RCell())
             return True
     if ctx.codec.exclusive_vol_fx:

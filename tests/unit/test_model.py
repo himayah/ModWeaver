@@ -7,48 +7,45 @@ import pytest
 
 from mod_weaver.core import pitch
 from mod_weaver.core.model import (
-    Cell, ChannelRole, Instrument, MeasureBuffer, Pattern, SampleSpec, RngStreams, EMPTY_CELL,
+    Cell, Pattern, SampleSpec, EMPTY_CELL,
 )
 from mod_weaver.errors import (
     CellConflictError, ChannelConflictError, PitchRangeError, SampleConstraintError,
 )
-from tests.conftest import load_reference
 
 
 # ---------------- Cell ----------------
 
-def _legacy(ref, note, sample, effect, param, vol):
-    name = "---" if note is None else pitch.NOTE_NAMES[note]
+def _mod_cell(note, sample, effect, param, vol):
+    """ProTracker の 4 バイトのセル（MOD の仕様どおり）。音量は ``Cxx``。"""
     if vol is not None:
-        return ref.cell(name, sample, vol=vol)
-    return ref.make_cell(name, sample, effect, param)
+        effect, param = 0xC, vol
+    period = 0 if note is None else pitch.PERIODS[note]
+    return bytes([(sample & 0xF0) | (period >> 8), period & 0xFF, ((sample & 0x0F) << 4) | effect, param])
 
 
-def test_cell_serialize_matches_legacy_boundary_product():
-    ref = load_reference()
+def test_cell_serialize_matches_the_mod_spec_boundary_product():
     notes = [None, 0, 1, 12, 24, 35]
     samples = [0, 1, 7, 15, 16, 31]
     effects = [0, 0xC, 0xF, 0x3]
     params = [0, 1, 0x36, 0x7F, 0xFF]
     for note, smp, eff, prm in itertools.product(notes, samples, effects, params):
-        assert Cell(note, smp, eff, prm).serialize() == _legacy(ref, note, smp, eff, prm, None)
+        assert Cell(note, smp, eff, prm).serialize() == _mod_cell(note, smp, eff, prm, None)
     for note, smp, vol in itertools.product(notes, samples, [0, 1, 32, 63, 64]):
-        assert Cell(note, smp, vol=vol).serialize() == _legacy(ref, note, smp, 0, 0, vol)
+        assert Cell(note, smp, vol=vol).serialize() == _mod_cell(note, smp, 0, 0, vol)
 
 
-def test_cell_serialize_matches_legacy_random():
-    ref = load_reference()
+def test_cell_serialize_matches_the_mod_spec_random():
     r = random.Random(7)
     for _ in range(10000):
         note = r.choice([None] + list(range(36)))
         smp = r.randint(0, 31)
         if r.random() < 0.5:
             vol = r.randint(0, 64)
-            c = Cell(note, smp, vol=vol)
-            assert c.serialize() == _legacy(ref, note, smp, 0, 0, vol)
+            assert Cell(note, smp, vol=vol).serialize() == _mod_cell(note, smp, 0, 0, vol)
         else:
             eff, prm = r.randint(0, 15), r.randint(0, 255)
-            assert Cell(note, smp, eff, prm).serialize() == _legacy(ref, note, smp, eff, prm, None)
+            assert Cell(note, smp, eff, prm).serialize() == _mod_cell(note, smp, eff, prm, None)
 
 
 def test_cell_vol_and_effect_conflict():
@@ -79,133 +76,8 @@ def test_cell_has_effect_and_is_empty():
 
 # ---------------- MeasureBuffer / Pattern ----------------
 
-def _plan():
-    return (
-        ChannelRole("drums", frozenset({1, 2, 3}), {3: 3, 2: 2, 1: 1}),
-        ChannelRole("bass", frozenset({4})),
-        ChannelRole("pad", frozenset({5, 6}), {5: 1, 6: 2}),
-        ChannelRole("lead", frozenset({7})),
-    )
-
-
-def test_strict_priority_rules():
-    buf = MeasureBuffer(8, _plan(), strict=True)
-    bd, sd, crash = Cell(24, 1), Cell(24, 2), Cell(35, 3)
-    buf.put(0, 0, bd)
-    buf.put(0, 0, sd)            # 新 > 既存 → 置換
-    assert buf.get(0, 0) == sd
-    buf.put(0, 0, bd)            # 新 < 既存 → 書かない
-    assert buf.get(0, 0) == sd
-    buf.put(0, 0, sd)            # 同一セル → no-op
-    assert buf.get(0, 0) == sd
-    with pytest.raises(ChannelConflictError):
-        buf.put(0, 0, Cell(20, 2))   # 同値で異なるセル
-    buf.put(0, 0, crash)
-    assert buf.get(0, 0) == crash
-
-
-def test_strict_off_never_overwrites_note_but_note_replaces_off():
-    buf = MeasureBuffer(4, _plan(), strict=True)
-    off = Cell(None, 0, vol=0)
-    buf.put(1, 1, Cell(10, 4))
-    buf.put(1, 1, off)
-    assert buf.get(1, 1) == Cell(10, 4)
-    buf.put(2, 1, off)
-    buf.put(2, 1, Cell(10, 4))
-    assert buf.get(2, 1) == Cell(10, 4)
-
-
-def test_strict_empty_put_is_noop():
-    buf = MeasureBuffer(4, _plan(), strict=True)
-    buf.put(0, 1, Cell(10, 4))
-    buf.put(0, 1, EMPTY_CELL)
-    assert buf.get(0, 1) == Cell(10, 4)
-
-
-def test_replace_always_overwrites():
-    buf = MeasureBuffer(4, _plan(), strict=True)
-    buf.put(0, 0, Cell(35, 3))
-    buf.replace(0, 0, Cell(24, 1))
-    assert buf.get(0, 0) == Cell(24, 1)
-
-
-def test_non_strict_overwrites_unconditionally():
-    buf = MeasureBuffer(4, _plan(), strict=False)
-    buf.put(0, 0, Cell(35, 3))
-    buf.put(0, 0, Cell(24, 1))
-    assert buf.get(0, 0) == Cell(24, 1)
-
-
-def test_disallowed_sample_and_bad_position():
-    buf = MeasureBuffer(4, _plan(), strict=False)
-    with pytest.raises(ChannelConflictError):
-        buf.put(0, 1, Cell(10, 1))          # ch2 に drums サンプル
-    buf.put(0, 1, Cell(None, 0, vol=10))     # sample 0 は常に可
-    with pytest.raises(ChannelConflictError):
-        buf.put(4, 0, Cell())
-    with pytest.raises(ChannelConflictError):
-        buf.get(0, 4)
-
-
-def test_pattern_blit_and_serialize():
-    plan = _plan()
-    buf = MeasureBuffer(16, plan, strict=True)
-    buf.put(3, 3, Cell(20, 7))
-    pat = Pattern(plan, strict=True)
-    pat.blit(buf, 16)
-    assert pat.get(19, 3) == Cell(20, 7)
-    data = pat.serialize()
-    assert len(data) == 1024
-    assert data[(19 * 4 + 3) * 4:(19 * 4 + 3) * 4 + 4] == Cell(20, 7).serialize()
-    with pytest.raises(ChannelConflictError):
-        pat.blit(buf, 56)                   # はみ出し
-    with pytest.raises(ChannelConflictError):
-        pat.blit(MeasureBuffer(16, None, channels=8), 0)   # チャンネル数不一致
-
-
-def test_grid_is_generic_in_rows_and_channels():
-    g = Pattern(None, rows=32, channels=8)
-    assert g.channels == 8 and len(g.serialize()) == 32 * 8 * 4
-    with pytest.raises(ValueError):
-        MeasureBuffer(0)
-
 
 # ---------------- CellGrid.insert_command (DESIGN.md §3.2) ----------------
-
-def test_insert_command_uses_lowest_empty_channel():
-    pat = Pattern(None, channels=4)
-    pat.replace(0, 0, Cell(24, 1, vol=30))
-    pat.insert_command(0, 0x0F, 6)
-    assert pat.get(0, 1) == Cell(None, 0, 0x0F, 6)
-    assert pat.get(0, 0) == Cell(24, 1, vol=30)
-
-
-def test_insert_command_falls_back_to_note_only_channel():
-    pat = Pattern(None, channels=2)
-    pat.replace(0, 0, Cell(24, 1, vol=30))
-    pat.replace(0, 1, Cell(20, 2))          # note あり・vol/effect なし
-    pat.insert_command(0, 0x0F, 6)
-    assert pat.get(0, 1) == Cell(20, 2, 0x0F, 6)
-
-
-def test_insert_command_raises_when_no_slot():
-    pat = Pattern(None, channels=1)
-    pat.replace(0, 0, Cell(20, 2, vol=30))
-    with pytest.raises(ChannelConflictError):
-        pat.insert_command(0, 0x0F, 6)
-
-
-def test_try_insert_command_mirrors_insert_command_on_success():
-    pat = Pattern(None, channels=2)
-    assert pat.try_insert_command(0, 0x0F, 6) is True
-    assert pat.get(0, 0) == Cell(None, 0, 0x0F, 6)
-
-
-def test_try_insert_command_returns_false_instead_of_raising():
-    pat = Pattern(None, channels=1)
-    pat.replace(0, 0, Cell(20, 2, vol=30))
-    assert pat.try_insert_command(0, 0x0F, 6) is False
-    assert pat.get(0, 0) == Cell(20, 2, vol=30)   # 変更なし
 
 
 # ---------------- SampleSpec / Instrument ----------------
@@ -230,51 +102,3 @@ def test_sample_validate_ok_and_errors():
     assert _spec().length_words == 32
 
 
-def test_instrument_pitched_shift_and_range():
-    inst = Instrument(4, _spec(shift=-24))
-    assert inst.cell(0) == Cell(24, 4)                 # logical 0 → t=24
-    assert inst.cell(11, vol=50) == Cell(35, 4, vol=50)
-    with pytest.raises(PitchRangeError):
-        inst.cell(12)                                   # t=36
-    with pytest.raises(PitchRangeError):
-        inst.cell(-25)                                  # t=-1
-    hi = Instrument(7, _spec(shift=12))
-    assert hi.cell(12) == Cell(0, 7)
-    with pytest.raises(PitchRangeError):
-        hi.cell(11)
-
-
-def test_instrument_arpeggio_range():
-    inst = Instrument(6, _spec())
-    assert inst.cell(28, param=0x47) == Cell(28, 6, 0, 0x47)     # 28+7=35
-    with pytest.raises(PitchRangeError):
-        inst.cell(29, param=0x47)
-    assert inst.cell(29, effect=0x4, param=0x47).effect == 4      # arp でなければ検査しない
-    with pytest.raises(CellConflictError):
-        inst.cell(20, vol=30, param=0x37)
-
-
-def test_instrument_unpitched_ignores_n():
-    inst = Instrument(1, _spec(pitched=False, rate_note=35))
-    assert inst.cell() == Cell(35, 1)
-    assert inst.cell(3, vol=50) == Cell(35, 1, vol=50)
-
-
-def test_instrument_no_note_cells():
-    inst = Instrument(7, _spec())
-    assert inst.cell() == Cell(None, 0) and inst.cell().is_empty            # 休符
-    assert inst.cell(vol=20) == Cell(None, 0, vol=20)                        # 音量専用は sample=0
-    assert inst.cell(effect=3, param=8, keep_sample=True) == Cell(None, 7, 3, 8)
-    assert inst.off() == Cell(None, 0, vol=0)
-
-
-def test_rng_streams_deterministic_and_independent():
-    a, b = RngStreams.for_seed(5, "march"), RngStreams.for_seed(5, "march")
-    assert [a.melody.random() for _ in range(3)] == [b.melody.random() for _ in range(3)]
-    c = RngStreams.for_seed(5, "march")
-    for _ in range(10):
-        c.drums.random()   # drums を消費しても melody は変わらない
-    e = RngStreams.for_seed(5, "march")
-    assert c.melody.random() == e.melody.random()
-    d = RngStreams.for_seed(5, "suspense-slow")
-    assert RngStreams.for_seed(5, "march").plan.random() != d.plan.random()

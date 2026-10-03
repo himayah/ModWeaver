@@ -52,8 +52,7 @@ def test_framework_does_not_import_core_format_modules(path: pathlib.Path) -> No
 def test_framework_realize_package_is_excluded_and_not_empty() -> None:
     """``framework/realize/`` は Realizer 自身なので、上の検査の対象外（I8 の例外）。空のまま
     放置されていないことだけ確認する（実際に形式系を import するかどうかは Realizer の設計次第。
-    F3 の ``tracker.py`` は ``Song``/``WriteOptions`` を組み立てるところまでが責務で、実際の
-    serialize/verify/write は呼び出し側 (``core.formats``/``core.writer``) に任せているため、
-    ``writer``/``level`` 等を直接 import する義務は無い）。"""
+    ``tracker.py`` は ``RealizedSong`` を作るところまでが責務で、実際の serialize/verify/write は
+    呼び出し側（``engine``）が ``core.native`` に任せているため、``writer``/``level`` 等を直接 import する義務は無い）。"""
     realize_files = sorted((FRAMEWORK_DIR / "realize").glob("*.py"))
     assert realize_files

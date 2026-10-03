@@ -20,17 +20,19 @@ import unicodedata
 from pathlib import Path
 from typing import Optional, Sequence
 
-from . import __url__, __version__, profiles
-from .profiles import registry
+from . import __url__, __version__
 from .core import formats, render
-from .engine import SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, channel_choices, generate
+from .engine import (
+    SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, channel_choices, generate, get_genre, list_genres,
+    supports_channels,
+)
 from .errors import (
     ChannelCountError, ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError,
 )
+from .framework import registry
 
 DEFAULT_GENRE = "nostalgic"
 RANDOM_GENRE = ("random", "r")   # --genre に指定するとジャンルをランダムに選ぶ（registry.RESERVED_NAMES と同じ）
-CHANNEL_CHOICES = (4, 6, 8)      # --channels に指定できる数（奇数は MOD の互換性のため使わない。DESIGN.md §6.14）
 LINE = "=" * 50
 THIN = "-" * 50
 
@@ -50,7 +52,8 @@ MESSAGES = {
         "output": "出力先パス（既定: output/<ジャンル>_<シード>.<拡張子>。拡張子は --format に従う）",
         "tempo": "テンポ（4分音符の BPM、{lo}〜{hi}）。80-100 のように範囲を指定するとその中からランダムに決める"
                  "（既定: ジャンルごとに自動）",
-        "channels": "チャンネル数（{choices}）。選べる数はジャンルによる（既定: ジャンルが曲ごとに選ぶ）",
+        "channels": "チャンネル数。MOD ではジャンルが宣言した数（4/6/8 のうち）から選び、XM・S3M・IT・MP3 では上限として扱う"
+                    "（MIDI では指定できない。既定: MOD はジャンルが曲ごとに選び、他の形式は形式の上限）",
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
@@ -68,6 +71,7 @@ MESSAGES = {
         "output_label": "出力ファイル",
         "random": "ランダム",
         "requested": "指定",
+        "limit": "上限",
         "success": "生成に成功しました。同じ曲を再現するには次を実行してください:",
     },
     "en": {
@@ -81,8 +85,9 @@ MESSAGES = {
         "output": "output file path (default: output/<genre>_<seed>.<ext>, extension follows --format)",
         "tempo": "tempo in quarter-note BPM ({lo}-{hi}); a range such as 80-100 picks a random BPM within it "
                  "(default: chosen by the genre)",
-        "channels": "number of channels ({choices}); which numbers are available depends on the genre "
-                    "(default: chosen by the genre for each song)",
+        "channels": "number of channels. For MOD it must be one of the counts the genre declares (4/6/8); for XM, S3M, IT "
+                    "and MP3 it is an upper limit (not allowed for MIDI). Default: MOD is chosen by the genre for each "
+                    "song, other formats use the format's maximum",
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
         "version": "print the version and the GitHub repository URL, then exit",
@@ -100,6 +105,7 @@ MESSAGES = {
         "output_label": "Output File",
         "random": "random",
         "requested": "requested",
+        "limit": "limit",
         "success": "Success! To reproduce this exact song, run:",
     },
 }
@@ -133,7 +139,7 @@ def _configure_logging() -> None:
 def _by_category() -> list[tuple[str, list]]:
     """登録ジャンルを区分（registry.CATEGORIES の順）ごとに id 順でまとめる。空の区分は除く。"""
     groups = {c: [] for c in registry.CATEGORIES}
-    for p in profiles.list_profiles():
+    for p in list_genres():
         groups[p.category].append(p)
     return [(c, ps) for c, ps in groups.items() if ps]
 
@@ -160,6 +166,16 @@ def ffmpeg_status() -> dict:
         return {"available": False, "ffmpeg": None, "error": str(e)}
 
 
+def _format_channels(fmt) -> Optional[dict]:
+    """形式ごとの ``--channels`` の意味（GUI が選択肢を作る）。``{"choices": [4, 6, 8]}``（ジャンルが宣言した数から選ぶ）・
+    ``{"max": 16}``（上限）・``None``（指定不可）。"""
+    if fmt.channels == "choices":
+        return {"choices": sorted({n for g in list_genres() for n in channel_choices(g)})}
+    if fmt.channels == "max":
+        return {"max": formats.channel_limit(fmt.name)}
+    return None
+
+
 def catalog() -> dict:
     """``--list-genres --json``: GUI などが起動時に読む、CLI で選べるもの一式（DESIGN.md §8.8）。
 
@@ -171,9 +187,9 @@ def catalog() -> dict:
         "default_genre": DEFAULT_GENRE,
         "random_genre": list(RANDOM_GENRE),
         "default_format": formats.DEFAULT_FORMAT,
-        "formats": [{"name": f.name, "extension": f.extension, "description": f.description} for f in fmts.values()],
+        "formats": [{"name": f.name, "extension": f.extension, "description": f.description,
+                     "channels": _format_channels(f)} for f in fmts.values()],
         "tempo": {"min": TEMPO_MIN, "max": TEMPO_MAX},
-        "channels": list(CHANNEL_CHOICES),
         "seed_range": list(SEED_RANGE),
         "categories": [{"id": c, "ja": MESSAGES["ja"]["categories"][c], "en": MESSAGES["en"]["categories"][c]}
                        for c, _ in _by_category()],
@@ -187,7 +203,8 @@ def catalog() -> dict:
                 "description_en": p.description_en,
                 "tempo_range": list(p.tempo_range),
                 "tempo_choices": sorted(p.tempo_choices),
-                "channel_choices": list(channel_choices(p)),
+                "mod_channels": list(channel_choices(p)),
+                "channel_cap": p.channel_cap,
             }
             for _, ps in _by_category() for p in ps
         ],
@@ -195,19 +212,21 @@ def catalog() -> dict:
     }
 
 
-def result_json(profile, result: Result, repro: str, random_genre: bool) -> dict:
+def result_json(genre, result: Result, repro: str, random_genre: bool) -> dict:
     """``--json`` の生成結果。バナーと同じ内容を機械向けに（DESIGN.md §8.8）。"""
     plan = result.plan
     requested = result.tempo_request
     return {
-        "genre": profile.id,
-        "display_name": profile.display_name,
+        "genre": genre.id,
+        "display_name": genre.display_name,
         "random_genre": random_genre,
         "format": result.fmt,
         "seed": result.seed,
         "bpm": plan.bpm,
         "tempo_request": None if requested is None else str(requested),
-        "channels": len(plan.channel_plan if plan.channel_plan is not None else profile.channel_plan),
+        "channels": result.channels,
+        "channel_budget": result.channel_budget,
+        "sample_bits": result.sample_bits,
         "channels_request": result.channels_request,
         "summary": list(plan.summary),
         "path": str(Path(result.path).resolve()) if result.path is not None else None,
@@ -233,19 +252,20 @@ def genre_ids_by_category(lang: str = "ja", width: int = 78) -> str:
     return "\n".join(lines)
 
 
-def pick_random_genre(tempo: Optional[TempoRequest] = None, channels: Optional[int] = None) -> str:
+def pick_random_genre(tempo: Optional[TempoRequest] = None, channels: Optional[int] = None,
+                      fmt: str = formats.DEFAULT_FORMAT, seed: int = 0) -> str:
     """``--genre random`` の選択（DESIGN.md §8.3）。候補は正規 id のみ（別名で確率が偏らないように）。
 
-    ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけ、``--channels`` があればその数を選べる
-    ジャンルだけを候補にする。乱数は seed と独立。"""
+    ``--tempo`` があれば ``tempo_range`` が要求と重なるジャンルだけ、``--channels`` があればその数でこの形式を作れる
+    ジャンル（MOD は宣言した数、他の形式は上限の中に収まるもの）だけを候補にする。乱数は seed と独立。"""
     candidates = [
-        p.id for p in profiles.list_profiles()
+        p.id for p in list_genres()
         if tempo is None or max(tempo.lo, p.tempo_range[0]) <= min(tempo.hi, p.tempo_range[1])
     ]
     if not candidates:
         raise TempoRangeError(f"no genre supports tempo {tempo}")
     if channels is not None:
-        candidates = [g for g in candidates if channels in channel_choices(profiles.get_profile(g))]
+        candidates = [g for g in candidates if supports_channels(get_genre(g), fmt, channels, seed)]
         if not candidates:
             raise ChannelCountError(f"no genre supports {channels} channels" + (f" at tempo {tempo}" if tempo else ""))
     return random.choice(candidates)
@@ -300,7 +320,7 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
     parser = argparse.ArgumentParser(
         prog=prog,
         description=m["description"],
-        epilog=(m["epilog_head"].format(n=len(profiles.list_profiles())) + "\n"
+        epilog=(m["epilog_head"].format(n=len(list_genres())) + "\n"
                 + genre_ids_by_category(lang, width) + "\n\n" + m["epilog_tail"]),
         formatter_class=_formatter_class(lang),
         add_help=False,
@@ -317,8 +337,7 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
     out.add_argument("--output-dir", type=str, default=None, metavar="DIR", help=m["output_dir"])
     opts.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
                       help=m["tempo"].format(lo=TEMPO_MIN, hi=TEMPO_MAX))
-    opts.add_argument("--channels", "-c", type=int, choices=CHANNEL_CHOICES, default=None, metavar="N",
-                      help=m["channels"].format(choices="/".join(map(str, CHANNEL_CHOICES))))
+    opts.add_argument("--channels", "-c", type=int, default=None, metavar="N", help=m["channels"])
     opts.add_argument("--list-genres", action="store_true", help=m["list_genres"])
     opts.add_argument("--json", action="store_true", help=m["json"])
     opts.add_argument("--english", "-e", action="store_true", help=m["english"])
@@ -332,20 +351,21 @@ def _label(text: str, width: int = 12) -> str:
     return text + " " * max(0, width - _cols(text)) + ": "
 
 
-def print_banner(profile, result: Result, repro: str, random_genre: bool = False, lang: str = "ja") -> None:
+def print_banner(genre, result: Result, repro: str, random_genre: bool = False, lang: str = "ja") -> None:
     """生成結果の表示。ジャンルの要約行（``plan.summary``。コード進行等の音楽用語）は言語によらずそのまま出す。"""
     m = MESSAGES[lang]
     print(LINE)
-    print(f"  ModWeaver: {profile.display_name}")
+    print(f"  ModWeaver: {genre.display_name}")
     print(LINE)
-    print(_label(m["genre_label"]) + profile.id + (f" ({m['random']})" if random_genre else ""))
+    print(_label(m["genre_label"]) + genre.id + (f" ({m['random']})" if random_genre else ""))
     print(_label(m["format_label"]) + result.fmt)
     print(_label(m["seed_label"]) + str(result.seed))
     requested = result.tempo_request
     note = f" ({m['requested']} {requested})" if requested is not None and requested.lo != requested.hi else ""
     print(_label(m["tempo_label"]) + f"BPM {result.plan.bpm}{note}")
-    n = len(result.plan.channel_plan if result.plan.channel_plan is not None else profile.channel_plan)
-    print(_label(m["channels_label"]) + str(n) + (f" ({m['requested']})" if result.channels_request else ""))
+    limit = f" ({m['limit']} {result.channel_budget})" if result.fmt not in ("mod", "midi") else ""
+    print(_label(m["channels_label"]) + str(result.channels) + limit
+          + (f" ({m['requested']})" if result.channels_request and not limit else ""))
     for line in result.plan.summary:
         print(line)
     print(THIN)
@@ -392,18 +412,18 @@ def main(
 
     random_genre = args.genre in RANDOM_GENRE
     try:
-        profile = profiles.get_profile(pick_random_genre(args.tempo, args.channels) if random_genre else args.genre)
         seed = args.seed if args.seed is not None else random.randint(*SEED_RANGE)
         fmt = args.format or formats.DEFAULT_FORMAT
+        genre = get_genre(pick_random_genre(args.tempo, args.channels, fmt, seed) if random_genre else args.genre)
         if args.output:
             out = args.output
         else:
-            out = default_output_path(profile.id, seed, fmt, args.output_dir)
+            out = default_output_path(genre.id, seed, fmt, args.output_dir)
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
-        result = generate(profile, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels)
+        result = generate(genre, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels)
     except (ProfileNotFoundError, TempoRangeError, ChannelCountError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -421,7 +441,7 @@ def main(
         return 1
 
     if repro is None:
-        repro = f"{invocation or 'python -m mod_weaver.cli'} --genre {profile.id}"
+        repro = f"{invocation or 'python -m mod_weaver.cli'} --genre {genre.id}"
     if args.format is not None:
         repro += f" --format {args.format}"
     if args.tempo is not None:
@@ -429,9 +449,9 @@ def main(
     if args.channels is not None:
         repro += f" --channels {args.channels}"   # 指定しなければ seed で同じ編成になる
     if args.json:
-        print_json(result_json(profile, result, repro, random_genre))
+        print_json(result_json(genre, result, repro, random_genre))
     else:
-        print_banner(profile, result, repro, random_genre, lang)
+        print_banner(genre, result, repro, random_genre, lang)
     return 0
 
 

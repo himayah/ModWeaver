@@ -37,7 +37,7 @@ class Genre:
     description: str
     description_en: str
     tempo_range: tuple[int, int]       # --tempo で指定できる範囲
-    channel_choices: tuple[int, ...]
+    mod_channels: tuple[int, ...]       # MOD で選べるチャンネル数
     tempo_choices: tuple[int, ...]     # ジャンルが自分で選ぶテンポの候補（昇順）
 
     def describe(self, lang: str) -> str:
@@ -65,7 +65,7 @@ class Catalog:
     formats: tuple[tuple[str, str], ...]          # (name, extension)
     tempo_min: int
     tempo_max: int
-    channels: tuple[int, ...]
+    format_channels: tuple[tuple[str, Optional[dict]], ...]   # (形式, --channels の意味 {"choices": [...]}｜{"max": N}｜None)
     categories: tuple[tuple[str, str, str], ...]  # (id, ja, en)
     genres: tuple[Genre, ...]
     mp3_available: bool
@@ -82,11 +82,11 @@ class Catalog:
             formats=tuple((f["name"], f["extension"]) for f in data["formats"]),
             tempo_min=data["tempo"]["min"],
             tempo_max=data["tempo"]["max"],
-            channels=tuple(data["channels"]),
+            format_channels=tuple((f["name"], f["channels"]) for f in data["formats"]),
             categories=tuple((c["id"], c["ja"], c["en"]) for c in data["categories"]),
             genres=tuple(
                 Genre(g["id"], g["display_name"], g["category"], tuple(g["aliases"]), g["description"],
-                      g["description_en"], tuple(g["tempo_range"]), tuple(g["channel_choices"]),
+                      g["description_en"], tuple(g["tempo_range"]), tuple(g["mod_channels"]),
                       tuple(g["tempo_choices"]))
                 for g in data["genres"]
             ),
@@ -102,6 +102,10 @@ class Catalog:
             if cid == category:
                 return en if lang == "en" else ja
         return category
+
+    def channel_spec(self, fmt: str) -> Optional[dict]:
+        """形式の ``--channels`` の意味（CLI が教える。GUI に形式ごとの値は書かない）。"""
+        return dict(self.format_channels).get(fmt)
 
     def extension(self, fmt: str) -> str:
         return dict(self.formats).get(fmt, "." + fmt)
@@ -127,6 +131,8 @@ class SongResult:
     tempo_request: Optional[str]
     channels: int
     channels_request: Optional[int]
+    channel_budget: int
+    sample_bits: Optional[int]
     summary: tuple[str, ...]
     path: Path
     repro: str
@@ -135,7 +141,7 @@ class SongResult:
     def from_json(cls, data: dict) -> "SongResult":
         return cls(data["genre"], data["display_name"], data["random_genre"], data["format"], data["seed"],
                    data["bpm"], data["tempo_request"], data["channels"], data["channels_request"],
-                   tuple(data["summary"]), Path(data["path"]), data["repro"])
+                   data["channel_budget"], data["sample_bits"], tuple(data["summary"]), Path(data["path"]), data["repro"])
 
 
 # ------------------------------------------------------------

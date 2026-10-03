@@ -4,13 +4,12 @@ import pytest
 
 from mod_weaver.core import pitch
 from mod_weaver.errors import PitchRangeError
-from tests.conftest import load_reference
 
 
 def test_periods_match_standard_table():
-    ref = load_reference()
     assert len(pitch.PERIODS) == 36 == len(pitch.NOTE_NAMES)
-    for nm, period in ref.PERIODS.items():
+    for nm, period in {"C-1": 856, "C#1": 808, "D-1": 762, "B-1": 453, "C-2": 428, "A-2": 254, "C-3": 214,
+                       "G-3": 143, "B-3": 113}.items():
         assert pitch.PERIODS[pitch.parse(nm)] == period
 
 

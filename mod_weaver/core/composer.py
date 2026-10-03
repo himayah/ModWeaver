@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence
 
 from ..errors import PlanError
-from .model import CellGrid, ChordDef, Instrument
+from .model import ChordDef
 from .pitch import Scale, fold_into_range
 
 
@@ -205,36 +205,3 @@ def ramp(v0: int, v1: int, i: int, n: int) -> int:
     if n <= 1:
         return v0
     return int(round(v0 + (v1 - v0) * i / (n - 1)))
-
-
-def fade_cells(target: CellGrid, ch: int, r0: int, r1: int, v0: int, v1: int) -> None:
-    """``r0..r1``（両端を含む）の既存セルの ``vol`` を ``v0→v1`` の線形補間で書き換える。
-
-    ``vol`` を持たないセル（休符・エフェクト付き）は対象外。
-    """
-    n = r1 - r0 + 1
-    for i, row in enumerate(range(r0, r1 + 1)):
-        cell = target.get(row, ch)
-        if cell.vol is not None:
-            target.replace(row, ch, dataclasses.replace(cell, vol=max(0, min(64, ramp(v0, v1, i, n)))))
-
-
-def articulate(
-    buf: CellGrid,
-    ch: int,
-    events: Sequence[NoteEvent],
-    inst: Instrument,
-    *,
-    gate: float = 1.0,
-) -> None:
-    """各 event を ``inst.cell(note, vol=vol)`` で置く。持続（ループ）音色向けに OFF も置く（D12）。
-
-    ``off_row = row + max(1, round(dur × gate))`` が「measure 内」かつ「次の発音 row より前」のときだけ
-    ``inst.off()`` を置く。``gate=1.0`` は休符（音価の終端が次の発音より前）があるときだけ、``gate<1`` はスタッカート。
-    """
-    for i, ev in enumerate(events):
-        buf.put(ev.row, ch, inst.cell(ev.note, vol=ev.vol))
-        next_row = events[i + 1].row if i + 1 < len(events) else buf.rows
-        off_row = ev.row + max(1, round(ev.dur * gate))
-        if off_row < buf.rows and off_row < next_row:
-            buf.put(off_row, ch, inst.off())

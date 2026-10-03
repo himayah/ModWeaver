@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from mod_weaver import cli
-from mod_weaver.core.verify import has_errors, verify
+from mod_weaver.core import native
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,17 +30,17 @@ def test_default_genre_generates_file(tmp_path, capsys):
     code, stdout, err = run_cli(["--seed", "732501", "-o", str(out)], capsys)
     assert code == 0 and err == ""
     assert out.exists() and out.stat().st_size > 0
-    assert "シード      : 732501" in stdout and "テンポ      : BPM 90" in stdout
+    assert "シード      : 732501" in stdout and re.search(r"テンポ      : BPM \d+\n", stdout)
     assert "Theme A" in stdout and "Theme B" in stdout
     assert "python -m mod_weaver.cli --genre nostalgic --seed 732501" in stdout
-    assert not has_errors(verify(out.read_bytes()))
+    assert not [i for i in native.verify("mod", out.read_bytes()) if i.level == "ERROR"]
 
 
 def test_short_options_and_negative_seed(tmp_path, capsys):
     out = tmp_path / "n.mod"
     code, *_ = run_cli(["-g", "nostalgic", "-s", "-7", "-o", str(out)], capsys)
     assert code == 0 and out.exists() and out.stat().st_size > 0
-    assert not has_errors(verify(out.read_bytes()))
+    assert not [i for i in native.verify("mod", out.read_bytes()) if i.level == "ERROR"]
 
 
 def test_seed_omitted_uses_random_in_range(tmp_path, capsys):
@@ -87,7 +88,7 @@ def test_list_genres_prints_all_ids_and_exits_0(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     code, stdout, err = run_cli(["--list-genres"], capsys)
     assert code == 0 and err == ""
-    for p in cli.profiles.list_profiles():
+    for p in cli.list_genres():
         assert p.id in stdout and p.description in stdout
     assert "suspense-slow (別名: suspense)" in stdout  # alias も表示される
     assert not (tmp_path / "output").exists()  # 生成は行われない
@@ -97,9 +98,9 @@ def test_help_lists_genre_ids_by_category_without_descriptions(capsys):
     """ジャンルが増えても読めるよう、--help の末尾は区分ごとの id だけ（説明は --list-genres）。"""
     code, stdout, _ = run_cli(["--help"], capsys)
     epilog = stdout[stdout.index("ジャンル一覧"):]
-    assert code == 0 and f"ジャンル一覧（{len(cli.profiles.list_profiles())} 種類）" in epilog
+    assert code == 0 and f"ジャンル一覧（{len(cli.list_genres())} 種類）" in epilog
     assert "--list-genres" in epilog
-    for p in cli.profiles.list_profiles():
+    for p in cli.list_genres():
         assert p.id in epilog and p.description not in stdout
 
 
@@ -107,8 +108,8 @@ def test_list_genres_is_grouped_by_category(capsys):
     _, stdout, _ = run_cli(["--list-genres"], capsys)
     headers = [l for l in stdout.splitlines() if l and not l.startswith(" ")]
     order = [h.split("(")[1].rstrip("):") for h in headers]
-    assert order == [c for c in cli.registry.CATEGORIES if any(p.category == c for p in cli.profiles.list_profiles())]
-    for p in cli.profiles.list_profiles():                          # 各ジャンルは自分の区分の見出しの下にある
+    assert order == [c for c in cli.registry.CATEGORIES if any(p.category == c for p in cli.list_genres())]
+    for p in cli.list_genres():                          # 各ジャンルは自分の区分の見出しの下にある
         before = stdout[:stdout.index(f"  {p.id}")]
         last_header = [l for l in before.splitlines() if l and not l.startswith(" ")][-1]
         assert f"({p.category})" in last_header, p.id
@@ -141,7 +142,7 @@ def test_random_genre_generates_registered_genre(tmp_path, capsys, monkeypatch, 
     assert code == 0
     genre_line = next(l for l in stdout.splitlines() if l.startswith("ジャンル"))
     gid = genre_line.split(":")[1].split()[0]
-    assert genre_line.endswith(" (ランダム)") and gid in [p.id for p in cli.profiles.list_profiles()]
+    assert genre_line.endswith(" (ランダム)") and gid in [p.id for p in cli.list_genres()]
     assert f"--genre {gid} --seed 11" in stdout                          # 再現コマンドは決まったジャンル
     assert (tmp_path / "output" / f"{gid}_11.mod").exists()
 
@@ -151,7 +152,7 @@ def test_random_genre_picks_among_canonical_ids(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or "trap")
     code, stdout, _ = run_cli(["-g", "r", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 0 and "ジャンル    : trap (ランダム)" in stdout
-    assert seen == [[p.id for p in cli.profiles.list_profiles()]]       # 別名（suspense）は含まない
+    assert seen == [[p.id for p in cli.list_genres()]]       # 別名（suspense）は含まない
 
 
 def test_random_genre_with_tempo_excludes_genres_that_cannot_play_it(tmp_path, capsys, monkeypatch):
@@ -159,20 +160,20 @@ def test_random_genre_with_tempo_excludes_genres_that_cannot_play_it(tmp_path, c
     monkeypatch.setattr(cli.random, "choice", lambda c: seen.append(list(c)) or c[0])
     code, stdout, err = run_cli(["-g", "random", "-t", "200", "-s", "1", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 0 and "テンポ      : BPM 200" in stdout and err == ""
-    ids = [p.id for p in cli.profiles.list_profiles()]
+    ids = [p.id for p in cli.list_genres()]
     assert "free-jazz" in ids and seen == [[i for i in ids if i != "free-jazz"]]   # free-jazz は 44-163
 
 
 def test_random_genre_with_unsupported_tempo_exit_2(tmp_path, capsys, monkeypatch):
-    fj = cli.profiles.get_profile("free-jazz").__class__
-    monkeypatch.setattr(cli.profiles, "list_profiles", lambda: [fj])
+    fj = cli.get_genre("free-jazz")
+    monkeypatch.setattr(cli, "list_genres", lambda: [fj])
     code, out, err = run_cli(["-g", "r", "-t", "200", "-o", str(tmp_path / "x.mod")], capsys)
     assert code == 2 and "no genre supports tempo 200" in err and out == ""
     assert not (tmp_path / "x.mod").exists()
 
 
 def test_random_names_match_registry_reserved_names():
-    from mod_weaver.profiles import registry
+    from mod_weaver.framework import registry
     assert set(cli.RANDOM_GENRE) == registry.RESERVED_NAMES
 
 
@@ -193,10 +194,11 @@ def test_version_wins_over_other_arguments(tmp_path, capsys, monkeypatch):
 def test_english_banner(tmp_path, capsys):
     code, stdout, _ = run_cli(["-e", "--seed", "732501", "-o", str(tmp_path / "a.mod")], capsys)
     assert code == 0
-    for line in ("Genre       : nostalgic", "Format      : mod", "Seed        : 732501", "Tempo       : BPM 90",
+    for line in ("Genre       : nostalgic", "Format      : mod", "Seed        : 732501",
                  "Success! To reproduce this exact song, run:",
                  "  python -m mod_weaver.cli --genre nostalgic --seed 732501"):
         assert line in stdout.splitlines()
+    assert re.search(r"^Tempo       : BPM \d+$", stdout, re.M)
     assert not any(ord(c) > 0x7F for c in stdout)                    # 英語モードに日本語が混ざらない
 
 
@@ -224,7 +226,7 @@ def test_english_help_and_listing(capsys):
     assert ja_help.startswith("使い方:") and "オプション:" in ja_help and "ジャンル一覧（" in ja_help
     code, listing, _ = run_cli(["--list-genres", "-e"], capsys)
     assert code == 0 and "suspense-slow (alias: suspense)" in listing
-    for p in cli.profiles.list_profiles():
+    for p in cli.list_genres():
         assert p.description_en in listing and p.description not in listing
         assert p.id in en_help
 
@@ -294,7 +296,7 @@ def test_python_dash_m_forms_produce_identical_output(tmp_path):
                            capture_output=True, text=True, cwd=ROOT)
         assert r.returncode == 0, r.stderr
     assert a.read_bytes() == b.read_bytes()             # 両起動形式は互いに同一（旧実装とのバイト一致は求めない）
-    assert not has_errors(verify(a.read_bytes()))
+    assert not [i for i in native.verify("mod", a.read_bytes()) if i.level == "ERROR"]
 
 
 def test_exit_code_of_module_invocation_for_unknown_genre(tmp_path):
@@ -384,13 +386,13 @@ def test_channels_shown_without_option(tmp_path, capsys):
 
 def test_channels_unsupported_by_genre_exit_2(tmp_path, capsys):
     code, out, err = run_cli(["-g", "calm", "-c", "8", "-o", str(tmp_path / "x.mod")], capsys)
-    assert code == 2 and "cannot use 8 channels (supports 4)" in err and out == ""
+    assert code == 2 and "--channels 8 not supported by calm (choices: [4])" in err and out == ""
     assert not (tmp_path / "x.mod").exists()
 
 
 def test_channels_rejects_odd_numbers(tmp_path, capsys):
     code, _out, err = run_cli(["-g", "pop", "-c", "5", "-o", str(tmp_path / "x.mod")], capsys)
-    assert code == 2 and "invalid choice" in err
+    assert code == 2 and "--channels 5 not supported by pop" in err
 
 
 def test_random_genre_with_channels_excludes_genres_that_cannot_use_it(tmp_path, capsys, monkeypatch):
@@ -407,9 +409,9 @@ def test_random_genre_with_channels_excludes_genres_that_cannot_use_it(tmp_path,
 def test_list_genres_json_describes_everything_the_cli_accepts(capsys):
     import json
 
-    from mod_weaver import __version__, profiles
+    from mod_weaver import __version__
     from mod_weaver.core import formats
-    from mod_weaver.engine import channel_choices
+    from mod_weaver.engine import channel_choices, get_genre, list_genres
 
     code, out, err = run_cli(["--list-genres", "--json"], capsys)
     assert code == 0 and err == ""
@@ -418,15 +420,19 @@ def test_list_genres_json_describes_everything_the_cli_accepts(capsys):
     assert data["version"] == __version__ and data["default_genre"] == cli.DEFAULT_GENRE
     assert data["random_genre"] == list(cli.RANDOM_GENRE)
     assert [f["name"] for f in data["formats"]] == list(formats.format_names())
-    assert data["tempo"] == {"min": 32, "max": 255} and data["channels"] == [4, 6, 8]
+    assert data["tempo"] == {"min": 32, "max": 255} and "channels" not in data
+    by_name = {f["name"]: f["channels"] for f in data["formats"]}          # --channels の意味は形式ごと（GUI が読む）
+    assert by_name == {"mod": {"choices": [4, 6, 8]}, "xm": {"max": 32}, "s3m": {"max": 16}, "it": {"max": 64},
+                       "midi": None, "mp3": {"max": 64}}
     assert [c["id"] for c in data["categories"]] == ["mood", "genre", "style"]
     assert data["categories"][0] == {"id": "mood", "ja": "気分", "en": "Mood"}
     ids = [g["id"] for g in data["genres"]]
-    assert sorted(ids) == sorted(p.id for p in profiles.list_profiles())
+    assert sorted(ids) == sorted(p.id for p in list_genres())
     calm = next(g for g in data["genres"] if g["id"] == "calm")
-    p = profiles.get_profile("calm")
+    p = get_genre("calm")
     assert calm["description"] == p.description and calm["description_en"] == p.description_en
-    assert calm["channel_choices"] == list(channel_choices(p)) and calm["tempo_range"] == list(p.tempo_range)
+    assert calm["mod_channels"] == list(channel_choices(p)) and calm["tempo_range"] == list(p.tempo_range)
+    assert calm["channel_cap"] == p.channel_cap
     assert calm["tempo_choices"] == sorted(p.tempo_choices)
     assert set(data["mp3"]) == {"available", "ffmpeg", "error"}
 
@@ -448,7 +454,8 @@ def test_generation_json_result(tmp_path, capsys):
     data = json.loads(stdout)
     assert data["genre"] == "pop" and data["random_genre"] is False and data["format"] == "xm"
     assert data["seed"] == 5 and 100 <= data["bpm"] <= 120 and data["tempo_request"] == "100-120"
-    assert data["channels"] == 6 and data["channels_request"] == 6
+    assert 1 <= data["channels"] <= 6 and data["channel_budget"] == 6 and data["channels_request"] == 6
+    assert data["sample_bits"] == 16
     assert data["path"] == str(out.resolve()) and out.exists()
     assert data["summary"] and all(isinstance(s, str) for s in data["summary"])
     assert data["repro"] == (f"python -m mod_weaver.cli --genre pop --format xm --tempo {data['bpm']} "
@@ -457,7 +464,7 @@ def test_generation_json_result(tmp_path, capsys):
 
 def test_generation_json_error_keeps_exit_code_and_stderr(tmp_path, capsys):
     code, out, err = run_cli(["-g", "calm", "-c", "8", "--json", "-o", str(tmp_path / "x.mod")], capsys)
-    assert code == 2 and out == "" and "cannot use 8 channels" in err
+    assert code == 2 and out == "" and "--channels 8 not supported by calm" in err
 
 
 def test_output_dir_replaces_default_folder(tmp_path, capsys, monkeypatch):

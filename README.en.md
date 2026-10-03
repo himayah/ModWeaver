@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-MOD%20%7C%20XM%20%7C%20S3M%20%7C%20IT%20%7C%20MIDI%20%7C%20MP3-green.svg)](https://openmpt.org/)
 
-**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 51 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (27, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`) and **styles** (14, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`). `--genre random` picks one for you. **The format is chosen first and the song is composed for what that format can do** (16-bit, high-resolution samples and a wide note range for XM and IT, a looser channel limit for IT, XM, S3M and MIDI, and so on). With MOD, each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one). With XM, S3M, IT and MP3 every part of the genre is included and `--channels` is an upper limit. For the same genre, seed and tempo, the skeleton of the song (melody, chords, rhythm) is the same in every format. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
+**ModWeaver** generates tracker music files entirely automatically, from waveform synthesis to sequencing, using **only the Python standard library** (no third-party packages). With `--format` you can choose ProTracker `.mod` (default), FastTracker II `.xm`, Scream Tracker 3 `.s3m`, Impulse Tracker `.it`, General MIDI `.mid` or `.mp3` (only `.mp3` needs the external program ffmpeg). Besides the nostalgic genre (`nostalgic`), `--genre` switches between 65 genres in three groups: **moods** (9, e.g. `calm`, `melancholic`, `focus`, `uplifting`), **genres** (36, e.g. `rock`, `pop`, `jazz`, `bossa-nova`, `city-pop`, `house`, `classical`, `cinematic`, `gamelan`, `industrial`, `trap`, `orchestral`, `celtic`, `trance`, `baroque`) and **styles** (20, e.g. 80s J-pop `jpop-80s`, JRPG game music `jrpg`, cinematic trailer `trailer`, 8-bit chiptune `chiptune`, late-90s racing game `racing-breaks`, suspense `suspense-slow`, Okinawan folk style `okinawan`, rokyoku style `rokyoku`, mood kayo `mood-kayo`). `--genre random` picks one for you. **The format is chosen first and the song is composed for what that format can do** (16-bit, high-resolution samples and a wide note range for XM and IT, a looser channel limit for IT, XM, S3M and MIDI, and so on). With MOD, each genre uses 4, 6 or 8 channels as its arrangement needs, and most genres also vary the arrangement from song to song (from a small 4-channel combo to a fuller 8-channel one). With XM, S3M, IT and MP3 every part of the genre is included and `--channels` is an upper limit. For the same genre, seed and tempo, the skeleton of the song (melody, chords, rhythm) is the same in every format. (Formerly known as TwilightPad MOD Generator. See `--list-genres` for the current list of genres.)
 
 The default `nostalgic` genre produces bittersweet, wistful pieces: emotional chord progressions that evoke a city at dusk or the walk home, woven from a music box, an enveloping analog pad and a lo-fi beat.
 
@@ -111,6 +111,10 @@ python modweaver.py -e --genre gamelan      # genre: gamelan (slendro / pelog tu
 python modweaver.py -e --genre chiptune     # style: 8-bit game music (pulse, triangle, noise)
 python modweaver.py -e --genre industrial   # genre: industrial (distortion and metal)
 python modweaver.py -e --genre racing-breaks  # style: late-90s racing game (drum'n'bass / breakbeat)
+python modweaver.py -e --genre celtic       # genre: Celtic dance tunes (jig, reel or hornpipe, chosen by the seed)
+python modweaver.py -e --genre gagaku       # genre: gagaku-style court music (jo-ha-kyu tempo)
+python modweaver.py -e --genre enka         # genre: enka (scoops and kobushi, final-chorus key change)
+python modweaver.py -e --genre okinawan     # style: Okinawan folk (Ryukyu scale; slow shima-uta or swung kachashi)
 ```
 
 #### Pick a genre at random (`--genre random` / `-g r`):
@@ -217,24 +221,30 @@ https://github.com/himayah/ModWeaver
 | `uplifting` | – | 4/6/8 | Uplifting anthem: four-on-the-floor, bright arpeggios and supersaw chords |
 | `warm` | – | 4/6 | Warm: acoustic guitar and piano in a gentle major key |
 
-**Genres (genre)** — 27
+**Genres (genre)** — 36
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
 | `ambient` | – | 4 | Ambient: layered pads and sparse bells with little or no beat |
+| `baroque` | – | 4/6/8 | Baroque style: circle-of-fifths harmony, melodic sequences, harpsichord and walking continuo, cadential trill, terraced dynamics |
 | `bossa-nova` | – | 4/6 | Bossa nova: soft nylon guitar and light percussion in 2/4 |
+| `celtic` | – | 4/6/8 | Celtic-style dance tunes: jig, reel or hornpipe, AABB repeats, drone and cuts (no traditional melodies) |
 | `cinematic` | – | 6/8 | Cinematic: piano ostinato building to soaring strings and horns |
 | `city-pop` | – | 4/6/8 | City pop: jazzy electric piano, bouncy bass and funky guitar cutting |
 | `classical` | – | 4 | Classical: a Classical-era minuet for string quartet with clear cadences |
 | `edm` | – | 4/6/8 | EDM: synth-driven builds that explode into the drop |
+| `enka` | – | 4/6/8 | Enka: pentatonic minor melody with scoops and kobushi, strings, plucked guitar, shamisen fills, final-chorus key change (no vocals) |
+| `fado` | – | 4/6 | Fado style: ornamented Portuguese-guitar-like melody, nylon arpeggios, slow minor key, a guitarrada interlude (no vocals) |
 | `folk` | – | 4/6 | Folk: strummed acoustic guitar and fiddle over simple progressions |
 | `free-jazz` | – | 4 | Free jazz: tone clusters, probabilistic density textures, rubato (continuous tempo changes) |
 | `future-bass` | – | 4 | Future bass: kick-triggered sidechain, vocal chops, Eb I-V-vi-IV |
+| `gagaku` | – | 4/6 | Gagaku-style court music: sho-like sustained chords, hichiriki-like melody with scoops, jo-ha-kyu tempo (not a faithful reproduction) |
 | `gamelan` | – | 6 | Gamelan style: interlocking bronze metallophones and gongs in slendro or pelog tuning |
 | `hiphop` | – | 4/6 | Hip hop: boom-bap beats and sample-style loops that leave room for rap |
 | `house` | – | 4/6/8 | House: steady four-on-the-floor groove with offbeat organ stabs |
 | `industrial` | – | 6 | Industrial: distorted beats and metal clangs, a roaring distorted bass and factory noise |
 | `jazz` | – | 4 | Modal jazz: dorian vamps, quartal piano voicings and muted trumpet |
+| `klezmer` | – | 4/6 | Klezmer style: 2/4 oom-pah, freygish clarinet with sobs, a doina-like intro and an accelerating coda |
 | `lofi-hiphop` | – | 4/6/8 | Lo-fi hip hop: swung beats, jazzy electric piano and vinyl noise |
 | `maqam` | – | 4 | Middle Eastern maqam (Rast on G): oud taqsim and maqsum usul with neutral intervals |
 | `march` | – | 4 | Military march: oom-pah and snare rolls, fanfares, modulation into the trio |
@@ -244,12 +254,15 @@ https://github.com/himayah/ModWeaver
 | `prog-rock` | – | 4 | Odd-meter prog / math rock: a 7/8+7/8+5/8 riff contrasted with a 4/4 chorus |
 | `rnb-soul` | – | 4/6/8 | R&B / soul: smooth extended chords and a singing melody in a slow jam |
 | `rock` | – | 4/6/8 | Rock: guitar riffs over a straight eight-beat |
+| `russian-folk` | – | 4/6/8 | Russian folk style: balalaika tremolo, bayan oom-pah, harmonic minor; a lyric song or an accelerating dance |
 | `swing-jazz` | – | 4 | Swing jazz: ride cymbal, walking bass and piano comping over Bb rhythm changes (AABA) |
 | `synthwave` | – | 4/6/8 | Synthwave: 80s synths, gated snare and a pulsing eighth-note bass |
+| `tango` | – | 4/6 | Argentine tango style: marcato four, 3-3-2 accents, dragging violin, bandoneon chords and a chan-chan ending |
 | `techno` | – | 4 | Minimal techno: a hypnotic four-on-the-floor with slowly mutating sequences |
+| `trance` | – | 4/6/8 | Trance: 136-142 BPM four-on-the-floor, rolling bass, 3-3-2 gated pads, a long breakdown into the drop |
 | `trap` | – | 4 | Trap / drill: 32nd-note hi-hat rolls and 808 glides over a two-chord Cm-Ab loop |
 
-**Styles (style)** — 15
+**Styles (style)** — 20
 
 | Genre id | Aliases | ch | Description |
 |:---|:---|:---|:---|
@@ -257,14 +270,19 @@ https://github.com/himayah/ModWeaver
 | `ambient-drone` | – | 4 | Ambient drone: long sustained tones that shift very slowly |
 | `anime-ost` | – | 4/6/8 | Anime soundtrack style: driving strings with jazz harmony and brass hits |
 | `chiptune` | – | 4 | 8-bit chiptune style: pulse-wave melody and arpeggios, triangle bass, noise drums and jump sounds |
+| `debayashi` | – | 4/6 | Debayashi (entrance music) style: miyako-bushi scale without chords, shamisen, drums, gong and flute hishigi, speeding up on each repeat |
+| `gospel-shout` | – | 4/6/8 | Gospel shout: swung shuffle, shout chord changes, handclaps, organ glissandi and a double-time vamp |
 | `indie-rock` | – | 4/6/8 | Indie rock style: live-sounding drums, ringing guitar arpeggios and light overdrive |
 | `jpop-80s` | – | 4/6/8 | 80s J-pop style: bright chords, city brass, a light beat and a final key change |
 | `jrock-90s` | – | 4/6/8 | 90s J-rock style: loud guitars over a fast beat, a guitar solo and a final key change |
 | `jrpg` | – | 4/6/8 | JRPG game music style: melodic adventure theme with harp, strings and horn |
 | `lofi-chill` | – | 4/6/8 | Lo-fi chill: soft guitar and flute, pumping sidechain and rain ambience |
+| `mood-kayo` | – | 4/6/8 | Mood kayo style: scooping tenor sax, Hawaiian steel guitar, strings, rumba or cha-cha-cha and 7th chords (no vocals) |
 | `neo-soul` | – | 4/6/8 | Neo soul style: laid-back off-grid beats and lush electric piano chords |
 | `nostalgic` | – | 4 | Lo-fi beat and music box evoking nostalgia at dusk (the original TwilightPad) |
+| `okinawan` | – | 4/6 | Okinawan folk style: Ryukyu scale, sanshin-like plucked strings and flute, a slow shima-uta or a swung kachashi dance |
 | `racing-breaks` | – | 4/6/8 | Late-90s racing game style: drum'n'bass / breakbeat with 9th-chord e.piano and deep sub bass |
+| `rokyoku` | – | 4/6 | Rokyoku style: sparse shamisen-led ensemble, melodic fushi alternating with spoken-style tanka gaps, wide tempo swings (no voice) |
 | `suspense-chase` | – | 4 | Emergency escape / pursuit: heartbeat on every beat, driving eighth notes, impacts out of silence |
 | `suspense-slow` | `suspense` | 4 | Slow, heavy tension: heartbeat and silence, sudden metallic hits |
 | `trailer` | – | 6/8 | Cinematic trailer style: taiko and brass hits, driving strings and choir in three acts |
@@ -348,7 +366,7 @@ or the per-genre sections in §6 of [DESIGN.md](DESIGN.md) (§6.16 for the 35 ba
 │   │                   #   native_midi / verify / render (mp3)), output loudness boost (native_level)
 │   ├── framework/     # The composition framework: Target (format capabilities), Score (format-independent score), Genre base,
 │   │                   #   generator parts (gens/), Realizers (realize/: tracker and MIDI), measured per-genre peaks (levels)
-│   ├── genres/        # Genre modules (one file = one genre; registered just by being there; 51 genres)
+│   ├── genres/        # Genre modules (one file = one genre; registered just by being there; 65 genres)
 │   └── gui/           # GUI (tkinter). Runs the CLI as a child process
 ├── tools/             # For development: calibrate_levels.py (re-measures per-genre peaks with ffmpeg; DESIGN.md §7.9),
 │                      #   update_golden.py (updates the output baseline tests/regression/golden.json; DESIGN.md §10)
@@ -371,6 +389,7 @@ The design documents are written in Japanese: [DESIGN.md](DESIGN.md) describes t
 - The same genre, seed, format, tempo and channel count give the same file, but because the waveform synthesis uses floating point, a different Python version or OS can rarely change the end of a sample by one bit (it is the same song).
 - Playback differences between formats: XM and IT are high-resolution (16-bit) while MOD and S3M are 8-bit, so the same song has a richer high end in XM and IT. S3M alone has a pitch error inherited from ST3's period table (up to about 12 cents).
 - MIDI sounds as your GM synth or DAW renders it. Listening on a GM synth has not been verified in this environment.
+- The "style" genres (gagaku, Okinawan folk, rokyoku, debayashi, Celtic, enka, mood kayo, Russian folk and so on) are procedural **approximations** that capture a few markers of each music (scale, rhythm, timbre, form); they are not faithful reproductions. No real tune, lyric, shout, performer or school is used, and there are no vocals or narration. The sounds are 8-bit synthesis on at most eight channels, so instrument timbres stay "-like".
 
 ---
 

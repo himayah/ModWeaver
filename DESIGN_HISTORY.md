@@ -22,6 +22,7 @@
 | 2026-09-24 | 音色空間の分析 | 使っている音色を core のパラメータの軸に置いて疎な領域を調べ、そこを埋める gamelan・chiptune・industrial を追加（計50。§12.7） | `DESIGN.md` §6.17 |
 | 2026-09-25 | サウンドトラックの解析 | 特定の作品（R4）の BGM 13曲を音声解析し、その特徴で racing-breaks を追加（計51。§12.8） | `DESIGN.md` §6.18 |
 | 2026-10-01〜10-03 | フレームワークの再設計 | 形式を最初に決めて作曲する新しい枠組み（Target・Score・Genre・Realizer）を設計（第三者レビュー16項目を反映）し、フェーズ F0〜F8 で全51ジャンルを移植。旧 `profiles/`・`BandProfile`・Song 経由の書き出しを削除（§15） | `FRAMEWORK_REDESIGN.md`（統合して削除） |
+| 2026-10-03 | 新ジャンル14 | ケルト・ロシア民謡・ムード歌謡・演歌・沖縄民謡・浪曲・雅楽・トランス・ゴスペル・クレズマー・タンゴ・ファド・バロック・出囃子を新フレームワークで設計・実装（計65。§16） | `NEW_GENRES_DESIGN.md`（統合して削除） |
 
 ---
 
@@ -636,3 +637,45 @@ CLI でできることを画面から使いたい（Windows 11 / macOS / Linux�
 | MIDI の GM 音源での聴感の確認 | この環境に GM 音源が無く、未実施 |
 | nostalgic の pad の −17.6 セント | 音色の値の問題として残した（D9 で出力の互換は求めないが、直すなら golden の更新とセット） |
 | サイドチェインのダッキングの重なり（2つ目のトリガが既にダッキング済みの音量を基準に下げる） | 簡略化のまま（racing-breaks などトリガの間隔が十分あるジャンルでは実害が無い） |
+
+
+---
+
+## 16. 新ジャンル14（2026-10-03）
+
+### 16.1 経緯
+
+- 2026-09-26/27 に「新ジャンル9種」（trance・gospel-shout・klezmer・tango・fado・baroque・弦楽四重奏〔既存の classical と重なるので取り下げ〕・okinawan・celtic。のち debayashi〔出囃子〕を追加）の検討をした（設計はチャットだけで、リポジトリには未反映）。その後フレームワークの再設計（§15）で全51ジャンルの書き方が変わったので、再設計の完了（2026-10-03）の後に検討をやり直した。
+- ユーザーの要求（2026-10-03）: 「設計したフレームワークを利用して雅楽、沖縄民謡、演歌、浪曲、ロシア民謡、ケルト音楽、ムード歌謡のジャンルを設計してください。」→ 設計書 `NEW_GENRES_DESIGN.md` を作成 → 「実装は設計レビュー後。id と区分は推奨値でよい。以前の検討にあった7ジャンルも併せて設計、実装してほしい。実装順は推奨案でよい。音色の方針も推奨案でよい。進めてください。」→ 計14ジャンルを実装。
+- 決定: id・区分は推奨値（gagaku・enka・russian-folk・celtic・trance・klezmer・tango・fado・baroque＝genre、okinawan・rokyoku・mood-kayo・gospel-shout・debayashi＝style）。音色は「既存プリセットの `replace` で近似し、足りないものだけ新規」。旧検討の決定（baroque は進行＋ゼクエンツ＋通奏低音まで、debayashi は和音なし・実在曲と掛け声は使わない、MODES の追加）を引き継ぐ。実装順は、共通部品 → celtic・russian-folk・mood-kayo → enka・okinawan・rokyoku・gagaku → trance・gospel-shout・klezmer・tango・fado・baroque・debayashi。試聴の確認は実装後にまとめて行う（ユーザー）。
+
+### 16.2 設計レビュー（第三者視点。設計書 §13 の記録）
+
+| 重大度 | 指摘 | 対応 |
+|:---|:---|:---|
+| High | 設計書の初版が `Tremolo` をジェネレータとして挙げたが、`score.Tremolo`（奏法）と名前が衝突し、`Retrig` で足りる | `OrnamentedLead(tremolo=ticks)` に統合し、独立のジェネレータは作らなかった |
+| High | 笙の合竹のような和音パートに `Part.poly` が要ると考えたが、`poly != 1` のパートは和音を書けない | 和音（`NoteEvent.chord`）の1パートにし、ladder が声部／焼き込みを決める（`poly` は使わない）。要確認だった R-3 はこれで解消 |
+| Medium | 区間の拍子・スウィングは宣言（`Section`）が固定なので、系統ごとに変えられない | `plan()` で `SectionPlan` の `measures`・`meter`・`swing`・`section.motifs` を差し替える `retime`（実プレイヤーの検査〔I5〕が拍子・スウィングの時間軸を確かめる） |
+| Medium | 系統ごとに曲の長さ・区間が違うと `form` が足りなくなる | `form` は全系統の区間の和集合、`plan()` で `order` を決めて使わない区間を消す（実装中に okinawan で `KeyError: 'c'` が出て確定した） |
+| Medium | 装飾の追加が骨格（I1）や `Heterophony` を壊さないか | 装飾は空き step への挿入と同じ音価内の分割だけ。しゃくりのピックアップ・トレモロの続きは `prio=0`（骨格ではない印）にし、`Heterophony` が読み飛ばす |
+| Low | 設計書の件数・節番号の食い違い | 実装時に整合を取り、DESIGN.md §6.19 に統合した |
+
+### 16.3 実装中に分かったこと
+
+- **和音を焼くと最高倍音が Nyquist を超えうる**: `jp_sho` の倍音を 8 次まで書くと、合竹（最高音 +14 半音）を焼いたときのサイクル数が 1920（L/2 = 1900 超）になり `SampleConstraintError`。倍音を 6 次までにした（ループの和音の焼き込みは `サイクル数 × 比 < L/2`）。
+- **`Glide` の「直前が鳴っている」はループ音色なら常に真**（ワンショットは再生長で判定）。しゃくりは「低い音を `dur=None` で1 step 前に置く」で、ループ・ワンショットのどちらでも滑る。
+- `fold_into_range` は幅が 11 未満だと `PitchRangeError`（debayashi の初版）。
+- `Heterophony` の既定の `min_dur=2` は、8分格子（1 step ＝ 8分）や `gate` で音価が1になる旋律の音まで落とす。ジャンルごとに `min_dur=1` を指定した（celtic・klezmer・debayashi）。
+- トレモロは頭の音を元の音価のままにする（`dur=1` にすると、それを読む `Heterophony` の骨格が潰れる）。
+- 和音を焼けるかの検査は `gen.inst` を読むので、`WithTempo` で包んだジェネレータにも `inst` を見せる必要がある。
+- 実プレイヤー（libopenmpt）の検査: 全14ジャンルの MOD（最大の予算）・IT の長さが Score の時間軸（`WithTempo` のテンポ曲線・スウィングを含む）と一致し、−0.5 dBFS 以下。ファズ（compose 60 seed ×14、MOD 最大・最小の予算・IT・MIDI × 12 seed）でエラー 0。
+
+### 16.4 見送り・持ち越し
+
+| 項目 | 扱い |
+|:---|:---|
+| 音色の質・装飾の確率・テンポの倍率・音量の釣り合い | 初期値のまま（耳での確認は未実施）。試聴は `listen_samples.py` の 17_world-genres。DESIGN.md §11 |
+| 雅楽の笙の和音の自然な変化・龍笛との掛け合い、浪曲の語りの間の長さ、演歌・ムードの歌の旋律型（下行・跳躍） | 旋律の文法は「音階＋装飾」まで。必要なら `ScaleRules`・動機を調整する |
+| okinawan の三線の調弦（本調子・二上り）の音の並び、celtic のロール（5音）の厳密な形 | 見送り（近似）。`OrnamentedLead` の `roll` は「本命・上・本命」の3音 |
+| バロックのフーガの模倣、klezmer の krekhts の細かい表現、tango のバンドネオンの蛇腹の息継ぎ | 見送り（旧検討の決定を維持） |
+

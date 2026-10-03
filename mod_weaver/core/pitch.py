@@ -125,6 +125,12 @@ MODES: dict[str, tuple[int, ...]] = {
     "major_pent": (0, 2, 4, 7, 9),
     "minor_pent": (0, 3, 5, 7, 10),
     "blues": (0, 3, 5, 6, 7, 10),
+    # 新ジャンル（NEW_GENRES_DESIGN.md §3.1）
+    "ritsu": (0, 2, 5, 7, 9),                    # 雅楽の律旋法（呂旋法は major_pent）
+    "ryukyu": (0, 4, 5, 7, 11),                  # 琉球音階
+    "miyakobushi": (0, 1, 5, 7, 8),              # 都節音階
+    "phrygian_dominant": (0, 1, 4, 5, 7, 8, 10), # フリギア・ドミナント（クレズマーの freygish）
+    "ukrainian_dorian": (0, 2, 3, 6, 7, 9, 10),  # ウクライナ・ドリアン（クレズマーの mi sheberakh）
 }
 
 CHORD_QUALITIES: dict[str, tuple[int, ...]] = {  # 半音オフセット

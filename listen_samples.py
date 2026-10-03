@@ -41,6 +41,16 @@ ARRANGEMENTS = {
     "synthwave": (4, 6, 8), "trailer": (6, 8), "uplifting": (4, 6, 8), "warm": (4, 6),
 }
 
+# 新ジャンル14（17_world-genres。NEW_GENRES は DESIGN.md §6.19）。系統（family）を持つジャンルは、系統ごとに1例になるよう
+# シードを選んである（celtic: 101＝ジグ・104＝リール・107＝ホーンパイプ／russian-folk: 101＝叙情歌・104＝舞曲／
+# okinawan: 101＝カチャーシー・103＝島唄／mood-kayo: 101＝チャチャチャ・102＝ルンバ）。
+NEW_GENRES_SEEDS = {
+    "celtic": (101, 104, 107), "russian-folk": (101, 104), "okinawan": (101, 103), "mood-kayo": (101, 102),
+}
+NEW_GENRES = (
+    "celtic russian-folk mood-kayo enka okinawan rokyoku gagaku trance gospel-shout klezmer tango fado baroque debayashi"
+).split()
+
 
 def _one(genre: str, seeds=SEEDS) -> list[tuple[str, int, int | None]]:
     return [(genre, s, None) for s in seeds]
@@ -70,6 +80,9 @@ ITEMS: list[tuple[str, str, list[tuple[str, int, int | None]]]] = [
      [x for g in ("gamelan", "chiptune", "industrial") for x in _one(g)]),
     ("16_racing-breaks", "racing-breaks の3系統のドラム・ベース、低音の量、エレピの揺れ（系統ごとに1例。系統は seed で決まるので、"
      "101＝ドラムンベース・102＝ブレイクビーツ・113＝2ステップ）", _one("racing-breaks", (101, 102, 113))),
+    ("17_world-genres", "新ジャンル14（ケルト・ロシア民謡・ムード歌謡・演歌・沖縄民謡・浪曲・雅楽・トランス・ゴスペル・クレズマー・タンゴ・"
+     "ファド・バロック・出囃子）の音色・装飾・テンポの動き・音量の釣り合い（ジャンルごとに3例。系統を持つものは系統ごとに1例）",
+     [x for g in NEW_GENRES for x in _one(g, NEW_GENRES_SEEDS.get(g, SEEDS))]),
 ]
 
 

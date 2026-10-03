@@ -25,3 +25,5 @@ from .pads import *  # noqa: F401,F403
 from .orch import *  # noqa: F401,F403
 from .fx import *  # noqa: F401,F403
 from .metal import *  # noqa: F401,F403
+from .asia_court import *  # noqa: F401,F403
+from .folk_world import *  # noqa: F401,F403

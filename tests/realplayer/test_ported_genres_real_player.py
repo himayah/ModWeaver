@@ -11,7 +11,7 @@ from mod_weaver.core import native
 from mod_weaver.framework.compose import compose, resolve_plan
 from mod_weaver.framework.realize.tracker import realize
 from mod_weaver.framework.target import resolve
-from tests.framework.test_ported_genres_all import IDS, PORTED, PORTED_F6, PORTED_F7, _genre
+from tests.framework.test_ported_genres_all import IDS, NEW_GENRES, PORTED, PORTED_F6, PORTED_F7, _genre
 from tests.realplayer import decode, peak, requires_openmpt
 
 pytestmark = requires_openmpt
@@ -42,7 +42,7 @@ def _expected_seconds(score) -> float:
     return total
 
 
-@pytest.mark.parametrize("gid", sorted(PORTED & set(IDS)))
+@pytest.mark.parametrize("gid", sorted((PORTED | NEW_GENRES) & set(IDS)))
 @pytest.mark.parametrize("fmt", ["mod", "it"])
 def test_duration_matches_the_score_and_does_not_clip(gid, fmt):
     data, score = _built(gid, fmt)
@@ -54,7 +54,7 @@ def test_duration_matches_the_score_and_does_not_clip(gid, fmt):
     assert peak(data, "." + fmt) <= CLIP_LIMIT
 
 
-@pytest.mark.parametrize("batch, ids", [("f6-trial", PORTED_F6), ("f7-trial", PORTED_F7)])
+@pytest.mark.parametrize("batch, ids", [("f6-trial", PORTED_F6), ("f7-trial", PORTED_F7), ("new-genres-trial", NEW_GENRES)])
 def test_generate_reference_files_for_listening(batch, ids):
     """聴き比べ用に、ジャンルごとの MOD（最大の予算）・MIDI・MP3（IT 経由）を ``output/<batch>/`` に書き出す
     （試聴はユーザーが行う。このテストは生成・検査が通ることだけを確認する。output/ は git の管理外）。"""

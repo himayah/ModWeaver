@@ -1,5 +1,6 @@
 """歌声パート（VOCAL_DESIGN.md P3・ヴォカリーズ）: 宣言・作曲・音域合わせ・プリロール・CLI。"""
 import ast
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -48,10 +49,20 @@ def test_vocal_part_only_exists_with_voice(gid):
     assert not any(e for s in off.sections.values() for e in s.parts.get("vocal", ()))
     sung = [e for s in on.sections.values() for e in s.parts["vocal"] if isinstance(e, NoteEvent)]
     assert sung and all(e.syl is not None for e in sung)
-    for name, sec in off.sections.items():          # D4: 他のパートの音符は声の有無で変わらない
+    ducked = {t for part in engine.get_genre(gid).parts for t in part.ducks}
+    for name, sec in off.sections.items():          # D4: 他のパートの音符は声の有無で変わらない（音量だけ ducks で下がる）
         for part, events in sec.parts.items():
-            if part != "vocal":
+            if part == "vocal":
+                continue
+            if part not in ducked:
                 assert on.sections[name].parts[part] == events
+                continue
+            strip = lambda evs: [dataclasses.replace(e, vel=None) if isinstance(e, NoteEvent) else e for e in evs]
+            assert strip(on.sections[name].parts[part]) == strip(events)        # 時刻・高さ・長さは同じ
+            if on.sections[name].parts["vocal"]:
+                vel = lambda evs: [e.vel for e in evs if isinstance(e, NoteEvent)]
+                assert all(a is not None and (b is None or a < b) for a, b in
+                           zip(vel(on.sections[name].parts[part]), vel(events)) if b is not None)
 
 
 @pytest.mark.parametrize("gid", VOCAL_GENRES)

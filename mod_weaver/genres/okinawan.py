@@ -92,7 +92,8 @@ class OkinawanGenre(Genre):
              follow="lead", pan=100),
         Part("comp", Comp("sanshin_bk", kind="pulse8", vol=34, chordal=False), pan=70, min_channels=6),
         Part("chorus", Pad("chorus", vol=24), pan=128, min_channels=6),
-        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"}),
+             ducks=("lead",), duck_ratio=0.35),
     )
     mod_channels = {4: 1, 6: 2}
 

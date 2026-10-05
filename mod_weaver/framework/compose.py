@@ -5,6 +5,7 @@ seed, features)`` が区間ごと・パートごとに ``Generator`` を呼ん�
 """
 from __future__ import annotations
 
+import dataclasses
 import random
 from typing import TYPE_CHECKING
 
@@ -87,10 +88,32 @@ def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str])
                 ctx._set_depends_events(dep, sec_score.parts[dep])
             part.gen.section(ctx)
 
+        _apply_ducks(genre, order, sec_score)
         genre.finalize_section(sec_plan, sec_score, finalize_rng)
         _validate_section_score(genre, sec_score)
 
     return score
+
+
+def _apply_ducks(genre: "Genre", active: list["Part"], sec_score: SectionScore) -> None:
+    """``Part.ducks``: そのパートがこの区間で鳴っているとき、指定パートの音量を ``duck_ratio`` 倍にする
+    （歌が主旋律のとき、同じ旋律をなぞる楽器が歌を隠さないように。歌声ありの曲だけ）。"""
+    for part in active:
+        if not part.ducks or not any(isinstance(e, NoteEvent) for e in sec_score.parts.get(part.name, ())):
+            continue
+        for tgt in part.ducks:
+            events = sec_score.parts.get(tgt)
+            if not events:
+                continue
+            out = []
+            for e in events:
+                if isinstance(e, NoteEvent):
+                    inst = genre.instruments[e.inst]
+                    base = e.vel if e.vel is not None else (inst.volume if inst.volume is not None
+                                                            else getattr(getattr(inst, "patch", None), "volume", 48))
+                    e = dataclasses.replace(e, vel=max(1, round(base * part.duck_ratio)))
+                out.append(e)
+            sec_score.parts[tgt] = out
 
 
 # ============================================================

@@ -118,7 +118,8 @@ class MoodKayoGenre(Genre):
              pan=100, min_channels=6),
         Part("strings", Pad("strings", vol=26), pan=128, min_channels=6),
         Part("vibes", Layer("vibes", vol=24, register=(19, 31)), follow="comp", pan=70, min_channels=8),
-        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"}),
+             ducks=("lead",), duck_ratio=0.35),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}
 

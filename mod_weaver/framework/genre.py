@@ -137,6 +137,8 @@ class Part:
     double: Optional[Double] = None   # opt-in: デチューンした複製で左右に広げる
     follow: Optional[str] = None      # 付き従うパート
     depends: tuple[str, ...] = ()     # 先に作っておくパート
+    ducks: tuple[str, ...] = ()       # このパートが鳴る区間で音量を下げるパート（歌が主旋律のとき、同じ旋律の楽器を後ろへ回す）
+    duck_ratio: float = 0.4           # ``ducks`` の音量の倍率
     requires: frozenset[str] = frozenset()   # 曲の機能（``Target.features`` ＋ ``voice``）。満たさなければパートは存在しない扱い
 
 
@@ -217,6 +219,9 @@ def _validate_declaration(cls: type) -> None:
                              f"requires=frozenset({{'voice'}}) (VOCAL_DESIGN.md D4)")
         if part.follow is not None and part.follow not in name_set:
             raise PlanError(f"{cls.id}: part {part.name!r} follows unknown part {part.follow!r}")
+        for tgt in part.ducks:
+            if tgt not in name_set:
+                raise PlanError(f"{cls.id}: part {part.name!r} ducks unknown part {tgt!r}")
         for dep in part.depends:
             if dep not in name_set:
                 raise PlanError(f"{cls.id}: part {part.name!r} depends on unknown part {dep!r}")

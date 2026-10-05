@@ -92,6 +92,7 @@ class EnkaGenre(Genre):
         Part("strings", Pad("strings", vol=28), pan=128, min_channels=6),
         Part("aizuchi", Aizuchi(), pan=60, min_channels=8),
         Part("koto", Arp("koto", (19, 31), tuple(range(0, 16, 2)), vol=36), pan=70, min_channels=8),
-        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"}),
+             ducks=("lead",), duck_ratio=0.35),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}

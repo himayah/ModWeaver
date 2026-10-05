@@ -112,7 +112,7 @@ def test_every_declared_part_plays_somewhere(gid):
             for p, events in sec.parts.items():
                 if any(isinstance(e, NoteEvent) for e in events):
                     played.add(p)
-    silent = {p.name for p in genre.parts} - played
+    silent = {p.name for p in genre.parts if not p.requires} - played   # requires を持つ部品（歌声）は別のテストで検査する
     assert not {(gid, p) for p in silent} - MAY_BE_SILENT, f"parts that never play: {sorted(silent)}"
 
 

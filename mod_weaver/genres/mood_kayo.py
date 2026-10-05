@@ -11,8 +11,8 @@ from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
 from ..core.pitch import CHORD_QUALITIES, fold_into_range
 from ..framework.context import Generator, MeasureCtx
-from ..framework.gens import Groove, Layer, Pad, hits
-from ..framework.genre import Genre, Harmony, Kit, Part, Section
+from ..framework.gens import Groove, Layer, Pad, Sing, hits
+from ..framework.genre import Genre, Harmony, Kit, Part, Section, Voice
 from ..framework.plan import SongPlan, default_plan
 from ..framework.registry import register_genre
 from ._ornament import OrnamentedLead, WithTempo, inst as _inst
@@ -73,7 +73,7 @@ class MoodKayoGenre(Genre):
     category = "style"
     display_name = "Mood Kayo"
     description = "ムード歌謡風。テナーサックスのしゃくり、ハワイアンギターの間奏、ストリングス、ルンバ／チャチャチャと7thの和声（歌は含まない）"
-    description_en = "Mood kayo style: scooping tenor sax, Hawaiian steel guitar, strings, rumba or cha-cha-cha and 7th chords (no vocals)"
+    description_en = "Mood kayo style: scooping tenor sax, Hawaiian steel guitar, strings, rumba or cha-cha-cha and 7th chords (a sung part with --voice)"
     title = "Mood Kayo Night"
     tempo_choices = tuple(sorted({b for f in FAMILIES.values() for b in f[1]}))
 
@@ -89,15 +89,16 @@ class MoodKayoGenre(Genre):
         "steel": _inst("mood_steel_gtr", GmVoice(program=26)),
         "strings": _inst("orch_violin", GmVoice(program=48), name="Strings", volume=30),
         "vibes": _inst("min_vibraphone", GmVoice(program=11), volume=26),
+        "voice": Voice(GmVoice(program=54), timbre="female", volume=46),     # --voice で歌う（旋律は lead と同じ）
     }
     harmony = Harmony(keys=(9, 2, 4, 0), mode="aeolian", progressions=PROGRESSIONS, n_progressions=2)
     _core = {"drums", "bass", "comp"}
     sections = {
         "intro": _sec({"lead", "comp", "bass"}, intensity=0.5, measures=4),
-        "verse": _sec(_core | {"lead", "strings"}, intensity=0.7),
-        "chorus": _sec(_core | {"lead", "strings", "vibes"}, prog=1, intensity=0.9),
+        "verse": _sec(_core | {"lead", "strings", "vocal"}, intensity=0.7),
+        "chorus": _sec(_core | {"lead", "strings", "vibes", "vocal"}, prog=1, intensity=0.9),
         "interlude": _sec(_core | {"steel", "strings", "vibes"}, intensity=0.8, motifs="solo"),
-        "chorus2": _sec(_core | {"lead", "strings", "vibes"}, prog=1, intensity=1.0, key_offset=1),
+        "chorus2": _sec(_core | {"lead", "strings", "vibes", "vocal"}, prog=1, intensity=1.0, key_offset=1),
         "outro": _sec({"lead", "comp", "bass", "strings"}, intensity=0.5, measures=4),
     }
     form = ("intro", "verse", "chorus", "interlude", "verse", "chorus2", "outro")
@@ -117,6 +118,7 @@ class MoodKayoGenre(Genre):
              pan=100, min_channels=6),
         Part("strings", Pad("strings", vol=26), pan=128, min_channels=6),
         Part("vibes", Layer("vibes", vol=24, register=(19, 31)), follow="comp", pan=70, min_channels=8),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}
 

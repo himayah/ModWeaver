@@ -19,6 +19,7 @@ from ...errors import PlanError
 from ..score import Arpeggio, Cut, Delay, Glide, NoteEvent, Offset, Retrig, TempoEvent, Tremolo, Vibrato
 from . import lanes as lanesmod
 from . import samples as samplesmod
+from . import voice as voicemod
 from .encode import PRIORITY, Codec
 from .lanes import AutomationPlacement, LaneLayout, Placement
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mod_weaver")
 
+VOICE_HEADROOM_DB = 1.0   # 歌声を加えた曲の底上げで、測定値（歌声なし）に足す dB（P3 で実測して決める。VOCAL_DESIGN.md R3）
 _TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（DESIGN.md §7.6）
 
 
@@ -41,8 +43,9 @@ class _Ctx:
     """区間をまたいで共有する値（読み取り専用）。"""
 
     def __init__(self, genre: "Genre", layout: LaneLayout, target: "Target", codec: Codec, bpm: int,
-                 specs: list[SampleSpec], slot_of: dict, release: tuple) -> None:
+                 specs: list[SampleSpec], slot_of: dict, release: tuple, voice=None) -> None:
         self.genre, self.layout, self.target, self.codec, self.bpm = genre, layout, target, codec, bpm
+        self.voice = voice
         self.specs, self.slot_of, self.release = specs, slot_of, release
         self.lane_by_index = {l.index: l for l in layout.lanes}
         control = [l.index for l in layout.lanes if l.role == "control"]
@@ -50,8 +53,9 @@ class _Ctx:
 
 
 def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", *,
-            level: bool = True) -> RealizedSong:
-    """``level=False`` は音量の底上げをしない（``tools/calibrate_levels.py`` が測るため）。"""
+            level: bool = True, voice=None) -> RealizedSong:
+    """``level=False`` は音量の底上げをしない（``tools/calibrate_levels.py`` が測るため）。
+    ``voice`` は歌声の声の源（``realize.voice.VoiceBackend``）。歌声の音符があるときだけ使う。"""
     if target.kind != "tracker":
         raise PlanError(f"TrackerRealizer cannot realize format {target.format!r}")
     fmt = "it" if target.format == "mp3" else target.format
@@ -59,9 +63,16 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
 
     layout = lanesmod.compute_layout(genre, score, target.budget)
     placements_by_section = lanesmod.assign_events(genre, layout, score)
+    vplan = None
+    voice_headroom = 0.0
+    if voice is not None and any(p.syl is not None for ps, _a in placements_by_section.values() for p in ps):
+        vplan = voicemod.VoicePlan(voice, genre, plan.bpm)
+        vplan.prepare(placements_by_section, {name: (s.plan.meter.ticks_per_step, s.plan.swing)
+                                              for name, s in score.sections.items()})
+        voice_headroom = VOICE_HEADROOM_DB     # 歌声ありは歌声の分だけ余裕を持って底上げする（VOCAL_DESIGN.md §5.8）
     specs, slot_of, inst_names, release = samplesmod.plan_samples(genre, layout, score, target,
-                                                                    placements_by_section)
-    ctx = _Ctx(genre, layout, target, codec, plan.bpm, specs, slot_of, release)
+                                                                    placements_by_section, vplan)
+    ctx = _Ctx(genre, layout, target, codec, plan.bpm, specs, slot_of, release, vplan)
     n_ch = layout.budget if fmt == "mod" else len(layout.lanes)
 
     if not score.order:
@@ -110,7 +121,10 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
     if level:
         from ...core import native_level
         from ..levels import PEAK_DB
-        rs = native_level.lift(rs, PEAK_DB.get(genre.id))
+        peaks = PEAK_DB.get(genre.id)
+        if voice_headroom and peaks:
+            peaks = {k: v + voice_headroom for k, v in peaks.items()}
+        rs = native_level.lift(rs, peaks)
     return rs
 
 
@@ -295,7 +309,7 @@ def _resolve_glide(ctx: _Ctx, lane, prev: Optional[Placement], p: Placement, ste
     codec = ctx.codec
     prev_spec = prev_note = None
     if prev is not None and prev.kind == "note":
-        prev_slot = ctx.slot_of.get(samplesmod.sample_key(codec.fmt, ctx.genre, prev, lane))
+        prev_slot = ctx.slot_of.get(samplesmod.sample_key(codec.fmt, ctx.genre, prev, lane, ctx.voice))
         if prev_slot is not None:
             prev_spec = ctx.specs[prev_slot - 1]
             prev_note = codec.note(prev_spec, round(prev.pitch) if prev.pitch is not None else None)
@@ -303,7 +317,7 @@ def _resolve_glide(ctx: _Ctx, lane, prev: Optional[Placement], p: Placement, ste
         return _with_arts(p, [a for a in p.arts if a is not glide])
     if glide.param is not None:
         return p
-    slot = ctx.slot_of[samplesmod.sample_key(codec.fmt, ctx.genre, p, lane)]
+    slot = ctx.slot_of[samplesmod.sample_key(codec.fmt, ctx.genre, p, lane, ctx.voice)]
     spec = ctx.specs[slot - 1]
     note = codec.note(spec, round(p.pitch) if p.pitch is not None else None)
     steps = glide.steps if glide.steps is not None else 1
@@ -333,7 +347,7 @@ def _fill_notes(ctx: _Ctx, grid: RGrid, sec_plan: "SectionPlan", placements: lis
                           _release_of_inst(ctx, p.inst), step_ticks)
                 continue
             p = _resolve_glide(ctx, lane, events[i - 1] if i > 0 else None, p, step_ticks)
-            key = samplesmod.sample_key(codec.fmt, ctx.genre, p, lane)
+            key = samplesmod.sample_key(codec.fmt, ctx.genre, p, lane, ctx.voice)
             slot = ctx.slot_of.get(key)
             if slot is None:
                 raise PlanError(f"no sample planned for {key} (lane assignment / sample planning disagree)")
@@ -341,7 +355,7 @@ def _fill_notes(ctx: _Ctx, grid: RGrid, sec_plan: "SectionPlan", placements: lis
 
         last = events[-1]
         if last.kind == "note" and last.dur is None:
-            key = samplesmod.sample_key(codec.fmt, ctx.genre, last, lane)
+            key = samplesmod.sample_key(codec.fmt, ctx.genre, last, lane, ctx.voice)
             slot = ctx.slot_of.get(key)
             if slot is not None and _looped(ctx.specs[slot - 1]) and grid.rows - 1 > last.step:
                 # 区間の終わりのループ停止: スライドは次の区間にはみ出せないので、MOD・S3M は即時に止める

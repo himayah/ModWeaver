@@ -78,6 +78,9 @@ class _Info:
         self.genre = genre
         self._spec = {}
 
+    def is_voice(self, inst: str) -> bool:
+        return not hasattr(self.genre.instruments[inst], "patch")
+
     def spec(self, inst: str):
         if inst not in self._spec:
             self._spec[inst] = synth.render(self.genre.instruments[inst].patch)
@@ -85,11 +88,15 @@ class _Info:
 
     def default_volume(self, inst: str) -> int:
         i = self.genre.instruments[inst]
+        if self.is_voice(inst):
+            return i.volume if i.volume is not None else 40
         return i.volume if i.volume is not None else self.spec(inst).volume
 
     def midi_pitch(self, inst: str, n: float) -> float:
         """書かれた音高 n（logical note）の実音の MIDI ノート番号（小数）。"""
         i = self.genre.instruments[inst]
+        if self.is_voice(inst):
+            return 36.0 + n + i.tune_cents / 100.0     # 歌声は書かれた音高が実音（logical note 0 = C2 = MIDI 36）
         spec = self.spec(inst)
         if spec.sounding_hz is None:
             base = 36.0 + n
@@ -100,6 +107,8 @@ class _Info:
 
     def natural_ticks(self, inst: str, n: Optional[float], bpm: int) -> Optional[int]:
         """ワンショットが鳴り終わるまでの MIDI tick（ループは None）。tick への換算は曲の初期テンポ。"""
+        if self.is_voice(inst):
+            return None
         spec = self.spec(inst)
         if spec.loop is not None:
             return None

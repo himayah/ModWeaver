@@ -435,6 +435,33 @@ flowchart LR
 - **合成した試験用バンクでのみ検証済み**。実音源での再評価（cutoff の符号規約 §5.3.3・文字コード・zip の文字化け・ループの「うなり」）は未実施で、利用者が実音源を `voices/` に置いてから行う（R6）。cutoff の規約は `voice/bank/cut.py` の定数 1 つで反転できる。
 - 取り込みの速度（R9）: 25 音節で約 4 秒（純 Python）。
 
+### P3 の実施状況（2026-10-05）
+
+```mermaid
+flowchart TB
+    subgraph C["compose（音楽側）"]
+        R["Part.requires={voice}<br/>features に voice があるときだけ作曲"] --> SG["gens/vocal.py: Sing / Vocalise<br/>NoteEvent.syl（音節）"]
+    end
+    subgraph Z["realize/tracker.py（形式側）"]
+        L["lanes.assign_events<br/>Placement.syl"] --> VP["VoicePlan.prepare<br/>① 音域合わせ（UTAU のみ）<br/>② プリロール: row と Delay を逆算"]
+        VP --> SP["samples.plan_samples<br/>VoiceSlot → 16-bit サンプル"]
+        BE["VoiceBackend<br/>FormantBackend / UtauBackend"] --> VP
+        BE --> SP
+        SP --> W["tracker の書き込み（既存）"]
+    end
+    SG --> L
+```
+
+- 実装済み: `Voice`・`Part.requires`・`NoteEvent.syl`・`Score.skipped_parts`、`gens/vocal.py`（`Sing`・`Vocalise`）、`voice/phoneme.py`・`voice/formant.py`・`voice/credits.py`、`realize/voice.py`（`VoiceBackend`・`FormantBackend`・`UtauBackend`・`VoicePlan`）、`--voice`・`--voices-dir`・`--list-voices`、`<出力>.credits.txt`、IT・XM・MP3・MIDI。最初のジャンルは okinawan・enka・mood-kayo。
+- **設計からの変更**:
+  - 最初のジャンルの歌声は、独自の旋律ではなく **`lead` の旋律をなぞる `Sing`**（島唄・演歌は歌と楽器が同じ旋律をなぞる）。`Vocalise`（歌声パート自身が旋律を作る）は部品として用意した。
+  - 組込みの声は `core/synth.py` の Layer ではなく **`voice/formant.py` が直接描画**する（周期が整数サンプルの母音をループにするため。`Patch` の後処理は不要）。
+  - プリロールは §5.6 の「スウィングなしの row_ticks で近似」をやめ、**row ごとの tick 長（スウィング含む）から逆算**した（row と `Delay` を決める）。2:1・3:1 のスウィングでも母音の頭が拍に ±0 tick で乗る（単体テスト）。テンポ変化（`TempoEvent`）の途中は未対応（初期 BPM で近似）。
+  - 引き当てられない音節（P3 は母音のみ）は代替せず `PlanError`（§5.1 の代替は P4）。
+- **R3（音量）の決定**: 歌声ありの曲も底上げするが、測定値（歌声なし）に **+1.0 dB の余裕**を足す（`VOICE_HEADROOM_DB`）。実プレイヤーで 3 ジャンル × IT・XM × 数 seed を測り、歌声ありの最大振幅は 0.3〜1.0 の内、歌声なしの 70% 以上で、音割れなし。
+- 未実施: IT の曲メッセージ欄へのクレジット（P3 では楽器名・サンプル名・サイドファイル・バナーのみ）、歌声ありの `tools/calibrate_levels.py`、GUI。
+- 実音源での評価は引き続き未実施（P2 と同じ。合成バンクと組込みの声だけで検証）。
+
 ---
 
 ## 9. テスト戦略
@@ -476,7 +503,7 @@ flowchart LR
 |:---|:---|:---|
 | R1 | フォルマント合成の品質が「声」に聞こえない | P1 で判断。ダメなら標準の声を「母音だけの合唱（あー）」に絞る。音源が無い環境では歌声なし、を許容 |
 | R2 | プリロールを `tracker.py` に足せるか（row 単位のセル化、スウィング、テンポ変化） | P3 で実装して実測。ずれの許容範囲を決める（§5.6）。**P2 の audition（IT・テンポ固定・スウィングなし）で先行実測済み**: 母音の頭と拍の誤差は約 ±3 ms（実プレイヤー）。残る確認はスウィング・テンポ変化・`tracker` への組込み |
-| R3 | 歌声ありの音量（底上げ §7.9 との関係） | P3 で決める（§5.8） |
+| R3 | 歌声ありの音量（底上げ §7.9 との関係） | **P3 で決定**: 底上げは行い、測定値に +1.0 dB の余裕を足す（P3 の実施状況） |
 | R4 | UTAU の単一音高の音源は、移調で音色が変わる（フォルマントのずれ） | 音域合わせ（§5.5）で最小化。多音高音源を推奨（README） |
 | R5 | 母音部が短い音源はループできない | ワンショット代替・`report.txt` で警告。README に「母音が長めの音源」を選ぶ指針 |
 | R6 | oto.ini の cutoff の符号規約、文字コード、zip の文字化け（OS の展開ツール） | P2 で実音源で確認。README に展開方法を詳述（§付録 A） |

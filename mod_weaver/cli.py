@@ -23,11 +23,12 @@ from typing import Optional, Sequence
 from . import __url__, __version__
 from .core import formats, render
 from .engine import (
-    SEED_RANGE, TEMPO_MAX, TEMPO_MIN, Result, TempoRequest, channel_choices, generate, get_genre, list_genres,
+    SEED_RANGE, TEMPO_MAX, TEMPO_MIN, VOICE_FORMATS, Result, TempoRequest, channel_choices, generate, get_genre, has_vocal, list_genres,
     supports_channels,
 )
 from .errors import (
-    ChannelCountError, ExternalToolError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError,
+    ChannelCountError, ExternalToolError, LyricsError, ModGenError, OutputError, ProfileNotFoundError, TempoRangeError,
+    VoiceNotFoundError, VoiceUnsupportedError,
 )
 from .framework import registry
 
@@ -56,6 +57,9 @@ MESSAGES = {
                     "（MIDI では指定できない。既定: MOD はジャンルが曲ごとに選び、他の形式は形式の上限）",
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
+        "voice": "歌声を加える。formant（組込みの声）か、modweaver_voice.py で取り込んだ音源の id（歌声パートを持つジャンルだけ。IT・XM・MP3・MIDI）",
+        "voices_dir": "音源（歌声）の置き場所（既定の探索順は VOCAL_DESIGN.md §5.3.1）",
+        "list_voices": "取り込み済みの音源を表示して終了する（--json で機械向け）",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
         "output_dir": "--output を省略したときの出力フォルダ（既定: output。無ければ作る）",
         "json": "ジャンル一覧（--list-genres）・生成結果を機械向けの JSON で出す",
@@ -90,6 +94,9 @@ MESSAGES = {
                     "song, other formats use the format's maximum",
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
+        "voice": "add a sung part: formant (built-in voice) or the id of a voice bank imported with modweaver_voice.py (genres with a vocal part; IT, XM, MP3, MIDI)",
+        "voices_dir": "where voice banks are searched (default search order: VOCAL_DESIGN.md 5.3.1)",
+        "list_voices": "list the imported voice banks and exit (--json for machine-readable output)",
         "version": "print the version and the GitHub repository URL, then exit",
         "output_dir": "folder for the output file when --output is omitted (default: output; created if missing)",
         "json": "print the genre list (--list-genres) or the generation result as machine-readable JSON",
@@ -205,10 +212,12 @@ def catalog() -> dict:
                 "tempo_choices": sorted(p.tempo_choices),
                 "mod_channels": list(channel_choices(p)),
                 "channel_cap": p.channel_cap,
+                "vocal": has_vocal(p),
             }
             for _, ps in _by_category() for p in ps
         ],
         "mp3": ffmpeg_status(),
+        "voice_formats": list(VOICE_FORMATS),
     }
 
 
@@ -231,6 +240,10 @@ def result_json(genre, result: Result, repro: str, random_genre: bool) -> dict:
         "summary": list(plan.summary),
         "path": str(Path(result.path).resolve()) if result.path is not None else None,
         "repro": f"{repro} --seed {result.seed}",
+        "voice": None if result.voice is None else {
+            "id": result.voice.id, "fingerprint": result.voice.fingerprint[:8], "credit": result.voice.credit,
+            "terms_url": result.voice.terms_url, "terms_checked": result.voice.terms_checked,
+            "credits_path": str(Path(result.credits_path).resolve()) if result.credits_path else None},
     }
 
 
@@ -338,6 +351,9 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
     opts.add_argument("--tempo", "-t", type=_tempo_arg, default=None, metavar="BPM|MIN-MAX",
                       help=m["tempo"].format(lo=TEMPO_MIN, hi=TEMPO_MAX))
     opts.add_argument("--channels", "-c", type=int, default=None, metavar="N", help=m["channels"])
+    opts.add_argument("--voice", type=str, default=None, metavar="ID", help=m["voice"])
+    opts.add_argument("--voices-dir", type=str, default=None, metavar="DIR", help=m["voices_dir"])
+    opts.add_argument("--list-voices", action="store_true", help=m["list_voices"])
     opts.add_argument("--list-genres", action="store_true", help=m["list_genres"])
     opts.add_argument("--json", action="store_true", help=m["json"])
     opts.add_argument("--english", "-e", action="store_true", help=m["english"])
@@ -368,11 +384,36 @@ def print_banner(genre, result: Result, repro: str, random_genre: bool = False, 
           + (f" ({m['requested']})" if result.channels_request and not limit else ""))
     for line in result.plan.summary:
         print(line)
+    if result.voice is not None:
+        v = result.voice
+        extra = "" if v.id == "formant" else f"  [{v.fingerprint[:8]}] {v.credit}" + \
+            ("" if v.terms_checked else f"  (check the terms: {v.terms_url or 'no URL recorded'})")
+        print(_label("Voice" if lang == "en" else "歌声") + v.id + extra)
     print(THIN)
     print(_label(m["output_label"]) + str(result.path))
     print(m["success"])
     print(f"  {repro} --seed {result.seed}")
     print(LINE)
+
+
+def _list_voices(voices_dir: Optional[str], as_json: bool) -> int:
+    """``--list-voices``: 取り込み済みの音源（id・言語・音節数・クレジット・規約確認の状態）。"""
+    from .voice.bank import cache, discover
+
+    rows = [{"id": "formant", "lang": "ja", "syllables": None, "credit": "", "terms_checked": True,
+             "builtin": True}]
+    for vid, folder in discover.installed(discover.search_dirs(voices_dir)).items():
+        info = cache.load_info(folder)
+        rows.append({"id": vid, "lang": info.lang, "syllables": len(info.syllables), "credit": info.credit,
+                     "terms_checked": info.terms_checked, "builtin": False, "path": str(folder)})
+    if as_json:
+        print_json(rows)
+    else:
+        for r in rows:
+            flag = "" if r["terms_checked"] else "  [terms not checked]"
+            n = "built-in" if r["builtin"] else f"{r['syllables']} syllables"
+            print(f"{r['id']}  lang={r['lang']}  {n}  {r['credit']}{flag}")
+    return 0
 
 
 def _is_english_flag(arg: str) -> bool:
@@ -410,6 +451,9 @@ def main(
             print(genre_listing(lang))
         return 0
 
+    if args.list_voices:
+        return _list_voices(args.voices_dir, args.json)
+
     random_genre = args.genre in RANDOM_GENRE
     try:
         seed = args.seed if args.seed is not None else random.randint(*SEED_RANGE)
@@ -423,8 +467,10 @@ def main(
                 out.parent.mkdir(parents=True, exist_ok=True)
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
-        result = generate(genre, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels)
-    except (ProfileNotFoundError, TempoRangeError, ChannelCountError) as e:
+        result = generate(genre, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels, voice=args.voice,
+                          voices_dir=args.voices_dir)
+    except (ProfileNotFoundError, TempoRangeError, ChannelCountError, VoiceNotFoundError, VoiceUnsupportedError,
+            LyricsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except OutputError as e:
@@ -448,6 +494,8 @@ def main(
         repro += f" --tempo {result.plan.bpm}"     # 範囲ではなく確定値を出す
     if args.channels is not None:
         repro += f" --channels {args.channels}"   # 指定しなければ seed で同じ編成になる
+    if args.voice:
+        repro += f" --voice {args.voice}" + (f" --voices-dir {args.voices_dir}" if args.voices_dir else "")
     if args.json:
         print_json(result_json(genre, result, repro, random_genre))
     else:

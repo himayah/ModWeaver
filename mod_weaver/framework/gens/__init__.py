@@ -10,7 +10,8 @@ from .layer import Layer
 from .lead import Lead
 from .pad import Pad
 from .tempo import tempo_curve
+from .vocal import Sing, Vocalise
 
 __all__ = [
-    "Arp", "BassLine", "Buildup", "Comp", "Groove", "Hit", "hits", "Echo", "Fx", "Layer", "Lead", "Pad", "tempo_curve",
+    "Arp", "BassLine", "Buildup", "Comp", "Groove", "Hit", "hits", "Echo", "Fx", "Layer", "Lead", "Pad", "tempo_curve", "Vocalise", "Sing",
 ]

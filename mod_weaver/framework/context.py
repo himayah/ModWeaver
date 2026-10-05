@@ -5,6 +5,8 @@ import random
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from ..errors import PlanError
+from ..voice.phoneme import Syllable
+from .genre import Voice
 from .plan import MeasurePlan, SectionPlan, SongPlan
 from .score import Articulation, Automation, Cut, Delay, Event, NoteEvent, NoteOff, Retrig, TempoEvent
 
@@ -65,7 +67,10 @@ class SectionCtx:
         再生時間ではなく設計上の長さ）。ループ音色は None。"""
         from ..core.synth import OneShot as _OneShot
 
-        finish = self.genre.instruments[inst].patch.finish
+        patch = getattr(self.genre.instruments[inst], "patch", None)
+        if patch is None:
+            return None                # 歌声（Voice）は音源が決めるので設計上の長さが無い
+        finish = patch.finish
         return finish.duration if isinstance(finish, _OneShot) else None
 
     # --- 音量の換算（DESIGN.md §5.2） ---
@@ -113,16 +118,18 @@ class SectionCtx:
     # --- 音符を書く ---
     def note(self, step: int, inst: str, pitch: Optional[float] = None, vel: Optional[int] = None, *,
               dur: Optional[int] = None, chord: tuple[int, ...] = (), strum_ms: float = 0.0,
-              prio: int = 1, arts: tuple[Articulation, ...] = ()) -> None:
+              prio: int = 1, arts: tuple[Articulation, ...] = (), syl: Optional[Syllable] = None) -> None:
         self._check_step(step)
         self._check_inst(inst, pitch)
+        if (syl is not None) != isinstance(self.genre.instruments[inst], Voice):
+            raise PlanError(f"{self.part.name}: syl is required for (and only allowed on) Voice instruments: {inst!r}")
         if vel is not None and not 0 <= vel <= 64:
             raise PlanError(f"{self.part.name}: vel={vel} must be 0..64")
         if chord and self.part.poly != 1:
             raise PlanError(f"{self.part.name}: a part with poly != 1 cannot also write chords")
         self._check_arts(arts)
         self._events.append(NoteEvent(step=step, inst=inst, pitch=pitch, vel=vel, dur=dur, chord=chord,
-                                       strum_ms=strum_ms, prio=prio, arts=arts))
+                                       strum_ms=strum_ms, prio=prio, arts=arts, syl=syl))
 
     def off(self, step: int, inst: str) -> None:
         self._check_step(step)
@@ -164,10 +171,10 @@ class MeasureCtx(SectionCtx):
 
     def note(self, step: int, inst: str, pitch: Optional[float] = None, vel: Optional[int] = None, *,
               dur: Optional[int] = None, chord: tuple[int, ...] = (), strum_ms: float = 0.0,
-              prio: int = 1, arts: tuple[Articulation, ...] = ()) -> None:
+              prio: int = 1, arts: tuple[Articulation, ...] = (), syl: Optional[Syllable] = None) -> None:
         self._check_step(step)
         self._parent.note(self.m.start + step, inst, pitch, vel, dur=dur, chord=chord, strum_ms=strum_ms,
-                           prio=prio, arts=arts)
+                           prio=prio, arts=arts, syl=syl)
 
     def off(self, step: int, inst: str) -> None:
         self._check_step(step)

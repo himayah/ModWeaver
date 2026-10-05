@@ -10,18 +10,14 @@ import math
 import random
 from pathlib import Path
 
+from .. import formant
 from .wavio import write_wav16
 
 F0 = 220.0
-VOWELS = {   # ((中心 Hz, 帯域 Hz), ...)
-    "a": ((800, 80), (1200, 90), (2600, 120), (3300, 150)),
-    "i": ((300, 60), (2300, 90), (3000, 120), (3400, 150)),
-    "u": ((350, 60), (1300, 90), (2400, 120), (3300, 150)),
-    "e": ((500, 70), (1900, 90), (2600, 120), (3300, 150)),
-    "o": ((500, 70), (900, 80), (2500, 120), (3300, 150)),
-}
-GAINS = {"i": (1.0, 1.4, 0.8, 0.5)}
-DEFAULT_GAINS = (1.0, 0.8, 0.5, 0.35)
+VOWELS = {k: v for k, v in formant.VOWELS.items()}
+VOWELS["u"] = VOWELS.pop("M")
+GAINS = {("u" if k == "M" else k): v for k, v in formant.GAINS.items()}
+DEFAULT_GAINS = formant.DEFAULT_GAINS
 KANA = {
     "": "あいうえお", "k": "かきくけこ", "s": "さしすせそ", "m": "まみむめも", "n": "なにぬねの",
 }
@@ -29,17 +25,7 @@ CONSONANT_MS = {"": 0, "k": 25, "s": 70, "m": 55, "n": 45}
 LEAD_MS, VOWEL_MS, TAIL_MS = 30, 420, 25
 
 
-def _resonate(x: list[float], fc: float, bw: float, rate: int) -> list[float]:
-    r = math.exp(-math.pi * bw / rate)
-    c1, c2 = 2 * r * math.cos(2 * math.pi * fc / rate), -r * r
-    g = 1 - c1 - c2
-    y1 = y2 = 0.0
-    out = []
-    for v in x:
-        y = g * v + c1 * y1 + c2 * y2
-        out.append(y)
-        y2, y1 = y1, y
-    return out
+_resonate = formant.resonate
 
 
 def _vowel(v: str, n: int, rate: int, rng: random.Random) -> list[float]:

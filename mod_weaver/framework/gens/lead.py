@@ -35,7 +35,8 @@ class Lead(Generator):
         for m in ctx.measures():
             self.measure(m)
 
-    def measure(self, m: MeasureCtx) -> None:
+    def _bar_events(self, m: MeasureCtx) -> list:
+        """1小節ぶんの旋律（``MelodyGenerator`` の音符。``dur`` は gate 適用前）。``Vocalise`` と共用。"""
         phrase_pos = m.m.index % 4
         motif = m.state["motif_a"] if phrase_pos in (0, 1) else m.state["motif_b"]
         cadence = phrase_pos == 3
@@ -47,6 +48,10 @@ class Lead(Generator):
         if cadence:
             events = [dataclasses.replace(e, dur=min(e.dur, m.m.steps // 2 - e.row)) for e in events]
             events = [e for e in events if e.dur > 0]
+        return events
+
+    def measure(self, m: MeasureCtx) -> None:
+        events = self._bar_events(m)
         inst = self.inst_for(m.plan) if self.inst_for is not None else self.inst
         for e in events:
             dur = max(1, round(e.dur * self.gate))

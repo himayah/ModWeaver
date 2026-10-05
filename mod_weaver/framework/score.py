@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Union
 
+from ..voice.phoneme import Syllable
+
 if TYPE_CHECKING:
     from .plan import SectionPlan
 
@@ -97,6 +99,7 @@ class NoteEvent:
     strum_ms: float = 0.0            # 和音の構成音ごとの鳴り始めの遅れ（ギターのストローク）
     prio: int = 1                    # 同じチャンネルに畳まれたときの優先度（大きいほど勝つ。DESIGN.md §7.6）
     arts: tuple[Articulation, ...] = ()
+    syl: Optional[Syllable] = None   # 歌声の音符だけが持つ（VOCAL_DESIGN.md §3.2）。既存の音符は None
 
 
 @dataclass(frozen=True)
@@ -159,3 +162,4 @@ class Score:
     sections: dict[str, SectionScore] = field(default_factory=dict)   # 作成順（＝初出順）
     order: list[str] = field(default_factory=list)                    # 区間名の並び
     summary: list[str] = field(default_factory=list)                  # バナーに出す行
+    skipped_parts: frozenset[str] = frozenset()                       # ``Part.requires`` を満たさず存在しない扱いのパート

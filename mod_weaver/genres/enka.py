@@ -8,8 +8,8 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
 from ..framework.context import Generator, MeasureCtx
-from ..framework.gens import Arp, BassLine, Groove, Pad, hits
-from ..framework.genre import Genre, Harmony, Kit, Part, Section
+from ..framework.gens import Arp, BassLine, Groove, Pad, Sing, hits
+from ..framework.genre import Genre, Harmony, Kit, Part, Section, Voice
 from ..framework.registry import register_genre
 from ._ornament import OrnamentedLead, inst as _inst
 
@@ -53,7 +53,7 @@ class EnkaGenre(Genre):
     category = "genre"
     display_name = "Enka"
     description = "演歌。ヨナ抜き短音階、しゃくり・こぶし、ストリングスと爪弾くギター、合いの手、最後のサビで転調（歌は含まない）"
-    description_en = "Enka: pentatonic minor melody with scoops and kobushi, strings, plucked guitar, shamisen fills, final-chorus key change (no vocals)"
+    description_en = "Enka: pentatonic minor melody with scoops and kobushi, strings, plucked guitar, shamisen fills, final-chorus key change (a sung part with --voice)"
     title = "Enka Ballad"
     tempo_choices = (68, 72, 76, 80, 84, 88)
 
@@ -67,16 +67,17 @@ class EnkaGenre(Genre):
         "strings": _inst("orch_violin", GmVoice(program=48), name="EnkaStrings", volume=28),
         "shamisen": _inst("jp_shamisen", GmVoice(program=106)),
         "koto": _inst("jp_koto", GmVoice(program=107)),
+        "voice": Voice(GmVoice(program=54), timbre="female", volume=46),     # --voice で歌う（旋律は lead と同じ）
     }
     harmony = Harmony(keys=(9, 4, 2, 11), mode="minor_pent", progressions=PROGRESSIONS, n_progressions=2)
     _core = {"drums", "bass", "comp", "lead"}
     sections = {
         "intro": _sec({"comp", "strings", "bass"}, intensity=0.5, measures=4),
-        "verse": _sec(_core | {"strings", "aizuchi"}, intensity=0.65),
-        "bridge": _sec(_core | {"strings", "aizuchi"}, prog=1, intensity=0.75),
-        "chorus": _sec(_core | {"strings", "aizuchi"}, prog=1, intensity=0.9, motifs="chorus"),
+        "verse": _sec(_core | {"strings", "aizuchi", "vocal"}, intensity=0.65),
+        "bridge": _sec(_core | {"strings", "aizuchi", "vocal"}, prog=1, intensity=0.75),
+        "chorus": _sec(_core | {"strings", "aizuchi", "vocal"}, prog=1, intensity=0.9, motifs="chorus"),
         "interlude": _sec(_core | {"strings", "koto"}, intensity=0.8, motifs="chorus"),
-        "chorus2": _sec(_core | {"strings", "aizuchi"}, prog=1, intensity=1.0, motifs="chorus", key_offset=2),
+        "chorus2": _sec(_core | {"strings", "aizuchi", "vocal"}, prog=1, intensity=1.0, motifs="chorus", key_offset=2),
         "outro": _sec({"comp", "strings", "lead", "bass"}, intensity=0.5, measures=4),
     }
     form = ("intro", "verse", "bridge", "chorus", "interlude", "verse", "chorus", "chorus2", "outro")
@@ -91,5 +92,6 @@ class EnkaGenre(Genre):
         Part("strings", Pad("strings", vol=28), pan=128, min_channels=6),
         Part("aizuchi", Aizuchi(), pan=60, min_channels=8),
         Part("koto", Arp("koto", (19, 31), tuple(range(0, 16, 2)), vol=36), pan=70, min_channels=8),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
     )
     mod_channels = {4: 1, 6: 2, 8: 1}

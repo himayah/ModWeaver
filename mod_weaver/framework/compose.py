@@ -60,12 +60,13 @@ def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str])
     plan.extra = dict(plan.extra)
     plan.extra["features"] = frozenset(features)
 
-    order = _topo_order(genre)
+    order = [p for p in _topo_order(genre) if p.requires <= features]
     part_rngs = {p.name: random.Random(f"{seed}:{genre.id}:part:{p.name}") for p in genre.parts}
     part_song_state: dict[str, dict] = {p.name: {} for p in genre.parts}
     finalize_rng = random.Random(f"{seed}:{genre.id}:finalize")
 
-    score = Score(bpm=plan.bpm, key_pc=plan.key_pc, order=list(plan.order), summary=list(plan.summary))
+    score = Score(bpm=plan.bpm, key_pc=plan.key_pc, order=list(plan.order), summary=list(plan.summary),
+                  skipped_parts=frozenset(p.name for p in genre.parts if not p.requires <= features))
 
     for name, sec_plan in plan.sections.items():     # 作成順（SongPlan.sections の挿入順）
         sec_score = SectionScore(name=name, plan=sec_plan, parts={p.name: [] for p in genre.parts}, tempo=[])

@@ -292,6 +292,7 @@ class Placement:
     arts: tuple = ()
     strum_ms: float = 0.0
     chord: tuple[int, ...] = ()     # chord_baked の lane だけ使う（焼いたサンプルを選ぶ鍵）
+    syl: object = None              # 歌声の音節（``voice.phoneme.Syllable``）。歌声の音符だけ
 
 
 @dataclass(frozen=True)
@@ -304,7 +305,7 @@ class AutomationPlacement:
 
 def compute_layout(genre: "Genre", score: "Score", budget: int) -> LaneLayout:
     """DESIGN.md §7.6〜§7.6: 予算でパートを選び、ladder で lane 数を収め、物理チャンネルの並び・パンを決める。"""
-    active = [p.name for p in genre.parts if p.min_channels <= budget]
+    active = [p.name for p in genre.parts if p.min_channels <= budget and p.name not in score.skipped_parts]
     demands = _build_demands(genre, score)
     for name in list(demands):
         if name not in active:
@@ -445,7 +446,8 @@ def _assign_poly(lanes: list[Lane], events: list[Event]) -> list[Placement]:
             lane = min(free, key=lambda l: l.index)
         else:
             lane = min(lanes, key=lambda l: busy_since.get(l.index, -1))
-        out.append(Placement(e.step, lane.index, "note", e.inst, e.pitch, e.vel, e.dur, e.arts, e.strum_ms))
+        out.append(Placement(e.step, lane.index, "note", e.inst, e.pitch, e.vel, e.dur, e.arts, e.strum_ms,
+                              syl=e.syl))
         busy_since[lane.index] = e.step
         busy_until[lane.index] = e.step + e.dur if e.dur is not None else None
     for e in offs:

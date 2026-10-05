@@ -10,8 +10,8 @@ import random
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
-from ..framework.gens import BassLine, Comp, Groove, Pad, hits
-from ..framework.genre import Genre, Harmony, Kit, Part, Section
+from ..framework.gens import BassLine, Comp, Groove, Pad, Sing, hits
+from ..framework.genre import Genre, Harmony, Kit, Part, Section, Voice
 from ..framework.plan import Meter, SongPlan, Swing, default_plan
 from ..framework.registry import register_genre
 from ._ornament import Heterophony, OrnamentedLead, WithTempo, inst as _inst, retime
@@ -66,14 +66,15 @@ class OkinawanGenre(Genre):
         "sanshin_bk": _inst("oki_sanshin", GmVoice(program=106), name="SanshinBk", volume=34),
         "fue": _inst("wind_flute", GmVoice(program=77), name="Fue", volume=32),
         "chorus": _inst("vox_ooh", GmVoice(program=53), volume=24),
+        "voice": Voice(GmVoice(program=54), timbre="female", volume=46),     # --voice で歌う（旋律は lead と同じ）
     }
     harmony = Harmony(keys=(0, 5, 7), mode="ryukyu", progressions=PROGRESSIONS, n_progressions=2)
     _core = {"drums", "bass", "lead"}
     sections = {
         "intro": _sec({"lead", "bass"}, intensity=0.5, measures=4),
-        "a": _sec(_core | {"comp"}, intensity=0.7),
-        "b": _sec(_core | {"comp", "chorus"}, prog=1, intensity=0.85),
-        "c": _sec(_core | {"comp", "chorus"}, intensity=1.0),
+        "a": _sec(_core | {"comp", "vocal"}, intensity=0.7),
+        "b": _sec(_core | {"comp", "chorus", "vocal"}, prog=1, intensity=0.85),
+        "c": _sec(_core | {"comp", "chorus", "vocal"}, intensity=1.0),
         "outro": _sec({"lead", "bass", "drums"}, intensity=0.5, measures=4),
     }
     form = ("intro", "a", "b", "c", "outro")     # 全系統の区間の和集合（曲の並びは plan() が系統ごとに決める）
@@ -91,6 +92,7 @@ class OkinawanGenre(Genre):
              follow="lead", pan=100),
         Part("comp", Comp("sanshin_bk", kind="pulse8", vol=34, chordal=False), pan=70, min_channels=6),
         Part("chorus", Pad("chorus", vol=24), pan=128, min_channels=6),
+        Part("vocal", Sing("voice"), pan=128, depends=("lead",), min_channels=6, requires=frozenset({"voice"})),
     )
     mod_channels = {4: 1, 6: 2}
 

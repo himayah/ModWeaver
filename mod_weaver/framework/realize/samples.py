@@ -20,6 +20,7 @@ from ...core.model import SampleSpec
 from ...core.pitch import PERIODS
 from ...errors import PlanError, SampleConstraintError
 from .lanes import Lane, LaneLayout, Placement
+from .voice import VoiceSlot
 
 if TYPE_CHECKING:
     from ...framework.genre import Genre
@@ -33,8 +34,11 @@ MOD_FINETUNE_CENTS = 12.5
 SampleKey = tuple[str, tuple[int, ...], int, Optional[int]]   # (楽器名, 和音の形, セント, パン)
 
 
-def sample_key(fmt: str, genre: "Genre", p: Placement, lane: Lane) -> SampleKey:
-    """発音 ``p``（lane ``lane`` 上）が使うサンプルの鍵。計画（``plan_samples``）と書き込み（tracker）が共用する。"""
+def sample_key(fmt: str, genre: "Genre", p: Placement, lane: Lane, voice=None):
+    """発音 ``p``（lane ``lane`` 上）が使うサンプルの鍵。計画（``plan_samples``）と書き込み（tracker）が共用する。
+    歌声の音符（``p.syl``）は ``VoiceSlot``（``SampleKey`` とは別の型）を返す。"""
+    if p.syl is not None:
+        return voice.slot_for(p, lane.pan if fmt == "xm" else None)
     cents = 0
     inst = genre.instruments[p.inst]
     if inst.is_pitched and p.pitch is not None:
@@ -75,8 +79,8 @@ def _sample_label(inst_name: str, shape: tuple[int, ...], cents: int = 0, pan: O
 
 
 def plan_samples(genre: "Genre", layout: LaneLayout, score: "Score", target: "Target",
-                  placements_by_section: dict) -> tuple[list[SampleSpec], dict[SampleKey, int],
-                                                         tuple[str, ...], tuple[Optional[float], ...]]:
+                  placements_by_section: dict, voice=None) -> tuple[list[SampleSpec], dict[SampleKey, int],
+                                                                    tuple[str, ...], tuple[Optional[float], ...]]:
     """``(samples, slot_of, instrument_names, release)`` を返す。``slot_of`` は鍵 → sample 番号（1 始まり）。
     ``release`` は sample 番号順の ``Instrument.release_s``。"""
     fmt = target.format
@@ -86,13 +90,16 @@ def plan_samples(genre: "Genre", layout: LaneLayout, score: "Score", target: "Ta
     for placements, _autos in placements_by_section.values():
         for p in placements:
             if p.kind == "note":
-                used.add(sample_key(fmt, genre, p, lane_by_index[p.lane]))
+                used.add(sample_key(fmt, genre, p, lane_by_index[p.lane], voice))
 
     decl_index = {name: i for i, name in enumerate(genre.instruments)}
+    voice_keys = sorted((k for k in used if isinstance(k, VoiceSlot)),
+                        key=lambda k: (decl_index[k.inst], k.syl, k.bucket, k.pan or 0))
+    used = {k for k in used if not isinstance(k, VoiceSlot)}
     plain = sorted((k for k in used if not k[1]), key=lambda k: (decl_index[k[0]], k[2], k[3] or 0))
     baked_keys = [k for k in used if k[1]]
     baked = sorted(baked_keys, key=lambda k: (decl_index[k[0]], k[1], k[2], k[3] or 0))
-    order = plain + baked
+    order = plain + baked + voice_keys
 
     if len(order) > target.sample.max_samples:
         raise PlanError(f"{genre.id}: needs {len(order)} samples but {target.format} allows only "
@@ -103,6 +110,14 @@ def plan_samples(genre: "Genre", layout: LaneLayout, score: "Score", target: "Ta
     names: list[str] = []
     release: list[Optional[float]] = []
     for i, key in enumerate(order):
+        if isinstance(key, VoiceSlot):
+            spec = voice.sample(key, genre.instruments[key.inst])
+            spec.validate()
+            specs.append(spec)
+            slot_of[key] = i + 1
+            names.append(key.inst)
+            release.append(genre.instruments[key.inst].release_s)
+            continue
         inst_name, shape, cents, pan = key
         inst = genre.instruments[inst_name]
         patch = inst.patch if not shape else synth.chord_patch(inst.patch, shape)

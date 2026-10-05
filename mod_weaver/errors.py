@@ -73,3 +73,7 @@ class VoiceNotFoundError(ModGenError):
 
 class LyricsError(ModGenError):
     """歌詞を音節に分けられない。"""
+
+
+class VoiceUnsupportedError(ModGenError):
+    """``--voice`` を、歌声に対応しない形式・歌声パートの無いジャンルに指定した（黙って無視しない。VOCAL_DESIGN.md V-8）。"""

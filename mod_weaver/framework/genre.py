@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Union
 
 from ..core.harmony import Registers
 from ..core.model import ChordSpec, GmVoice
@@ -43,6 +43,19 @@ class Instrument:
     @property
     def is_pitched(self) -> bool:
         return self.patch.pitched if self.pitched is None else self.pitched
+
+
+@dataclass(frozen=True)
+class Voice:
+    """歌声の楽器（VOCAL_DESIGN.md §3.2）。``patch`` を持たない（声の源は ``--voice`` で決まる）。"""
+    gm: GmVoice                      # MIDI の代替（合唱音色など）。必須
+    timbre: str = "female"           # "female" | "male" | "child" | "choir"。formant の声種と音源選びの手がかり
+    volume: Optional[int] = None     # 既定音量（None は 40）
+    tune_cents: float = 0.0
+    release_s: Optional[float] = None
+    pan: Optional[int] = None
+    range: tuple[int, int] = (19, 33)   # 旋律を書く logical note の範囲（Realizer の音域合わせの目安）
+    is_pitched = True
 
 
 @dataclass(frozen=True)
@@ -124,6 +137,7 @@ class Part:
     double: Optional[Double] = None   # opt-in: デチューンした複製で左右に広げる
     follow: Optional[str] = None      # 付き従うパート
     depends: tuple[str, ...] = ()     # 先に作っておくパート
+    requires: frozenset[str] = frozenset()   # 曲の機能（``Target.features`` ＋ ``voice``）。満たさなければパートは存在しない扱い
 
 
 @dataclass(frozen=True)
@@ -154,7 +168,7 @@ class Genre:
     tempo_range: tuple[int, int] = (32, 255)
 
     # --- 宣言 ---
-    instruments: Mapping[str, Instrument] = {}
+    instruments: Mapping[str, Union[Instrument, Voice]] = {}
     harmony: Optional[Harmony] = None
     sections: Mapping[str, Section] = {}
     form: tuple[str, ...] = ()
@@ -189,7 +203,7 @@ def _validate_declaration(cls: type) -> None:
     name_set = set(part_names)
 
     for inst_name, inst in cls.instruments.items():
-        if not isinstance(inst, Instrument) or inst.gm is None:
+        if not isinstance(inst, (Instrument, Voice)) or inst.gm is None:
             raise PlanError(f"{cls.id}: instrument {inst_name!r} needs a GmVoice (Instrument.gm)")
 
     if not set(cls.mod_channels) <= {4, 6, 8}:
@@ -197,6 +211,10 @@ def _validate_declaration(cls: type) -> None:
     max_budget = max(cls.mod_channels, default=0)
 
     for part in cls.parts:
+        if isinstance(getattr(part.gen, "inst", None), str) and isinstance(cls.instruments.get(part.gen.inst), Voice) \
+                and "voice" not in part.requires:
+            raise PlanError(f"{cls.id}: part {part.name!r} plays a Voice instrument, so it must declare "
+                             f"requires=frozenset({{'voice'}}) (VOCAL_DESIGN.md D4)")
         if part.follow is not None and part.follow not in name_set:
             raise PlanError(f"{cls.id}: part {part.name!r} follows unknown part {part.follow!r}")
         for dep in part.depends:

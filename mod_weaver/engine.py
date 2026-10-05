@@ -15,7 +15,7 @@ from typing import Optional, Union
 
 from .core import formats, native, render, writer
 from .core import verify as verify_mod
-from .errors import ChannelCountError, TempoRangeError, VerificationError
+from .errors import ChannelCountError, TempoRangeError, VerificationError, VoiceUnsupportedError
 from .framework import registry
 from .framework.compose import compose, resolve_plan
 from .framework.genre import Genre
@@ -23,7 +23,9 @@ from .framework.plan import SongPlan
 from .framework.realize.midi import realize_midi
 from .framework.realize.tracker import realize
 from .framework.score import Score
+from .framework.realize.voice import FormantBackend, UtauBackend, VoiceBackend, VoiceInfo
 from .framework.target import Target, resolve
+from .voice.bank import discover
 
 log = logging.getLogger("mod_weaver")
 
@@ -68,6 +70,7 @@ class Built:
     data: bytes
     channels: int                         # 実際に使ったチャンネル数（MIDI は鳴らした MIDI チャンネルの数）
     sample_bits: Optional[int]            # サンプルのビット数（MIDI は None）
+    voice: Optional[VoiceInfo] = None     # 歌声を加えた曲の声の源の情報（クレジット出力用）
 
 
 @dataclass
@@ -83,6 +86,8 @@ class Result:
     channels: int = 0
     channel_budget: int = 0
     sample_bits: Optional[int] = None
+    voice: Optional[VoiceInfo] = None
+    credits_path: Optional[Path] = None
 
 
 # ------------------------------------------------------------
@@ -149,30 +154,51 @@ def _midi_channels(data: bytes) -> int:
     return len(used)
 
 
+VOICE_FORMATS = ("it", "xm", "mp3", "midi")   # 歌声に対応する形式（VOCAL_DESIGN.md D5。MOD・S3M は後の段階）
+
+
+def has_vocal(genre: Genre) -> bool:
+    return any("voice" in p.requires for p in genre.parts)
+
+
+def resolve_voice(voice: str, genre: Genre, fmt: str, voices_dir: Optional[str] = None) -> VoiceBackend:
+    """``--voice`` の声の源を決める。非対応の形式・歌声パートの無いジャンルは ``VoiceUnsupportedError``（V-8）。"""
+    if fmt not in VOICE_FORMATS:
+        raise VoiceUnsupportedError(f"--voice is not supported for format {fmt!r} (supported: {', '.join(VOICE_FORMATS)})")
+    if not has_vocal(genre):
+        withv = ", ".join(sorted(g.id for g in list_genres() if has_vocal(g)))
+        raise VoiceUnsupportedError(f"genre {genre.id!r} has no vocal part (genres with one: {withv})")
+    if voice == "formant":
+        return FormantBackend()
+    return UtauBackend(discover.find(voice, discover.search_dirs(voices_dir)))
+
+
 def build(genre: Genre, seed: int, fmt: str = formats.DEFAULT_FORMAT, *, tempo: Optional[TempoRequest] = None,
-          channels: Optional[int] = None) -> Built:
+          channels: Optional[int] = None, voice: Optional[str] = None, voices_dir: Optional[str] = None) -> Built:
     """純粋関数（I/O なし。MP3 だけ ffmpeg を呼ぶ）。
 
     ``tempo`` を渡すと ``plan()`` が選んだ BPM を上書きする。``plan()`` 自体は従来どおり BPM を引く（引いた値を捨てる）ので
     他の乱数消費は変わらず、「同じ seed・別テンポ＝同じ曲の速さ違い」になる。"""
+    backend = resolve_voice(voice, genre, fmt, voices_dir) if voice else None
     target = resolve(fmt, channels, genre, seed)
     plan = resolve_plan(genre, seed)
     if tempo is not None:
         plan.bpm = resolve_tempo(tempo, seed, genre)
     log.debug("%s seed=%s fmt=%s bpm=%s sections=%d", genre.id, seed, fmt, plan.bpm, len(plan.order))
-    score = compose(genre, plan, seed, target.features)
+    score = compose(genre, plan, seed, target.features | ({"voice"} if backend else frozenset()))
 
     if target.kind == "midi":
         data = realize_midi(genre, score, plan, target)
-        return Built(genre, seed, fmt, plan, score, target, data, _midi_channels(data), None)
-    rs = realize(genre, score, plan, target)
+        return Built(genre, seed, fmt, plan, score, target, data, _midi_channels(data), None,
+                     backend.info if backend else None)
+    rs = realize(genre, score, plan, target, voice=backend)
     module = native.serialize(rs)
     bits = rs.samples[0].bits if rs.samples else None
     if fmt == "mp3":
         data = render.render_mp3_from_it(module, genre.title)
     else:
         data = module
-    return Built(genre, seed, fmt, plan, score, target, data, rs.n_channels, bits)
+    return Built(genre, seed, fmt, plan, score, target, data, rs.n_channels, bits, backend.info if backend else None)
 
 
 def verify_data(built: Built) -> list[verify_mod.Issue]:
@@ -191,11 +217,13 @@ def generate(
     tempo: Optional[TempoRequest] = None,
     fmt: str = formats.DEFAULT_FORMAT,
     channels: Optional[int] = None,
+    voice: Optional[str] = None,
+    voices_dir: Optional[str] = None,
 ) -> Result:
     """曲を生成し、検査して ``fmt`` 形式（既定 mod）のファイルを書き出す。検査 ERROR があればファイルを書かない。"""
     if seed is None:
         seed = random.randint(*SEED_RANGE)
-    built = build(genre, seed, fmt, tempo=tempo, channels=channels)
+    built = build(genre, seed, fmt, tempo=tempo, channels=channels, voice=voice, voices_dir=voices_dir)
 
     issues: list[verify_mod.Issue] = []
     if verify:
@@ -211,6 +239,11 @@ def generate(
 
     path = Path(out)
     writer.write_file(path, built.data)
+    credits_path = None
+    if built.voice is not None and fmt != "midi":
+        from .voice.credits import credits_text
+        credits_path = path.with_name(path.name + ".credits.txt")
+        writer.write_file(credits_path, credits_text(built.voice, genre, seed, fmt).encode("utf-8"))
     return Result(seed=seed, path=path, plan=built.plan, issues=issues, genre=genre, tempo_request=tempo, fmt=fmt,
                   channels_request=channels, channels=built.channels, channel_budget=built.target.budget,
-                  sample_bits=built.sample_bits)
+                  sample_bits=built.sample_bits, voice=built.voice, credits_path=credits_path)

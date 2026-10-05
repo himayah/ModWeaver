@@ -97,10 +97,11 @@ def test_read_wav_float_is_rejected_with_filename(tmp_path):
 def test_cut_cutoff_sign_convention():
     from mod_weaver.voice.bank.otoini import OtoEntry
     rate, n = 1000, 1000                                        # 1 sample = 1 ms
-    assert cut_range(OtoEntry("w", "a", 100, 0, -200, 0, 0), n, rate) == (100, 800)   # 負: 末尾から 200 ms 捨てる
-    assert cut_range(OtoEntry("w", "a", 100, 0, 300, 0, 0), n, rate) == (100, 400)    # 正: offset から 300 ms
+    assert cut_range(OtoEntry("w", "a", 100, 0, 200, 0, 0), n, rate) == (100, 800)    # 正: 末尾から 200 ms 捨てる（実音源で確認）
+    assert cut_range(OtoEntry("w", "a", 100, 0, -300, 0, 0), n, rate) == (100, 400)   # 負: offset から 300 ms
     assert cut_range(OtoEntry("w", "a", 100, 0, 0, 0, 0), n, rate) == (100, 1000)
-    assert cut_range(OtoEntry("w", "a", 900, 0, -200, 0, 0), n, rate) == (0, 0)        # 逆転は空
+    assert cut_range(OtoEntry("w", "a", 900, 0, 200, 0, 0), n, rate) == (0, 0)         # 逆転は空
+    assert cut_range(OtoEntry("w", "a", 24, 56, 73, 5, 20), 28762, 44100) == (1058, 25543)   # 重音テト「あ」の実測値
 
 
 @pytest.mark.parametrize("src,dst", [(22050, 44100), (48000, 44100), (44100, 22050)])

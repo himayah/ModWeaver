@@ -84,7 +84,7 @@ def make_test_bank(folder: Path, rate: int = 22050, encoding: str = "utf-8") -> 
             name = f"{c}{v}.wav"
             write_wav16(folder / name, rate, wave_)
             pre = cms if cms else 10
-            lines.append(f"{name}={kana},{LEAD_MS},{pre + 40},-{TAIL_MS},{pre},{min(pre, 20)}")
+            lines.append(f"{name}={kana},{LEAD_MS},{pre + 40},{TAIL_MS},{pre},{min(pre, 20)}")
             aliases.append(kana)
     (folder / "oto.ini").write_bytes(("\n".join(lines) + "\n").encode(encoding))
     (folder / "modweaver.json").write_text(json.dumps({

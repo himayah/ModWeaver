@@ -81,10 +81,12 @@ def apply(rs: RealizedSong, gain: float, header: int) -> RealizedSong:
     return dataclasses.replace(rs, samples=samples, patterns=patterns, mix_volume=header)
 
 
-def lift(rs: RealizedSong, peaks_db: Optional[dict]) -> RealizedSong:
-    """``peaks_db``: そのジャンルの ``{level_key: 最悪の最大振幅(dBFS)}``。"""
+def lift(rs: RealizedSong, peaks_db: Optional[dict], channels: Optional[int] = None) -> RealizedSong:
+    """``peaks_db``: そのジャンルの ``{level_key: 最悪の最大振幅(dBFS)}``。``channels``: 測定値の鍵に使うチャンネル数
+    （歌声を加えた曲は、歌声の lane を除いた数で引く。既定は ``rs`` の実際の数）。"""
     peaks_db = peaks_db or {}
-    peak = peaks_db.get(level_key(rs))
+    key = level_key(rs) if channels is None else f"{rs.format}{channels}"
+    peak = peaks_db.get(key)
     if peak is None:     # 測っていないチャンネル数（seed で編成が変わる形式）は、同じ形式の最悪値で代用する
         same = [v for k, v in peaks_db.items() if k.rstrip("0123456789") == rs.format]
         peak = max(same) if same else None

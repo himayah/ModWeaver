@@ -246,3 +246,50 @@ def test_preroll_collision_at_section_start_keeps_one_note(bank):
     by = {"s": ([lanesmod.Placement(s, 0, "note", "voice", 30.0, 40, 1, (), syl=syl) for s in (0, 1, 4)], [])}
     plan.prepare(by, {"s": (6, None)})
     assert [p.step for p in by["s"][0]] == [0, 3]        # 0 と 1 は行 0 に重なるので後の音を捨てる
+
+
+# ---- 組込みの声の質（試聴で「楽器に聞こえる」と指摘されたため、揺れの焼き込みと母音の差を検査する） ----
+
+@pytest.mark.parametrize("timbre", ["female", "male", "choir"])
+@pytest.mark.parametrize("vowel", ["a", "i", "M", "e", "o"])
+def test_formant_loop_is_seamless_and_periodic_in_loop_length(vowel, timbre):
+    from mod_weaver.voice import formant
+    r = formant.render_vowel(vowel, 262.0, timbre)
+    start, length = r.loop
+    assert start + length == len(r.data)
+    biggest = max(abs(r.data[i + 1] - r.data[i]) for i in range(start, len(r.data) - 1))
+    assert abs(r.data[start] - r.data[-1]) <= biggest                     # ループ末尾→始点の飛びが、ループ内の最大の隣接差以内
+    cycles = r.home_hz * length / r.rate
+    assert abs(cycles - round(cycles)) < 1e-6                              # ループ長に整数周期
+
+
+def test_formant_is_not_a_static_waveform():
+    """ビブラート・シマーを焼き込んであるので、ループ内で振幅の包絡と周期が揺れる（静的な周期波形はオルガンに聞こえる）。"""
+    from mod_weaver.voice import formant
+    r = formant.render_vowel("a", 262.0, "female")
+    s, n = r.loop
+    period = round(r.rate / r.home_hz)
+    peaks = [max(abs(v) for v in r.data[s + i:s + i + period]) for i in range(0, n - period, period)]
+    assert max(peaks) / min(peaks) > 1.03                                  # シマー
+    zc = [i for i in range(s + 1, s + n) if r.data[i - 1] < 0 <= r.data[i]]
+    gaps = [b - a for a, b in zip(zc, zc[1:])]
+    assert max(gaps) - min(gaps) >= 3                                      # ビブラート・ジッタによる周期の揺れ
+
+
+def test_formant_vowels_have_distinct_spectra():
+    np = pytest.importorskip("numpy")
+    from mod_weaver.voice import formant
+
+    def curve(v, f0):
+        r = formant.render_vowel(v, f0, "female")
+        seg = np.array(r.data[2205:2205 + 16384], float) * np.hanning(16384)
+        sp, f = np.abs(np.fft.rfft(seg)), np.fft.rfftfreq(16384, 1 / r.rate)
+        ks = range(1, int(3800 / r.home_hz))
+        db = [20 * np.log10(sp[(f > k * r.home_hz * .97) & (f < k * r.home_hz * 1.03)].max() + 1e-9) for k in ks]
+        c = np.interp(np.arange(300, 3800, 100), [k * r.home_hz for k in ks], db)
+        return c - c.mean()
+
+    for f0 in (196, 262, 330):
+        cs = {v: curve(v, f0) for v in "aiMeo"}
+        worst = min(float(np.sqrt(np.mean((cs[a] - cs[b]) ** 2))) for a in "aiMeo" for b in "aiMeo" if a < b)
+        assert worst > 4.0, (f0, worst)               # どの母音の組も包絡が 4 dB(RMS) 以上違う

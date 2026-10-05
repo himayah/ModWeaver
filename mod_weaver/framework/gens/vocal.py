@@ -37,7 +37,7 @@ class Vocalise(Lead):
 
 class Sing(Generator):
     """別パート（既定は ``lead``）の旋律を歌う（島唄・演歌のように、歌と楽器が同じ旋律をなぞる型）。装飾の短い音（``min_dur`` 未満）は
-    歌わない。しゃくり（``Glide``）とビブラートは引き継ぐ。母音は ``vowels`` を音符ごとに循環し、**区間の先頭から数え直す**。
+    歌わない。しゃくり（``Glide``）は引き継ぐ（ビブラートは声のサンプルに焼き込んであるので引き継がない）。母音は ``vowels`` を音符ごとに循環し、**区間の先頭から数え直す**。
     ``Part(..., depends=(source,), requires=frozenset({"voice"}))`` で宣言する。"""
 
     def __init__(self, inst: str, *, source: str = "lead", vowels: Sequence[str] = ("あ",), min_dur: int = 2,
@@ -52,6 +52,6 @@ class Sing(Generator):
         notes = sorted((e for e in ctx.events_of(self.source) if isinstance(e, NoteEvent) and e.pitch is not None
                         and not e.chord and (e.dur is None or e.dur >= self.min_dur)), key=lambda e: e.step)
         for i, e in enumerate(notes):
-            arts = tuple(a for a in e.arts if isinstance(a, (Vibrato, Glide)))
+            arts = tuple(a for a in e.arts if isinstance(a, Glide))    # ビブラートはサンプルに焼き込み済み
             vel = None if e.vel is None else max(1, min(64, round(e.vel * self.vel_ratio)))
             ctx.note(e.step, self.inst, e.pitch, vel, dur=e.dur, arts=arts, syl=self.syls[i % len(self.syls)])

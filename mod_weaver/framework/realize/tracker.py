@@ -124,7 +124,7 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
         peaks = PEAK_DB.get(genre.id)
         if voice_headroom and peaks:
             peaks = {k: v + voice_headroom for k, v in peaks.items()}
-        rs = native_level.lift(rs, peaks)
+        rs = native_level.lift(rs, peaks, rs.n_channels - 1 if voice_headroom and fmt != "mod" else None)
     return rs
 
 

@@ -61,3 +61,15 @@ class OutputError(ModGenError):
 
 class ExternalToolError(ModGenError):
     """必要な外部ツール（mp3 出力の ffmpeg）が無い・機能不足・実行失敗。"""
+
+
+class VoiceBankError(ModGenError):
+    """歌声の音源（UTAU 形式）の読み込み・取り込み・キャッシュの不備（VOCAL_DESIGN.md §5.3）。"""
+
+
+class VoiceNotFoundError(ModGenError):
+    """``--voice`` に指定された id の音源が見つからない。"""
+
+
+class LyricsError(ModGenError):
+    """歌詞を音節に分けられない。"""

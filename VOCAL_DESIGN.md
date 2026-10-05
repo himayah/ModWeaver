@@ -419,6 +419,22 @@ flowchart LR
 
 各段階の終わりに、実プレイヤー・単体・結合・golden の全テストが通ること（既存の方針どおり）。
 
+### P2 の実施状況（2026-10-05）
+
+```mermaid
+flowchart LR
+    D[音源フォルダ<br/>oto.ini + wav] --> C[check]
+    D --> I[import]
+    I --> K[.modweaver/<br/>bank.json + seg/*.pcm]
+    K --> L[list / info]
+    K --> A[audition → .it]
+    T[make-test-bank<br/>合成の試験用バンク] --> D
+```
+
+- 実装済み: `voice/bank/`（`wavio`・`otoini`・`cut`・`resample`・`pitch`・`loopfind`・`credit`・`cache`・`importer`・`discover`・`audition`・`synthetic`）、`voice_cli.py`、`modweaver_voice.py`（`check`・`import`・`list`・`info`・`audition`・`make-test-bank`）。
+- **合成した試験用バンクでのみ検証済み**。実音源での再評価（cutoff の符号規約 §5.3.3・文字コード・zip の文字化け・ループの「うなり」）は未実施で、利用者が実音源を `voices/` に置いてから行う（R6）。cutoff の規約は `voice/bank/cut.py` の定数 1 つで反転できる。
+- 取り込みの速度（R9）: 25 音節で約 4 秒（純 Python）。
+
 ---
 
 ## 9. テスト戦略
@@ -459,7 +475,7 @@ flowchart LR
 | # | 項目 | 対応 |
 |:---|:---|:---|
 | R1 | フォルマント合成の品質が「声」に聞こえない | P1 で判断。ダメなら標準の声を「母音だけの合唱（あー）」に絞る。音源が無い環境では歌声なし、を許容 |
-| R2 | プリロールを `tracker.py` に足せるか（row 単位のセル化、スウィング、テンポ変化） | P3 で実装して実測。ずれの許容範囲を決める（§5.6） |
+| R2 | プリロールを `tracker.py` に足せるか（row 単位のセル化、スウィング、テンポ変化） | P3 で実装して実測。ずれの許容範囲を決める（§5.6）。**P2 の audition（IT・テンポ固定・スウィングなし）で先行実測済み**: 母音の頭と拍の誤差は約 ±3 ms（実プレイヤー）。残る確認はスウィング・テンポ変化・`tracker` への組込み |
 | R3 | 歌声ありの音量（底上げ §7.9 との関係） | P3 で決める（§5.8） |
 | R4 | UTAU の単一音高の音源は、移調で音色が変わる（フォルマントのずれ） | 音域合わせ（§5.5）で最小化。多音高音源を推奨（README） |
 | R5 | 母音部が短い音源はループできない | ワンショット代替・`report.txt` で警告。README に「母音が長めの音源」を選ぶ指針 |

@@ -15,3 +15,7 @@ htmlcov/
 
 # 旧版バックアップ（配布対象外）
 /old/
+
+# 歌声の音源と取り込みキャッシュ（声のデータは入れない。VOCAL_DESIGN.md D1・§7）
+/voices/
+.modweaver/

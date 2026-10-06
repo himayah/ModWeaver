@@ -156,7 +156,7 @@ def _midi_channels(data: bytes) -> int:
     return len(used)
 
 
-VOICE_FORMATS = ("it", "xm", "mp3", "midi")   # 歌声に対応する形式（VOCAL_DESIGN.md D5。MOD・S3M は後の段階）
+VOICE_FORMATS = ("it", "xm", "s3m", "mp3", "midi")   # 歌声に対応する形式（VOCAL_DESIGN.md D5。MOD は後の段階）
 
 
 def has_vocal(genre: Genre) -> bool:

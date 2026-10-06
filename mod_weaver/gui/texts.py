@@ -91,7 +91,7 @@ TEXTS = {
         "voice_na_cli": "この CLI は歌声に対応していません",
         "voice_na_random": "ジャンルをランダムにすると使えません",
         "voice_na_genre": "このジャンルには歌声パートがありません",
-        "voice_na_format": "この形式では使えません（IT・XM・MP3・MIDI）",
+        "voice_na_format": "この形式では歌声を使えません",
         "voice_unchecked": "規約を確認してください（modweaver.json の terms_checked）",
         "lyrics": "歌詞:",
         "lyrics_hint": "ひらがな・カタカナ・ローマ字（漢字は不可）。空白・句読点は休符。空欄なら「あ」で歌う。"
@@ -183,7 +183,7 @@ TEXTS = {
         "voice_na_cli": "This CLI has no singing voice support",
         "voice_na_random": "Not available with a random genre",
         "voice_na_genre": "This genre has no vocal part",
-        "voice_na_format": "Not available for this format (IT, XM, MP3, MIDI)",
+        "voice_na_format": "Voice is not available for this format",
         "voice_unchecked": "Please check the bank's terms (terms_checked in modweaver.json)",
         "lyrics": "Lyrics:",
         "lyrics_hint": "Hiragana, katakana or romaji (no kanji). Spaces and punctuation are rests. Empty = sing \"ah\". "

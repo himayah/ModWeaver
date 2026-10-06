@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mod_weaver")
 
-VOICE_HEADROOM_DB = 1.0   # 歌声を加えた曲の底上げで、測定値（歌声なし）に足す dB（P3 で実測して決める。VOCAL_DESIGN.md R3）
+VOICE_HEADROOM_DB = 0.5   # 歌声を加えた曲の底上げで、測定値（歌声なし）に足す dB（P3 で実測して決める。VOCAL_DESIGN.md R3）
 _TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（DESIGN.md §7.6）
 
 
@@ -66,7 +66,7 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
     vplan = None
     voice_headroom = 0.0
     if voice is not None and any(p.syl is not None for ps, _a in placements_by_section.values() for p in ps):
-        vplan = voicemod.VoicePlan(voice, genre, plan.bpm)
+        vplan = voicemod.VoicePlan(voice, genre, plan.bpm, target.sample)
         vplan.prepare(placements_by_section, {name: (s.plan.meter.ticks_per_step, s.plan.swing)
                                               for name, s in score.sections.items()})
         voice_headroom = VOICE_HEADROOM_DB     # 歌声ありは歌声の分だけ余裕を持って底上げする（VOCAL_DESIGN.md §5.8）
@@ -120,11 +120,16 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
         rows_per_measure=score.sections[first_section].plan.meter.steps)
     if level:
         from ...core import native_level
-        from ..levels import PEAK_DB
-        peaks = PEAK_DB.get(genre.id)
-        if voice_headroom and peaks:
-            peaks = {k: v + voice_headroom for k, v in peaks.items()}
-        rs = native_level.lift(rs, peaks, rs.n_channels - 1 if voice_headroom and fmt != "mod" else None)
+        from ..levels import PEAK_DB, PEAK_DB_VOICE
+        if vplan is not None and PEAK_DB_VOICE.get(genre.id):
+            # 歌声あり: 歌声ありで測った値（Part.ducks で他パートが下がるので、歌声なしの測定値とは最大振幅が違う）
+            peaks = {k: v + voice_headroom for k, v in PEAK_DB_VOICE[genre.id].items()}
+            rs = native_level.lift(rs, peaks)
+        else:
+            peaks = PEAK_DB.get(genre.id)
+            if voice_headroom and peaks:
+                peaks = {k: v + voice_headroom for k, v in peaks.items()}
+            rs = native_level.lift(rs, peaks, rs.n_channels - 1 if voice_headroom and fmt != "mod" else None)
     return rs
 
 

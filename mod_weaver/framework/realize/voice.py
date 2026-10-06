@@ -151,7 +151,8 @@ def logical_of_hz(hz: float) -> float:
 
 
 class VoicePlan:
-    def __init__(self, backend: VoiceBackend, genre: "Genre", bpm: int) -> None:
+    def __init__(self, backend: VoiceBackend, genre: "Genre", bpm: int, caps=None) -> None:
+        self.caps = caps                # ``SampleCaps``（8-bit 形式は音節を 8-bit・上限バイト数以内にする）
         self.backend = backend
         self.genre = genre
         self.bpm = bpm
@@ -276,17 +277,47 @@ class VoicePlan:
         ms_tick = 2500.0 / self.bpm
         pad = max(0, round(self.lead_ticks * ms_tick / 1000.0 * vs.rate) - vs.pre)
         data = [0.0] * pad + vs.data
-        pcm = struct.pack(f"<{len(data)}h", *[max(-32768, min(32767, round(v * 32767))) for v in data])
+        loop = (vs.loop[0] + pad, vs.loop[1]) if vs.loop else None        # サンプル単位（16-bit の word = 1 サンプル）
+        rate = vs.rate
+        bits = 16
+        if self.caps is not None and self.caps.bits == 8:
+            data, loop, rate = _to_8bit(data, loop, rate, self.caps.max_bytes)
+            bits = 8
+            pcm = bytes(max(0, min(255, round(v * 127) + 128)) for v in data)
+            loop = (loop[0] // 2, loop[1] // 2) if loop else None            # 8-bit の word = 2 サンプル
+        else:
+            pcm = struct.pack(f"<{len(data)}h", *[max(-32768, min(32767, round(v * 32767))) for v in data])
         h = logical_of_hz(vs.home_hz)
         s_note = round(h)
         rate_note = 24
-        rate_hz = vs.rate * 2 ** ((s_note - h) / 12)
-        loop = (vs.loop[0] + pad, vs.loop[1]) if vs.loop else None
+        rate_hz = rate * 2 ** ((s_note - h) / 12)
         name = f"v:{self.backend.info.id[:6]}:{slot.syl}.{slot.bucket}"
         return SampleSpec(name=name.encode("ascii", "replace").decode("ascii")[:22], data=pcm,
                           volume=inst.volume if inst.volume is not None else 48, loop=loop, rate_note=rate_note,
                           shift=s_note - rate_note, pitched=True, pan=slot.pan if slot.pan is not None else 128,
-                          sounding_hz=vs.home_hz, bits=16, rate_hz=rate_hz)
+                          sounding_hz=vs.home_hz, bits=bits, rate_hz=rate_hz)
+
+
+def _to_8bit(data: list[float], loop: Optional[tuple[int, int]], rate: int, max_bytes: int):
+    """8-bit 形式（S3M）向け: 上限バイト数に収まるよう再サンプルし、サンプル数とループを偶数（word = 2 サンプル）にそろえる。
+    戻り値は (データ, ループ（サンプル単位）, 新しいレート)。"""
+    from ...voice.bank.resample import resample
+    n = len(data)
+    if n > max_bytes - 2:
+        new_rate = int(rate * (max_bytes - 2) / n)
+        data = resample(data, rate, new_rate)
+        if loop:
+            loop = (round(loop[0] * new_rate / rate), round(loop[1] * new_rate / rate))
+        rate = new_rate
+    if loop:
+        start = loop[0] - loop[0] % 2
+        length = max(2, loop[1] - loop[1] % 2)
+        if start + length > len(data):
+            length = max(2, (len(data) - start) // 2 * 2)
+        loop = (start, length)
+    if len(data) % 2:
+        data = data + [0.0]
+    return data, loop, rate
 
 
 def home_name(h: float) -> str:

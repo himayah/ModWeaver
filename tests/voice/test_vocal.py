@@ -148,13 +148,15 @@ def test_syllable_without_vowel_fallback_is_an_error(bank):
 
 # ---- 生成・形式・CLI ----
 
-@pytest.mark.parametrize("fmt", ["it", "xm"])
+@pytest.mark.parametrize("fmt", ["it", "xm", "s3m"])
 @pytest.mark.parametrize("gid", VOCAL_GENRES)
 def test_generates_and_verifies_with_voice(gid, fmt):
     built = engine.build(engine.get_genre(gid), 3, fmt, voice="formant")
     assert not [i for i in engine.verify_data(built) if i.level == "ERROR"]
     plain = engine.build(engine.get_genre(gid), 3, fmt)
-    assert built.channels == plain.channels + 1 and built.voice.id == "formant" and plain.voice is None
+    # 歌声は lane を 1 つ足す。形式のチャンネル上限（S3M は 16）にすでに達している曲は、他のパートを詰めて同じ数に収める
+    assert built.channels in (plain.channels + 1, built.target.budget) and built.channels <= built.target.budget
+    assert built.voice.id == "formant" and plain.voice is None
     assert built.data == engine.build(engine.get_genre(gid), 3, fmt, voice="formant").data      # V-3
 
 
@@ -170,7 +172,7 @@ def test_midi_with_voice_has_a_choir_channel():
     assert built.channels == plain.channels + 1
 
 
-@pytest.mark.parametrize("fmt", ["mod", "s3m"])
+@pytest.mark.parametrize("fmt", ["mod"])
 def test_voice_on_unsupported_format_is_an_error(fmt):
     with pytest.raises(VoiceUnsupportedError):
         engine.build(engine.get_genre("enka"), 1, fmt, voice="formant")
@@ -206,7 +208,7 @@ def test_cli_exit_codes_and_credits(tmp_path, bank, capsys):
 def test_catalog_marks_vocal_genres():
     cat = cli.catalog()
     assert {g["id"] for g in cat["genres"] if g["vocal"]} == set(VOCAL_GENRES)
-    assert cat["voice_formats"] == ["it", "xm", "mp3", "midi"]
+    assert cat["voice_formats"] == ["it", "xm", "s3m", "mp3", "midi"]
 
 
 # ---- 層の検査（VOCAL_DESIGN.md §2.1） ----
@@ -396,3 +398,27 @@ def test_multi_pitch_song_builds_with_per_range_samples(multi_bank):
     from mod_weaver.core import native
     assert not [i for i in native.verify("it", b.data) if i.level == "ERROR"]
     assert b.data.count(b"v:mpb:") > 5                                          # 音節 × 音域のサンプル
+
+
+# ---- S3M の歌声（8-bit。P5） ----
+
+def test_s3m_voice_samples_are_8bit_and_fit_the_size_limit(bank):
+    from mod_weaver.framework.realize.tracker import realize
+    g = engine.get_genre("enka")
+    plan = resolve_plan(g, 3)
+    t = resolve("s3m", None, g, 3)
+    sc = compose(g, plan, 3, t.features | {"voice"})
+    rs = realize(g, sc, plan, t, voice=UtauBackend(bank))
+    voiced = [s for s in rs.samples if s.name.startswith("v:")]
+    assert voiced and all(s.bits == 8 and len(s.data) <= t.sample.max_bytes and len(s.data) % 2 == 0 for s in voiced)
+    assert all(s.loop is None or s.loop[0] + s.loop[1] <= s.length_words for s in voiced)
+
+
+def test_to_8bit_shrinks_long_syllables_and_keeps_loops_even():
+    from mod_weaver.framework.realize.voice import _to_8bit
+    data = [0.5] * 150001
+    out, loop, rate = _to_8bit(data, (100001, 20001), 44100, 64000)
+    assert len(out) <= 64000 and len(out) % 2 == 0 and rate < 44100
+    assert loop[0] % 2 == 0 and loop[1] % 2 == 0 and loop[0] + loop[1] <= len(out)
+    same, loop2, rate2 = _to_8bit([0.1] * 1000, (11, 101), 44100, 64000)
+    assert rate2 == 44100 and loop2 == (10, 100) and len(same) == 1000

@@ -103,7 +103,9 @@ def _apply_ducks(genre: "Genre", active: list["Part"], sec_score: SectionScore) 
     for part in active:
         if not part.ducks or not any(isinstance(e, NoteEvent) for e in sec_score.parts.get(part.name, ())):
             continue
+        ratios = dict(part.duck_ratios)
         for tgt in part.ducks:
+            ratio = ratios.get(tgt, part.duck_ratio)
             events = sec_score.parts.get(tgt)
             if not events:
                 continue
@@ -113,7 +115,7 @@ def _apply_ducks(genre: "Genre", active: list["Part"], sec_score: SectionScore) 
                     inst = genre.instruments[e.inst]
                     base = e.vel if e.vel is not None else (inst.volume if inst.volume is not None
                                                             else getattr(getattr(inst, "patch", None), "volume", 48))
-                    e = dataclasses.replace(e, vel=max(1, round(base * part.duck_ratio)))
+                    e = dataclasses.replace(e, vel=max(1, round(base * ratio)))
                 out.append(e)
             sec_score.parts[tgt] = out
 

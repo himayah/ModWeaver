@@ -139,6 +139,7 @@ class Part:
     depends: tuple[str, ...] = ()     # 先に作っておくパート
     ducks: tuple[str, ...] = ()       # このパートが鳴る区間で音量を下げるパート（歌が主旋律のとき、同じ旋律の楽器を後ろへ回す）
     duck_ratio: float = 0.4           # ``ducks`` の音量の倍率
+    duck_ratios: tuple[tuple[str, float], ...] = ()   # パートごとの倍率（``duck_ratio`` を上書き）。例 (("lead", 0.2),)
     requires: frozenset[str] = frozenset()   # 曲の機能（``Target.features`` ＋ ``voice``）。満たさなければパートは存在しない扱い
 
 
@@ -222,6 +223,9 @@ def _validate_declaration(cls: type) -> None:
         for tgt in part.ducks:
             if tgt not in name_set:
                 raise PlanError(f"{cls.id}: part {part.name!r} ducks unknown part {tgt!r}")
+        for tgt, _r in part.duck_ratios:
+            if tgt not in part.ducks:
+                raise PlanError(f"{cls.id}: part {part.name!r} has a duck ratio for {tgt!r}, which it does not duck")
         for dep in part.depends:
             if dep not in name_set:
                 raise PlanError(f"{cls.id}: part {part.name!r} depends on unknown part {dep!r}")

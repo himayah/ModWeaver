@@ -315,3 +315,46 @@ def test_formant_vowels_have_distinct_spectra():
         cs = {v: curve(v, f0) for v in "aiMeo"}
         worst = min(float(np.sqrt(np.mean((cs[a] - cs[b]) ** 2))) for a in "aiMeo" for b in "aiMeo" if a < b)
         assert worst > 4.0, (f0, worst)               # どの母音の組も包絡が 4 dB(RMS) 以上違う
+
+
+# ---- 歌が聞き取れる音量バランス（歌詞が埋もれた問題。2026-10-06） ----
+
+@pytest.mark.parametrize("gid", VOCAL_GENRES)
+def test_vocal_genres_duck_the_parts_that_mask_the_voice(gid):
+    g = engine.get_genre(gid)
+    vocal = next(p for p in g.parts if p.name == "vocal")
+    assert "lead" in vocal.ducks and len(vocal.ducks) >= 3            # 旋律をなぞる楽器と、声の帯域に居る和音・弦・笛
+    ratios = dict(vocal.duck_ratios)
+    assert ratios["lead"] < vocal.duck_ratio                            # 同じ旋律の楽器は特に後ろへ回す
+    assert set(ratios) <= set(vocal.ducks)
+
+
+@pytest.mark.parametrize("gid", VOCAL_GENRES)
+def test_ducked_parts_are_quieter_than_without_the_voice(gid):
+    _, off = _score(gid, 3, False)
+    g, on = _score(gid, 3, True)
+    vocal = next(p for p in g.parts if p.name == "vocal")
+    ratios = dict(vocal.duck_ratios)
+    checked = 0
+    for name, sec in on.sections.items():
+        if not any(isinstance(e, NoteEvent) for e in sec.parts["vocal"]):
+            continue
+        for tgt in vocal.ducks:
+            for a, b in zip(off.sections[name].parts[tgt], sec.parts[tgt]):
+                if isinstance(a, NoteEvent) and isinstance(b, NoteEvent):
+                    inst = g.instruments[a.inst]
+                    base = a.vel if a.vel is not None else (inst.volume if inst.volume is not None
+                                                            else getattr(getattr(inst, "patch", None), "volume", 48))
+                    assert b.vel == max(1, round(base * ratios.get(tgt, vocal.duck_ratio)))
+                    checked += 1
+    assert checked > 20
+
+
+def test_duck_ratio_for_a_part_that_is_not_ducked_is_rejected():
+    from mod_weaver.framework.genre import Part
+    from mod_weaver.framework.gens import Sing
+    g = engine.get_genre("enka")
+    bad = dataclasses.replace(next(p for p in g.parts if p.name == "vocal"), duck_ratios=(("bass", 0.5),))
+    ns = {"parts": tuple(bad if p.name == "vocal" else p for p in g.parts)}
+    with pytest.raises(PlanError, match="duck ratio"):
+        type("Tmp", (type(g),), ns)()

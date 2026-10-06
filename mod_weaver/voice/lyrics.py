@@ -33,7 +33,7 @@ def parse_lyrics(spec: str) -> Lyrics:
         except (OSError, UnicodeDecodeError) as e:
             raise LyricsError(f"cannot read lyrics file {path}: {e}") from e
         return parse_text(text)
-    return Lyrics(stream=tuple(ja.parse(spec)))
+    return parse_text(spec)               # 文字列も、ファイルと同じ書式（[区間] ブロック可）
 
 
 def parse_text(text: str) -> Lyrics:

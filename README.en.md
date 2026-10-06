@@ -342,6 +342,7 @@ On Windows, **double-click `modweaver_gui.bat`** (no console window). It works e
 
 - Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5). Picking a genre fills the tempo fields with its typical tempo (Fixed) and its usual range (Range); the channel field depends on the format (buttons for the numbers the genre offers for MOD, an upper-limit field for XM, S3M, IT and MP3, unavailable for MIDI).
 - From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
+- For genres with a vocal part (IT, XM, MP3, MIDI), the "Voice" field lists the imported voice banks (`--list-voices --json`) and the "Lyrics" field takes the lyrics (see [Adding a singing voice](#5-adding-a-singing-voice---voice----lyrics)). The fields are disabled where they cannot be used.
 - The genre list and available formats are read from the CLI (`--list-genres --json`) at startup. The GUI runs `modweaver.py` behind the scenes, so it can do exactly what the CLI can.
 
 ### 5. Adding a singing voice (`--voice` / `--lyrics`)

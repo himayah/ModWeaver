@@ -98,3 +98,36 @@ def test_gui_rejects_bad_seed_and_tempo(app, monkeypatch):
     app.tempo_hi.set("160")
     req = app._request()
     assert req.seed == 12 and req.tempo == (150, 160) and len(shown) == 2
+
+
+def test_gui_voice_rows_follow_genre_and_format(app):
+    from mod_weaver.gui.bridge import Voice
+    _pump(app, lambda: app.catalog is not None or app.load_error is not None)
+    app.voices = [Voice("formant", "ja", True, "", True), Voice("bank1", "ja", False, "credit X", False, 10)]
+    app.random_genre.set(False)
+    app.genre_id.set("enka")
+    app.fmt.set("it")
+    app._build()
+    assert str(app.voice_combo.cget("state")) == "readonly"
+    assert str(app.lyrics_box.cget("state")) == "disabled"             # 声を選ぶまで歌詞は書けない
+    app.voice_combo.current(2)
+    app._on_voice_selected()
+    assert app.voice.get() == "bank1" and str(app.lyrics_box.cget("state")) == "normal"
+    assert app.voice_note.cget("text") == app.t("voice_unchecked")     # 規約未確認の音源には注意を出す
+    app.lyrics_box.insert("1.0", "ゆうやけ")
+    app._read_lyrics()
+    app._build()                                                        # 作り直しても残る
+    assert app.lyrics_box.get("1.0", "end-1c") == "ゆうやけ" and app.voice.get() == "bank1"
+
+    req = app._request()
+    assert (req.voice, req.lyrics) == ("bank1", "ゆうやけ")
+    app.fmt.set("mod")                                                  # 非対応の形式では無効になり、渡さない
+    assert str(app.voice_combo.cget("state")) == "disabled" and app._request().voice is None
+    app.fmt.set("it")
+    app.genre_id.set("calm")                                            # 歌声パートが無いジャンル
+    app._on_genre_changed()
+    assert str(app.voice_combo.cget("state")) == "disabled" and app._request().voice is None
+    app.genre_id.set("enka")
+    app.random_genre.set(True)                                          # ランダムジャンルでも使えない
+    app._on_genre_changed()
+    assert app.voice_note.cget("text") == app.t("voice_na_random") and app._request().voice is None

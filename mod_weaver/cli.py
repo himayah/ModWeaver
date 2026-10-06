@@ -247,6 +247,7 @@ def result_json(genre, result: Result, repro: str, random_genre: bool) -> dict:
             "id": result.voice.id, "fingerprint": result.voice.fingerprint[:8], "credit": result.voice.credit,
             "terms_url": result.voice.terms_url, "terms_checked": result.voice.terms_checked,
             "credits_path": str(Path(result.credits_path).resolve()) if result.credits_path else None},
+        "lyrics": result.lyrics,
     }
 
 

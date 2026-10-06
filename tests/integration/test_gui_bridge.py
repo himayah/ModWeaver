@@ -92,6 +92,36 @@ def test_replay_request_keeps_a_channel_request_only_where_it_means_the_same(cat
     assert bridge.replay_request(xm_song, "midi", None, catalog).channels is None
 
 
+def test_catalog_tells_which_genres_and_formats_can_sing(catalog):
+    assert catalog.voice_formats == tuple(cli.catalog()["voice_formats"]) and "it" in catalog.voice_formats
+    enka, calm = catalog.genre("enka"), catalog.genre("calm")
+    assert enka.vocal and not calm.vocal
+    assert catalog.voice_ok(enka, "it") and not catalog.voice_ok(enka, "mod")
+    assert not catalog.voice_ok(calm, "it") and not catalog.voice_ok(None, "it")     # ランダムジャンルは不可
+
+
+def test_build_args_with_voice_and_lyrics(catalog):
+    req = Request("enka", fmt="it", voice="teto", lyrics="ゆうやけ\n[verse]\nあ")
+    assert bridge.build_args(req, catalog) == ["--genre", "enka", "--format", "it", "--voice", "teto",
+                                               "--lyrics", "ゆうやけ\n[verse]\nあ", "--json"]
+    assert "--lyrics" not in bridge.build_args(Request("enka", voice="teto", lyrics="  \n"), catalog)
+    assert "--lyrics" not in bridge.build_args(Request("enka", lyrics="あ"), catalog)      # 声が無ければ歌詞も渡さない
+
+
+def test_replay_request_keeps_the_voice_only_in_voice_formats(catalog):
+    song = _song(format="it", voice="teto", lyrics="あ")
+    assert bridge.replay_request(song, "xm", None, catalog) == Request("pop", 5, "xm", None, None, None, "teto", "あ")
+    assert bridge.replay_request(song, "mod", None, catalog) == Request("pop", 5, "mod", None, None, None)
+    assert bridge.replay_request(song, "s3m", None, catalog).voice is None
+
+
+def test_voices_are_read_from_the_cli_and_a_failure_is_empty(monkeypatch):
+    rows = bridge.load_voices()
+    assert rows and rows[0].id == "formant" and rows[0].builtin
+    monkeypatch.setattr(bridge, "run", lambda *a, **k: bridge.Outcome(list(a), 1))
+    assert bridge.load_voices() == []
+
+
 def _run_job(args) -> bridge.Outcome:
     done = threading.Event()
     box = []

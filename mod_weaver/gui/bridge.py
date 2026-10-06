@@ -39,6 +39,7 @@ class Genre:
     tempo_range: tuple[int, int]       # --tempo で指定できる範囲
     mod_channels: tuple[int, ...]       # MOD で選べるチャンネル数
     tempo_choices: tuple[int, ...]     # ジャンルが自分で選ぶテンポの候補（昇順）
+    vocal: bool = False                # 歌声パートを持つ（--voice が使える）
 
     def describe(self, lang: str) -> str:
         return self.description_en if lang == "en" else self.description
@@ -70,6 +71,7 @@ class Catalog:
     genres: tuple[Genre, ...]
     mp3_available: bool
     mp3_error: Optional[str]
+    voice_formats: tuple[str, ...] = ()           # --voice が使える形式
 
     @classmethod
     def from_json(cls, data: dict) -> "Catalog":
@@ -87,11 +89,12 @@ class Catalog:
             genres=tuple(
                 Genre(g["id"], g["display_name"], g["category"], tuple(g["aliases"]), g["description"],
                       g["description_en"], tuple(g["tempo_range"]), tuple(g["mod_channels"]),
-                      tuple(g["tempo_choices"]))
+                      tuple(g["tempo_choices"]), bool(g.get("vocal", False)))
                 for g in data["genres"]
             ),
             mp3_available=data["mp3"]["available"],
             mp3_error=data["mp3"]["error"],
+            voice_formats=tuple(data.get("voice_formats", ())),
         )
 
     def genre(self, genre_id: str) -> Optional[Genre]:
@@ -110,6 +113,10 @@ class Catalog:
     def extension(self, fmt: str) -> str:
         return dict(self.formats).get(fmt, "." + fmt)
 
+    def voice_ok(self, genre: Optional[Genre], fmt: str) -> bool:
+        """このジャンル・形式で ``--voice`` が使えるか（CLI が教えた値だけで決める）。ランダムジャンルは使えない。"""
+        return genre is not None and genre.vocal and fmt in self.voice_formats
+
     def is_full_tempo_range(self, genre: Genre) -> bool:
         """ジャンルのテンポ範囲が CLI の全域（＝ジャンルによる制限なし）か。"""
         return genre.tempo_range == (self.tempo_min, self.tempo_max)
@@ -117,6 +124,22 @@ class Catalog:
     def tempo_bounds(self, genre: Optional[Genre]) -> tuple[int, int]:
         """テンポの入力で受け付ける範囲。ジャンルが決まっていればその ``tempo_range``、ランダムなら CLI の全域。"""
         return genre.tempo_range if genre is not None else (self.tempo_min, self.tempo_max)
+
+
+@dataclass(frozen=True)
+class Voice:
+    """``--list-voices --json`` の1行。"""
+    id: str
+    lang: str
+    builtin: bool
+    credit: str
+    terms_checked: bool
+    syllables: Optional[int] = None
+
+    @classmethod
+    def from_json(cls, d: dict) -> "Voice":
+        return cls(d["id"], d.get("lang", ""), bool(d.get("builtin")), d.get("credit", ""),
+                   bool(d.get("terms_checked", True)), d.get("syllables"))
 
 
 @dataclass(frozen=True)
@@ -136,12 +159,16 @@ class SongResult:
     summary: tuple[str, ...]
     path: Path
     repro: str
+    voice: Optional[str] = None
+    lyrics: Optional[str] = None
 
     @classmethod
     def from_json(cls, data: dict) -> "SongResult":
+        v = data.get("voice")
         return cls(data["genre"], data["display_name"], data["random_genre"], data["format"], data["seed"],
                    data["bpm"], data["tempo_request"], data["channels"], data["channels_request"],
-                   data["channel_budget"], data["sample_bits"], tuple(data["summary"]), Path(data["path"]), data["repro"])
+                   data["channel_budget"], data["sample_bits"], tuple(data["summary"]), Path(data["path"]), data["repro"],
+                   v["id"] if v else None, data.get("lyrics"))
 
 
 # ------------------------------------------------------------
@@ -157,6 +184,8 @@ class Request:
     tempo: Optional[tuple[int, int]] = None   # (lo, hi)。固定なら lo == hi
     channels: Optional[int] = None
     output_dir: Optional[Path] = None
+    voice: Optional[str] = None
+    lyrics: Optional[str] = None       # 歌詞（複数行可。[区間] ブロックも可。CLI の --lyrics の文字列と同じ書式）
 
 
 def build_args(req: Request, catalog: Catalog) -> list[str]:
@@ -173,6 +202,10 @@ def build_args(req: Request, catalog: Catalog) -> list[str]:
         args += ["--channels", str(req.channels)]
     if req.output_dir is not None:
         args += ["--output-dir", str(req.output_dir)]
+    if req.voice:
+        args += ["--voice", req.voice]
+        if req.lyrics and req.lyrics.strip():
+            args += ["--lyrics", req.lyrics]
     args.append("--json")
     return args
 
@@ -190,7 +223,10 @@ def replay_request(song: SongResult, fmt: str, output_dir: Optional[Path],
         src, dst = catalog.channel_spec(song.format), catalog.channel_spec(fmt)
         if dst is None or src is None or ("choices" in src) != ("choices" in dst):
             channels = None
-    return Request(song.genre, song.seed, fmt, tempo, channels, output_dir)
+    voice, lyrics = song.voice, song.lyrics
+    if catalog is not None and fmt not in catalog.voice_formats:
+        voice = lyrics = None                        # 歌声に対応しない形式（MOD・S3M）へは声を引き継げない
+    return Request(song.genre, song.seed, fmt, tempo, channels, output_dir, voice, lyrics)
 
 
 def parse_int(text: str) -> Optional[int]:
@@ -275,6 +311,17 @@ def load_catalog() -> Catalog:
     if not out.ok:
         raise RuntimeError(out.error or out.stderr.strip() or f"exit code {out.code}")
     return Catalog.from_json(out.json())
+
+
+def load_voices() -> list[Voice]:
+    """取り込み済みの声（``--list-voices --json``）。読めなければ空（歌声は使えないだけ）。"""
+    out = run(["--list-voices", "--json"], timeout=120)
+    if not out.ok:
+        return []
+    try:
+        return [Voice.from_json(d) for d in out.json()]
+    except (ValueError, KeyError, TypeError):
+        return []
 
 
 @dataclass

@@ -89,6 +89,7 @@ class Result:
     sample_bits: Optional[int] = None
     voice: Optional[VoiceInfo] = None
     credits_path: Optional[Path] = None
+    lyrics: Optional[str] = None
 
 
 # ------------------------------------------------------------
@@ -256,4 +257,4 @@ def generate(
         writer.write_file(credits_path, credits_text(built.voice, genre, seed, fmt).encode("utf-8"))
     return Result(seed=seed, path=path, plan=built.plan, issues=issues, genre=genre, tempo_request=tempo, fmt=fmt,
                   channels_request=channels, channels=built.channels, channel_budget=built.target.budget,
-                  sample_bits=built.sample_bits, voice=built.voice, credits_path=credits_path)
+                  sample_bits=built.sample_bits, voice=built.voice, credits_path=credits_path, lyrics=lyrics)

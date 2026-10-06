@@ -17,7 +17,7 @@ from tkinter import font as tkfont
 from typing import Callable, Optional
 
 from . import bridge
-from .bridge import Catalog, Genre, Outcome, Request, SongResult
+from .bridge import Catalog, Genre, Outcome, Request, SongResult, Voice
 from .texts import LANGUAGES, TEXTS, default_language
 
 POLL_MS = 50
@@ -49,6 +49,9 @@ class App(tk.Tk):
         self.fmt = tk.StringVar()
         self.output_dir = tk.StringVar(value=str(bridge.DEFAULT_OUTPUT_DIR))
         self.status = tk.StringVar()
+        self.voices: list[Voice] = []                    # --list-voices --json（取り込み済みの声）
+        self.voice = tk.StringVar(value="")              # "" は歌声なし
+        self.lyrics = ""                                 # 歌詞の入力（画面を作り直しても残す）
 
         self.title("ModWeaver")
         self.geometry("1040x760")
@@ -113,12 +116,14 @@ class App(tk.Tk):
                 catalog, error = bridge.load_catalog(), None
             except Exception as e:                        # CLI が動かない・JSON が壊れている
                 catalog, error = None, str(e)
-            self._post(lambda: self._on_catalog(catalog, error))
+            voices = bridge.load_voices() if catalog is not None and catalog.voice_formats else []
+            self._post(lambda: self._on_catalog(catalog, error, voices))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_catalog(self, catalog: Optional[Catalog], error: Optional[str]) -> None:
+    def _on_catalog(self, catalog: Optional[Catalog], error: Optional[str], voices: Optional[list] = None) -> None:
         self.catalog, self.load_error = catalog, error
+        self.voices = list(voices or [])
         if catalog is not None:
             if not self.genre_id.get():
                 self.genre_id.set(catalog.default_genre)
@@ -292,6 +297,7 @@ class App(tk.Tk):
             self.detail_desc.configure(text=g.describe(lang))
         self._update_channel_buttons()
         self._update_tempo_bounds()
+        self._update_voice_state()
 
     def _apply_genre_tempo(self) -> None:
         """ユーザーがジャンルを選んだとき、テンポの入力の初期値をそのジャンルに合わせる
@@ -342,7 +348,7 @@ class App(tk.Tk):
         self.channel_row.grid(row=1, column=1, sticky="w")
         self._build_channel_row()
         if not getattr(self, "_fmt_traced", False):
-            self.fmt.trace_add("write", lambda *_: self._build_channel_row())
+            self.fmt.trace_add("write", lambda *_: (self._build_channel_row(), self._update_voice_state()))
             self._fmt_traced = True
 
         ttk.Label(box, text=self.t("seed")).grid(row=2, column=0, sticky="w", pady=2)
@@ -368,6 +374,78 @@ class App(tk.Tk):
         ttk.Entry(row, textvariable=self.output_dir).pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(row, text=self.t("browse"), command=self._browse_output_dir).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(row, text=self.t("open"), command=self._open_output_dir).pack(side=tk.LEFT, padx=(6, 0))
+
+        self._build_voice_rows(box)
+
+    # --- 歌声（--voice / --lyrics。選べるものは CLI が教えた値だけ） ---
+
+    def _build_voice_rows(self, box: ttk.LabelFrame) -> None:
+        ttk.Label(box, text=self.t("voice")).grid(row=6, column=0, sticky="nw", pady=(6, 2))
+        row = ttk.Frame(box)
+        row.grid(row=6, column=1, sticky="w", pady=(6, 2))
+        ids = [""] + [v.id for v in self.voices]
+        self._voice_ids = ids
+        self.voice_combo = ttk.Combobox(row, values=[self.t("voice_none")] + ids[1:], state="readonly", width=22)
+        self.voice_combo.current(ids.index(self.voice.get()) if self.voice.get() in ids else 0)
+        self.voice_combo.bind("<<ComboboxSelected>>", self._on_voice_selected)
+        self.voice_combo.pack(side=tk.LEFT)
+        self.voice_note = ttk.Label(row, style="Muted.TLabel")
+        self.voice_note.pack(side=tk.LEFT, padx=(10, 0))
+
+        ttk.Label(box, text=self.t("lyrics")).grid(row=7, column=0, sticky="nw", pady=2)
+        col = ttk.Frame(box)
+        col.grid(row=7, column=1, sticky="ew", pady=2)
+        self.lyrics_box = tk.Text(col, height=4, width=48, wrap="word")
+        self.lyrics_box.insert("1.0", self.lyrics)
+        for ev in ("<KeyRelease>", "<FocusOut>"):
+            self.lyrics_box.bind(ev, lambda e: self._read_lyrics())
+        self.lyrics_box.pack(fill=tk.X)
+        ttk.Label(col, text=self.t("lyrics_hint"), style="Muted.TLabel", wraplength=560, justify="left").pack(anchor="w")
+        self._update_voice_state()
+
+    def _read_lyrics(self) -> str:
+        box = getattr(self, "lyrics_box", None)
+        if box is not None and box.winfo_exists():
+            self.lyrics = box.get("1.0", "end-1c")
+        return self.lyrics
+
+    def _on_voice_selected(self, _event=None) -> None:
+        self.voice.set(self._voice_ids[self.voice_combo.current()])
+        self._update_voice_state()
+
+    def _voice_available(self) -> Optional[str]:
+        """歌声が使えなければ、その理由の文言キー。使えるなら None（CLI が教えた対応ジャンル・形式で決める）。"""
+        if self.catalog is None or not self.catalog.voice_formats:
+            return "voice_na_cli"
+        if self.random_genre.get():
+            return "voice_na_random"
+        g = self._current_genre()
+        if g is None or not g.vocal:
+            return "voice_na_genre"
+        if self.fmt.get() not in self.catalog.voice_formats:
+            return "voice_na_format"
+        return None
+
+    def _update_voice_state(self) -> None:
+        if not hasattr(self, "voice_combo") or not self.voice_combo.winfo_exists():
+            return
+        why = self._voice_available()
+        usable = why is None and bool(self.voices)
+        self.voice_combo.configure(state="readonly" if usable else tk.DISABLED)
+        chosen = next((v for v in self.voices if v.id == self.voice.get()), None)
+        self.lyrics_box.configure(state=tk.NORMAL if usable and chosen is not None else tk.DISABLED)
+        if why is not None:
+            note = self.t(why)
+        elif not self.voices:
+            note = self.t("voice_none_installed")
+        elif chosen is not None and not chosen.terms_checked:
+            note = self.t("voice_unchecked")
+        elif chosen is not None and chosen.credit:
+            note = chosen.credit
+        else:
+            note = ""
+        self.voice_note.configure(text=note, style="Warn.TLabel" if (chosen and not chosen.terms_checked and usable)
+                                  else "Muted.TLabel")
 
     def _build_channel_row(self) -> None:
         """チャンネルの入力欄を、選んでいる形式の ``--channels`` の意味（CLI が教える）で作り直す。
@@ -489,7 +567,11 @@ class App(tk.Tk):
         elif self.channels.get() != "auto":
             channels = int(self.channels.get())
         out = self.output_dir.get().strip()
-        return Request(genre, seed, self.fmt.get(), tempo, channels, Path(out) if out else None)
+        voice = self.voice.get() or None
+        if voice is not None and self._voice_available() is not None:
+            voice = None                       # このジャンル・形式では使えない（画面でも無効にしてある）
+        lyrics = self._read_lyrics() if voice is not None else None
+        return Request(genre, seed, self.fmt.get(), tempo, channels, Path(out) if out else None, voice, lyrics)
 
     def _invalid(self, key: str, **kw) -> None:
         messagebox.showwarning(self.t("error"), self.t(key, **kw), parent=self)
@@ -673,6 +755,8 @@ class App(tk.Tk):
         else:
             self.tempo_mode.set("fixed")
             self.tempo_fixed.set(str(s.bpm))
+        self.voice.set(s.voice or "")
+        self.lyrics = s.lyrics or ""
         self.fmt.set(s.format)           # 形式を先に（チャンネルの入力欄が形式で作り直されるため）
         spec = self.catalog.channel_spec(s.format) if self.catalog else None
         if s.channels_request is None:

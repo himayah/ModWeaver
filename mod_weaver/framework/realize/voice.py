@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import math
 import statistics
 import struct
@@ -23,12 +24,14 @@ from ...core.model import SampleSpec
 from ...errors import PlanError
 from ...voice import formant
 from ...voice.bank import cache
-from ...voice.phoneme import KANA_OF_VOWEL, Syllable
+from ...voice.phoneme import KANA_OF_VOWEL, Syllable, vowel_syllable
 from .lanes import Placement
 
 if TYPE_CHECKING:
     from ...framework.genre import Genre, Voice
     from ..target import Target
+
+log = logging.getLogger(__name__)
 
 FOLD_LIMIT_SEMITONES = 6.5
 BUCKET_SEMITONES = 6                 # formant の音高帯の幅（半オクターブ）
@@ -136,6 +139,7 @@ class VoicePlan:
         self.lead_ticks = 0
         self.octave = 0                 # 音域合わせで移したオクターブ数（物理 = 書かれた音高 − 12×octave）
         self.notes: list[str] = []      # バナー・report 用の注意
+        self.missing: list[str] = []    # 声の源に無くて母音に置き換えた音節
         self._cache: dict = {}
         self._syl_of: dict = {}
 
@@ -146,16 +150,38 @@ class VoicePlan:
         voice_ps = [p for ps, _a in placements_by_section.values() for p in ps if p.kind == "note" and p.syl is not None]
         if not voice_ps:
             return
-        for p in voice_ps:
-            if not self.backend.covers(p.syl):
-                raise PlanError(f"voice {self.backend.info.id!r} cannot sing syllable {p.syl.text!r} "
-                                f"(VOCAL_DESIGN.md §5.1 fallback is not implemented yet)")
+        self._substitute(placements_by_section)
+        voice_ps = [p for ps, _a in placements_by_section.values() for p in ps if p.kind == "note" and p.syl is not None]
         home = self.backend.home_hz()
         if home:
             self._fold(placements_by_section, voice_ps, logical_of_hz(home))
             voice_ps = [p for ps, _a in placements_by_section.values() for p in ps
                         if p.kind == "note" and p.syl is not None]
         self._lead(placements_by_section, voice_ps, tick_for_step)
+
+    def _substitute(self, by_section: dict) -> None:
+        """声の源に無い音節は、同じ母音の単独母音へ置き換える（VOCAL_DESIGN.md §5.1 の 1。WARNING は音節ごとに1回）。
+        ん（核が N）は う。母音も無ければ ``PlanError``。"""
+        fixed: dict[str, Syllable] = {}
+        for name, (ps, autos) in list(by_section.items()):
+            out = []
+            for p in ps:
+                if p.kind == "note" and p.syl is not None and not self.backend.covers(p.syl):
+                    alt = fixed.get(p.syl.key)
+                    if alt is None:
+                        alt = vowel_syllable(KANA_OF_VOWEL.get(p.syl.nucleus, "う"))
+                        if not self.backend.covers(alt):
+                            raise PlanError(f"voice {self.backend.info.id!r} cannot sing syllable {p.syl.text!r} "
+                                            f"(nor its vowel {alt.text!r})")
+                        fixed[p.syl.key] = alt
+                        log.warning("voice %r has no syllable %r; sung as %r", self.backend.info.id, p.syl.text, alt.text)
+                        self.missing.append(p.syl.text)
+                    p = dataclasses.replace(p, syl=alt)
+                out.append(p)
+            by_section[name] = (out, autos)
+        if self.missing:
+            self.notes.append(f"voice: {len(set(self.missing))} syllable(s) missing in the bank, replaced by vowels: "
+                              f"{' '.join(sorted(set(self.missing)))}")
 
     def _fold(self, by_section: dict, voice_ps: list[Placement], h: float) -> None:
         m = statistics.median(p.pitch for p in voice_ps)

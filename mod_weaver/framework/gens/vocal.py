@@ -5,13 +5,16 @@
 """
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+import logging
+from typing import Mapping, Optional, Sequence
 
 from ...core.composer import RhythmMotif, ScaleRules
-from ...voice.phoneme import vowel_syllable
+from ...voice.phoneme import KANA_OF_VOWEL, Syllable, vowel_syllable
 from ..context import Generator, MeasureCtx, SectionCtx
 from ..score import Glide, NoteEvent, Vibrato
 from .lead import Lead
+
+log = logging.getLogger(__name__)
 
 
 class Vocalise(Lead):
@@ -51,7 +54,60 @@ class Sing(Generator):
     def section(self, ctx: SectionCtx) -> None:
         notes = sorted((e for e in ctx.events_of(self.source) if isinstance(e, NoteEvent) and e.pitch is not None
                         and not e.chord and (e.dur is None or e.dur >= self.min_dur)), key=lambda e: e.step)
-        for i, e in enumerate(notes):
+        lyrics = ctx.song.extra.get("lyrics")
+        queue = self._queue(ctx, lyrics) if lyrics is not None else None
+        if queue is None:
+            sung = [(e, self.syls[i % len(self.syls)], e.dur) for i, e in enumerate(notes)]
+        else:
+            sung, used = self._assign(notes, queue)
+            if lyrics.by_section:
+                left = sum(1 for x in queue[used:] if x is not None and x.kind != "geminate")
+                if left:
+                    log.warning("lyrics for section %r: %d syllable(s) do not fit the melody and are dropped",
+                                ctx.plan.name, left)
+            else:
+                ctx.song_state["lyric_pos"] = ctx.song_state.get("lyric_pos", 0) + used
+        for e, syl, dur in sung:
             arts = tuple(a for a in e.arts if isinstance(a, Glide))    # ビブラートはサンプルに焼き込み済み
             vel = None if e.vel is None else max(1, min(64, round(e.vel * self.vel_ratio)))
-            ctx.note(e.step, self.inst, e.pitch, vel, dur=e.dur, arts=arts, syl=self.syls[i % len(self.syls)])
+            ctx.note(e.step, self.inst, e.pitch, vel, dur=dur, arts=arts, syl=syl)
+
+    # ---- 歌詞（VOCAL_DESIGN.md §4.3）----
+    def _queue(self, ctx: SectionCtx, lyrics) -> Optional[list]:
+        """この区間で歌う音節列（``None`` は休符）。歌詞が無い区間は ``None``（ヴォカリーズ）。"""
+        name = ctx.plan.name
+        if lyrics.by_section:
+            return list(lyrics.by_section[name]) if name in lyrics.by_section else None
+        pos = ctx.song_state.get("lyric_pos", 0)             # 区間を指定しない歌詞: 歌う区間へ出現順に流し込む
+        if pos >= len(lyrics.stream):
+            return None
+        return list(lyrics.stream[pos:])
+
+    def _assign(self, notes: list[NoteEvent], queue: list):
+        """音符へ音節を割り当てる（乱数なし）。1音符＝1音節。休符 ``None`` は音符を1つ飛ばし、促音は直前の音符を1 step 詰め、
+        長音は同じ母音の音符にする。音節が尽きたら残りの音符は歌わない（同じ母音の連打になるメリスマにはしない。VOCAL_DESIGN.md §4.3）。
+        戻り値は (音符, 音節, dur) の列と、使った音節数。"""
+        out: list[list] = []          # [event, syl, dur]
+        i = 0
+        for idx, e in enumerate(notes):
+            while i < len(queue) and queue[i] is not None and queue[i].kind == "geminate":
+                if out:
+                    prev = out[-1]
+                    pdur = prev[2] if prev[2] is not None else max(1, e.step - prev[0].step)
+                    prev[2] = max(1, pdur - 1) if pdur > 1 else pdur
+                i += 1
+            if i >= len(queue):                                     # 歌詞が尽きた: 残りの音符は歌わない
+                break
+            syl = queue[i]
+            i += 1
+            if syl is None:                                         # 休符: この音符は歌わない
+                continue
+            if syl.kind == "extend":
+                syl = _vowel_of(syl)
+            out.append([e, syl, e.dur])
+        return [tuple(x) for x in out], i
+
+def _vowel_of(syl: Syllable) -> Syllable:
+    """子音を除いた母音だけの音節（長音・メリスマ用）。"""
+    kana = KANA_OF_VOWEL.get(syl.nucleus, "ん")
+    return Syllable(kana, syl.lang, nucleus=syl.nucleus)

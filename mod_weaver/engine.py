@@ -15,7 +15,7 @@ from typing import Optional, Union
 
 from .core import formats, native, render, writer
 from .core import verify as verify_mod
-from .errors import ChannelCountError, TempoRangeError, VerificationError, VoiceUnsupportedError
+from .errors import ChannelCountError, LyricsError, TempoRangeError, VerificationError, VoiceUnsupportedError
 from .framework import registry
 from .framework.compose import compose, resolve_plan
 from .framework.genre import Genre
@@ -26,6 +26,7 @@ from .framework.score import Score
 from .framework.realize.voice import FormantBackend, UtauBackend, VoiceBackend, VoiceInfo
 from .framework.target import Target, resolve
 from .voice.bank import discover
+from .voice.lyrics import parse_lyrics
 
 log = logging.getLogger("mod_weaver")
 
@@ -174,18 +175,26 @@ def resolve_voice(voice: str, genre: Genre, fmt: str, voices_dir: Optional[str] 
 
 
 def build(genre: Genre, seed: int, fmt: str = formats.DEFAULT_FORMAT, *, tempo: Optional[TempoRequest] = None,
-          channels: Optional[int] = None, voice: Optional[str] = None, voices_dir: Optional[str] = None) -> Built:
+          channels: Optional[int] = None, voice: Optional[str] = None, voices_dir: Optional[str] = None,
+          lyrics: Optional[str] = None) -> Built:
     """純粋関数（I/O なし。MP3 だけ ffmpeg を呼ぶ）。
 
     ``tempo`` を渡すと ``plan()`` が選んだ BPM を上書きする。``plan()`` 自体は従来どおり BPM を引く（引いた値を捨てる）ので
     他の乱数消費は変わらず、「同じ seed・別テンポ＝同じ曲の速さ違い」になる。"""
     backend = resolve_voice(voice, genre, fmt, voices_dir) if voice else None
+    parsed = None
+    if lyrics is not None:
+        if backend is None:
+            raise LyricsError("--lyrics needs --voice")
+        parsed = parse_lyrics(lyrics)
     target = resolve(fmt, channels, genre, seed)
     plan = resolve_plan(genre, seed)
+    if parsed is not None:
+        parsed.check_sections(list(plan.sections))
     if tempo is not None:
         plan.bpm = resolve_tempo(tempo, seed, genre)
     log.debug("%s seed=%s fmt=%s bpm=%s sections=%d", genre.id, seed, fmt, plan.bpm, len(plan.order))
-    score = compose(genre, plan, seed, target.features | ({"voice"} if backend else frozenset()))
+    score = compose(genre, plan, seed, target.features | ({"voice"} if backend else frozenset()), lyrics=parsed)
 
     if target.kind == "midi":
         data = realize_midi(genre, score, plan, target)
@@ -219,11 +228,12 @@ def generate(
     channels: Optional[int] = None,
     voice: Optional[str] = None,
     voices_dir: Optional[str] = None,
+    lyrics: Optional[str] = None,
 ) -> Result:
     """曲を生成し、検査して ``fmt`` 形式（既定 mod）のファイルを書き出す。検査 ERROR があればファイルを書かない。"""
     if seed is None:
         seed = random.randint(*SEED_RANGE)
-    built = build(genre, seed, fmt, tempo=tempo, channels=channels, voice=voice, voices_dir=voices_dir)
+    built = build(genre, seed, fmt, tempo=tempo, channels=channels, voice=voice, voices_dir=voices_dir, lyrics=lyrics)
 
     issues: list[verify_mod.Issue] = []
     if verify:

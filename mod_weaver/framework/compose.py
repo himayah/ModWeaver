@@ -56,10 +56,12 @@ def _topo_order(genre: "Genre") -> list["Part"]:
     return order
 
 
-def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str]) -> Score:
+def compose(genre: "Genre", plan: SongPlan, seed: int, features: frozenset[str], lyrics=None) -> Score:
     """区間ごと（作成順）・パートごとに ``Generator`` を呼んで ``Score`` を作る（DESIGN.md §5.7）。"""
     plan.extra = dict(plan.extra)
     plan.extra["features"] = frozenset(features)
+    if lyrics is not None:
+        plan.extra["lyrics"] = lyrics          # voice.lyrics.Lyrics。歌声パート（Sing）だけが読む
 
     order = [p for p in _topo_order(genre) if p.requires <= features]
     part_rngs = {p.name: random.Random(f"{seed}:{genre.id}:part:{p.name}") for p in genre.parts}

@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import random
+import shlex
 import re
 import shutil
 import sys
@@ -58,6 +59,7 @@ MESSAGES = {
         "list_genres": "全ジャンルの id・別名・説明を表示して終了する",
         "english": "使い方・ジャンル一覧・実行結果の表示を英語にする",
         "voice": "歌声を加える。formant（組込みの声）か、modweaver_voice.py で取り込んだ音源の id（歌声パートを持つジャンルだけ。IT・XM・MP3・MIDI）",
+        "lyrics": "歌詞（ひらがな・カタカナ・ローマ字）。文字列、または @ファイル（[区間名] で区切る。書式は VOCAL_DESIGN.md §4.1）。--voice が要る",
         "voices_dir": "音源（歌声）の置き場所（既定の探索順は VOCAL_DESIGN.md §5.3.1）",
         "list_voices": "取り込み済みの音源を表示して終了する（--json で機械向け）",
         "version": "バージョンと GitHub リポジトリの URL を表示して終了する",
@@ -95,6 +97,7 @@ MESSAGES = {
         "list_genres": "print all genre ids, aliases and descriptions, then exit",
         "english": "show the usage, genre list and results in English",
         "voice": "add a sung part: formant (built-in voice) or the id of a voice bank imported with modweaver_voice.py (genres with a vocal part; IT, XM, MP3, MIDI)",
+        "lyrics": "lyrics (hiragana, katakana or romaji): a string, or @FILE with [section] blocks (format: VOCAL_DESIGN.md 4.1). Needs --voice",
         "voices_dir": "where voice banks are searched (default search order: VOCAL_DESIGN.md 5.3.1)",
         "list_voices": "list the imported voice banks and exit (--json for machine-readable output)",
         "version": "print the version and the GitHub repository URL, then exit",
@@ -352,6 +355,7 @@ def build_parser(prog: Optional[str] = None, lang: str = "ja") -> argparse.Argum
                       help=m["tempo"].format(lo=TEMPO_MIN, hi=TEMPO_MAX))
     opts.add_argument("--channels", "-c", type=int, default=None, metavar="N", help=m["channels"])
     opts.add_argument("--voice", type=str, default=None, metavar="ID", help=m["voice"])
+    opts.add_argument("--lyrics", type=str, default=None, metavar="TEXT|@FILE", help=m["lyrics"])
     opts.add_argument("--voices-dir", type=str, default=None, metavar="DIR", help=m["voices_dir"])
     opts.add_argument("--list-voices", action="store_true", help=m["list_voices"])
     opts.add_argument("--list-genres", action="store_true", help=m["list_genres"])
@@ -468,7 +472,7 @@ def main(
             except OSError as e:
                 raise OutputError(f"cannot create directory {out.parent}: {e}") from e
         result = generate(genre, seed, out, tempo=args.tempo, fmt=fmt, channels=args.channels, voice=args.voice,
-                          voices_dir=args.voices_dir)
+                          voices_dir=args.voices_dir, lyrics=args.lyrics)
     except (ProfileNotFoundError, TempoRangeError, ChannelCountError, VoiceNotFoundError, VoiceUnsupportedError,
             LyricsError) as e:
         print(f"error: {e}", file=sys.stderr)
@@ -496,6 +500,8 @@ def main(
         repro += f" --channels {args.channels}"   # 指定しなければ seed で同じ編成になる
     if args.voice:
         repro += f" --voice {args.voice}" + (f" --voices-dir {args.voices_dir}" if args.voices_dir else "")
+    if args.lyrics:
+        repro += f" --lyrics {shlex.quote(args.lyrics)}"
     if args.json:
         print_json(result_json(genre, result, repro, random_genre))
     else:

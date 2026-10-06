@@ -127,9 +127,20 @@ def test_utau_range_fit_folds_by_octaves(bank):
     assert plan.octave == round((32 - h) / 12)
 
 
-def test_unsupported_syllable_is_reported(bank):
+def test_missing_syllable_falls_back_to_its_vowel(bank):
     plan = VoicePlan(UtauBackend(bank), engine.get_genre("enka"), 100)
-    odd = Syllable("ぬ", onset=("n",), nucleus="M")
+    p = lanesmod.Placement(0, 0, "note", "voice", 30.0, 40, 4, (), syl=Syllable("ぱ", onset=("p",), nucleus="a"))
+    by = {"s": ([p], [])}
+    plan.prepare(by, {"s": (6, None)})
+    assert by["s"][0][0].syl.text == "あ" and plan.missing == ["ぱ"]
+    assert any("replaced by vowels" in n for n in plan.notes)
+
+
+def test_syllable_without_vowel_fallback_is_an_error(bank):
+    class NoVowel(UtauBackend):
+        def covers(self, syl):
+            return False
+    plan = VoicePlan(NoVowel(bank), engine.get_genre("enka"), 100)
     p = lanesmod.Placement(0, 0, "note", "voice", 30.0, 40, 4, (), syl=Syllable("ぱ", onset=("p",), nucleus="a"))
     with pytest.raises(PlanError, match="cannot sing"):
         plan.prepare({"s": ([p], [])}, {"s": (6, None)})

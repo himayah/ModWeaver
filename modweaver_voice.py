@@ -1,4 +1,4 @@
-"""ModWeaver の音源管理コマンド（check / import / list / info / audition / make-test-bank）。VOCAL_DESIGN.md §6.2。"""
+"""ModWeaver の音源管理コマンド（check / import / list / info / audition / make-test-bank）。DESIGN.md §13.7.2。"""
 import sys
 
 from mod_weaver.voice_cli import main

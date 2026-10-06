@@ -1,4 +1,4 @@
-"""取り込み（``modweaver_voice.py check`` / ``import``。VOCAL_DESIGN.md §5.3.3）。"""
+"""取り込み（``modweaver_voice.py check`` / ``import``。DESIGN.md §13.5.3.3）。"""
 from __future__ import annotations
 
 import hashlib

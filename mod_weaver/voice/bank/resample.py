@@ -1,4 +1,4 @@
-"""窓付き sinc のリサンプリング（純 Python。取り込み時だけ使う。VOCAL_DESIGN.md §5.3.3-5）。"""
+"""窓付き sinc のリサンプリング（純 Python。取り込み時だけ使う。DESIGN.md §13.5.3.3-5）。"""
 from __future__ import annotations
 
 import math

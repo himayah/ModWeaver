@@ -1,4 +1,4 @@
-"""歌声の合唱（``Choir``。VOCAL_DESIGN.md §4.4・P5）: 和音の各声を同じ母音で同時に歌う。"""
+"""歌声の合唱（``Choir``。DESIGN.md §13.4.3・P5）: 和音の各声を同じ母音で同時に歌う。"""
 import dataclasses
 
 import pytest

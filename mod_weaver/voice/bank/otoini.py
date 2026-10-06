@@ -1,4 +1,4 @@
-"""oto.ini の読み込み（VOCAL_DESIGN.md §5.3.3）。
+"""oto.ini の読み込み（DESIGN.md §13.5.3.3）。
 
 1 行: ``<wav名>=<別名>,<offset>,<consonant>,<cutoff>,<preutterance>,<overlap>``（ms）。
 文字コードは UTF-8（厳密）→ cp932 の順に試す。

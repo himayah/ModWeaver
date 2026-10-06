@@ -1,4 +1,4 @@
-"""音源の管理 CLI（``modweaver_voice.py``。VOCAL_DESIGN.md §6.2）。標準ライブラリのみ。"""
+"""音源の管理 CLI（``modweaver_voice.py``。DESIGN.md §13.7.2）。標準ライブラリのみ。"""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ EXIT_OK, EXIT_ARGS, EXIT_BANK = 0, 2, 3
 
 def _parser(prog: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=prog, description="ModWeaver voice bank (UTAU oto.ini) tool")
-    p.add_argument("--voices-dir", help="where installed voices are searched (default: see VOCAL_DESIGN.md 5.3.1)")
+    p.add_argument("--voices-dir", help="where installed voices are searched (default: see DESIGN.md 13.5.3.1)")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check", help="read-only inspection of a voice folder")
     c.add_argument("folder", type=Path)

@@ -1,4 +1,4 @@
-"""試験用バンクの合成（コードだけで作る。声のデータではない＝D1 に抵触しない。VOCAL_DESIGN.md §9）。
+"""試験用バンクの合成（コードだけで作る。声のデータではない＝D1 に抵触しない。DESIGN.md §13.8）。
 
 ``make_test_bank(folder)`` が UTAU 形式（oto.ini＋wav＋modweaver.json）の 25 音節（あ行・か行・さ行・ま行・な行）を作る。
 テスト・``modweaver_voice.py make-test-bank``（取り込み・試聴の動作確認）で使う。品質は「母音が聞き分けられる」程度。

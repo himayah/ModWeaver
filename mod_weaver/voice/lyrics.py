@@ -1,4 +1,4 @@
-"""``--lyrics`` の入力（文字列または ``@ファイル``）を区間ごとの音節列にする（VOCAL_DESIGN.md §4.1）。"""
+"""``--lyrics`` の入力（文字列または ``@ファイル``）を区間ごとの音節列にする（DESIGN.md §13.4.1）。"""
 from __future__ import annotations
 
 import re

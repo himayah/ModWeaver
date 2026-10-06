@@ -1,4 +1,4 @@
-"""日本語の歌詞（VOCAL_DESIGN.md P4）: 前段 ``voice.lang.ja``・``--lyrics`` の書式・割当・CLI。"""
+"""日本語の歌詞（DESIGN.md §13.4・DESIGN_HISTORY.md §17.4.3）: 前段 ``voice.lang.ja``・``--lyrics`` の書式・割当・CLI。"""
 import dataclasses
 
 import pytest

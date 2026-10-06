@@ -1,4 +1,4 @@
-"""歌声の audition（IT）を実プレイヤー（libopenmpt）で再生し、プリロール整列（VOCAL_DESIGN.md §5.6・R2）を実測する:
+"""歌声の audition（IT）を実プレイヤー（libopenmpt）で再生し、プリロール整列（DESIGN.md §13.6.3・R2）を実測する:
 母音の頭（最初の音＋preutterance）が拍（クリック）から 1 tick（20 ms）以内に来る。"""
 import pytest
 

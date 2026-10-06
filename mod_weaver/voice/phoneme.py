@@ -1,4 +1,4 @@
-"""音素と音節（言語共通。純データ。VOCAL_DESIGN.md §3.1）。genres・framework・realize のすべてが import してよい。"""
+"""音素と音節（言語共通。純データ。DESIGN.md §13.3.1）。genres・framework・realize のすべてが import してよい。"""
 from __future__ import annotations
 
 from dataclasses import dataclass

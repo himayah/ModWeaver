@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("mod_weaver")
 
-VOICE_HEADROOM_DB = 0.5   # 歌声を加えた曲の底上げで、測定値（歌声なし）に足す dB（P3 で実測して決める。VOCAL_DESIGN.md R3）
+VOICE_HEADROOM_DB = 0.5   # 歌声を加えた曲の底上げで、測定値（歌声なし）に足す dB（歌声ありで測った表 PEAK_DB_VOICE に足す余裕。DESIGN.md §13.6.5・DESIGN_HISTORY.md §17.5 R3）
 _TEMPO_SEARCH_ROWS = 8   # row 0 が全チャンネル埋まっていても、近くの row で空きを探す（DESIGN.md §7.6）
 
 
@@ -69,7 +69,7 @@ def realize(genre: "Genre", score: "Score", plan: "SongPlan", target: "Target", 
         vplan = voicemod.VoicePlan(voice, genre, plan.bpm, target.sample)
         vplan.prepare(placements_by_section, {name: (s.plan.meter.ticks_per_step, s.plan.swing)
                                               for name, s in score.sections.items()})
-        voice_headroom = VOICE_HEADROOM_DB     # 歌声ありは歌声の分だけ余裕を持って底上げする（VOCAL_DESIGN.md §5.8）
+        voice_headroom = VOICE_HEADROOM_DB     # 歌声ありは歌声の分だけ余裕を持って底上げする（DESIGN.md §13.6.5）
     specs, slot_of, inst_names, release = samplesmod.plan_samples(genre, layout, score, target,
                                                                     placements_by_section, vplan)
     ctx = _Ctx(genre, layout, target, codec, plan.bpm, specs, slot_of, release, vplan)

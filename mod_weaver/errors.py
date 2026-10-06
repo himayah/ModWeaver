@@ -64,7 +64,7 @@ class ExternalToolError(ModGenError):
 
 
 class VoiceBankError(ModGenError):
-    """歌声の音源（UTAU 形式）の読み込み・取り込み・キャッシュの不備（VOCAL_DESIGN.md §5.3）。"""
+    """歌声の音源（UTAU 形式）の読み込み・取り込み・キャッシュの不備（DESIGN.md §13.5.3）。"""
 
 
 class VoiceNotFoundError(ModGenError):
@@ -76,4 +76,4 @@ class LyricsError(ModGenError):
 
 
 class VoiceUnsupportedError(ModGenError):
-    """``--voice`` を、歌声に対応しない形式・歌声パートの無いジャンルに指定した（黙って無視しない。VOCAL_DESIGN.md V-8）。"""
+    """``--voice`` を、歌声に対応しない形式・歌声パートの無いジャンルに指定した（黙って無視しない。DESIGN.md §13.1 V-8）。"""

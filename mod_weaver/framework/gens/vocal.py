@@ -1,4 +1,4 @@
-"""歌声のパート（VOCAL_DESIGN.md §4.3）。``Lead`` と同じ旋律に、音節（P3 は母音だけのヴォカリーズ）を流し込む。
+"""歌声のパート（DESIGN.md §13.4.3）。``Lead`` と同じ旋律に、音節（P3 は母音だけのヴォカリーズ）を流し込む。
 
 声の源（``--voice``）には問い合わせない。音節は決定的に割り当てる（旋律の乱数は ``Lead`` と同じく動機・旋律にだけ使う）ので、
 声の源や母音を変えても音符の時刻・高さは変わらない（V-4）。このパートは ``Part.requires=frozenset({"voice"})`` で宣言する。
@@ -73,7 +73,7 @@ class Sing(Generator):
             vel = None if e.vel is None else max(1, min(64, round(e.vel * self.vel_ratio)))
             ctx.note(e.step, self.inst, e.pitch, vel, dur=dur, arts=arts, syl=syl)
 
-    # ---- 歌詞（VOCAL_DESIGN.md §4.3）----
+    # ---- 歌詞（DESIGN.md §13.4.3）----
     def _queue(self, ctx: SectionCtx, lyrics) -> Optional[list]:
         """この区間で歌う音節列（``None`` は休符）。歌詞が無い区間は ``None``（ヴォカリーズ）。"""
         name = ctx.plan.name
@@ -86,7 +86,7 @@ class Sing(Generator):
 
     def _assign(self, notes: list[NoteEvent], queue: list):
         """音符へ音節を割り当てる（乱数なし）。1音符＝1音節。休符 ``None`` は音符を1つ飛ばし、促音は直前の音符を1 step 詰め、
-        長音は同じ母音の音符にする。音節が尽きたら残りの音符は歌わない（同じ母音の連打になるメリスマにはしない。VOCAL_DESIGN.md §4.3）。
+        長音は同じ母音の音符にする。音節が尽きたら残りの音符は歌わない（同じ母音の連打になるメリスマにはしない。DESIGN.md §13.4.3）。
         戻り値は (音符, 音節, dur) の列と、使った音節数。"""
         out: list[list] = []          # [event, syl, dur]
         i = 0
@@ -115,7 +115,7 @@ def _vowel_of(syl: Syllable) -> Syllable:
 
 
 class Choir(Generator):
-    """和音を母音で歌う合唱（``Pad`` の歌声版。VOCAL_DESIGN.md §4.4）。和音の変わり目に、構成音ごとの音符を同じ母音で発音し、
+    """和音を母音で歌う合唱（``Pad`` の歌声版。DESIGN.md §13.4.3）。和音の変わり目に、構成音ごとの音符を同じ母音で発音し、
     次の和音の変わり目（区間の終わりを超えない）まで伸ばす。歌声の和音は焼いて 1 つのサンプルにできないので、``Part(poly=声部数)`` の
     lane に 1 声ずつ載せる（lane が足りない予算では ``Part.min_channels`` でパートごと外す）。
 

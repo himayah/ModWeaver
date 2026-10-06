@@ -1,4 +1,4 @@
-"""歌声の Realizer 側の処理（VOCAL_DESIGN.md §5.1・§5.4〜§5.6）。
+"""歌声の Realizer 側の処理（DESIGN.md §13.5.1・§5.4〜§5.6）。
 
 ``VoiceBackend``（声の源）が音節を波形にし、``VoicePlan`` が曲全体の整合をとる:
 
@@ -40,7 +40,7 @@ LOGICAL_C1_HZ = 65.4064
 
 @dataclass(frozen=True)
 class VoiceSlot:
-    """歌声のサンプルの鍵（``SampleKey`` の 4 要素とは別の型。VOCAL_DESIGN.md §5.4）。"""
+    """歌声のサンプルの鍵（``SampleKey`` の 4 要素とは別の型。DESIGN.md §13.6.1）。"""
     inst: str
     syl: str
     bucket: int
@@ -180,7 +180,7 @@ class VoicePlan:
         self._lead(placements_by_section, voice_ps, tick_for_step)
 
     def _substitute(self, by_section: dict) -> None:
-        """声の源に無い音節は、同じ母音の単独母音へ置き換える（VOCAL_DESIGN.md §5.1 の 1。WARNING は音節ごとに1回）。
+        """声の源に無い音節は、同じ母音の単独母音へ置き換える（DESIGN.md §13.5.1 の 1。WARNING は音節ごとに1回）。
         ん（核が N）は う。母音も無ければ ``PlanError``。"""
         fixed: dict[str, Syllable] = {}
         for name, (ps, autos) in list(by_section.items()):
@@ -247,7 +247,7 @@ class VoicePlan:
                         row -= 1
                         elapsed += row_len(row)
                     delay = elapsed - self.lead_ticks
-                    if delay < 0:                    # 区間の頭より前: 行 0・Delay 0（母音が遅れる。VOCAL_DESIGN.md §5.6-4）
+                    if delay < 0:                    # 区間の頭より前: 行 0・Delay 0（母音が遅れる。DESIGN.md §13.6.3-4）
                         delay = 0
                     arts = p.arts + ((Delay(delay),) if delay else ())
                     p = dataclasses.replace(p, step=row, arts=arts,

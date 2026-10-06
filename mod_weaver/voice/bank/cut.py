@@ -1,4 +1,4 @@
-"""oto.ini の値による切り出し（VOCAL_DESIGN.md §5.3.3-3）。"""
+"""oto.ini の値による切り出し（DESIGN.md §13.5.3.3-3）。"""
 from __future__ import annotations
 
 from .otoini import OtoEntry

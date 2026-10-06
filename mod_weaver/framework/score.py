@@ -99,7 +99,7 @@ class NoteEvent:
     strum_ms: float = 0.0            # 和音の構成音ごとの鳴り始めの遅れ（ギターのストローク）
     prio: int = 1                    # 同じチャンネルに畳まれたときの優先度（大きいほど勝つ。DESIGN.md §7.6）
     arts: tuple[Articulation, ...] = ()
-    syl: Optional[Syllable] = None   # 歌声の音符だけが持つ（VOCAL_DESIGN.md §3.2）。既存の音符は None
+    syl: Optional[Syllable] = None   # 歌声の音符だけが持つ（DESIGN.md §13.3.2）。既存の音符は None
 
 
 @dataclass(frozen=True)

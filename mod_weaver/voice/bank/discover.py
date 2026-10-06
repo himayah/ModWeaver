@@ -1,4 +1,4 @@
-"""音源の置き場所の探索（VOCAL_DESIGN.md §5.3.1）。"""
+"""音源の置き場所の探索（DESIGN.md §13.5.3.1）。"""
 from __future__ import annotations
 
 import os

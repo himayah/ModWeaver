@@ -1,4 +1,4 @@
-"""``modweaver.json``（利用者が書く・音源ごとのクレジットと規約メモ。VOCAL_DESIGN.md §5.3.2）。
+"""``modweaver.json``（利用者が書く・音源ごとのクレジットと規約メモ。DESIGN.md §13.5.3.2）。
 ModWeaver は規約の内容を判断しない。"""
 from __future__ import annotations
 

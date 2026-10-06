@@ -1,4 +1,4 @@
-"""歌声の音源（UTAU 形式）の取り込み（VOCAL_DESIGN.md §5.3・§9）。実音源に依存しない（合成した試験用バンクを使う）。"""
+"""歌声の音源（UTAU 形式）の取り込み（DESIGN.md §13.5.3・§9）。実音源に依存しない（合成した試験用バンクを使う）。"""
 import json
 import math
 import struct

@@ -1,4 +1,4 @@
-"""歌声パート（VOCAL_DESIGN.md P3・ヴォカリーズ）: 宣言・作曲・音域合わせ・プリロール・CLI。"""
+"""歌声パート（DESIGN.md §13・ヴォカリーズ）: 宣言・作曲・音域合わせ・プリロール・CLI。"""
 import ast
 import dataclasses
 import json
@@ -211,7 +211,7 @@ def test_catalog_marks_vocal_genres():
     assert cat["voice_formats"] == ["it", "xm", "s3m", "mp3", "midi"]
 
 
-# ---- 層の検査（VOCAL_DESIGN.md §2.1） ----
+# ---- 層の検査（DESIGN.md §13.2） ----
 
 def _imports(path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -236,7 +236,7 @@ def test_phoneme_module_is_pure_data():
     assert not bad
 
 
-# ---- プリロール（VOCAL_DESIGN.md §5.6・R2） ----
+# ---- プリロール（DESIGN.md §13.6.3・R2） ----
 
 @pytest.mark.parametrize("swing", [None, "2:1", "3:1"])
 @pytest.mark.parametrize("bpm", [60, 84, 140, 200])

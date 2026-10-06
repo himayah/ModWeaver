@@ -4,7 +4,7 @@
 |:---|:---|
 | 対象 | ModWeaver 1.1.0（`mod_weaver` パッケージ・`modweaver.py`・GUI `modweaver_gui.pyw`） |
 | 本書の範囲 | **現在の実装がどうなっているか**だけを書く。なぜそうなったか・過去の案・訂正・レビュー記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) |
-| 最終更新 | 2026-10-03（新ジャンル14〔§6.19〕と第2弾4〔§6.20。DESIGN_HISTORY.md §16〕を追加。フレームワークの再設計を統合: 形式を最初に決めて作曲する新しい枠組み〔`framework/`〕と、全51ジャンルの移植、形式ごとの Realizer・書き出し。再設計の決定の経緯と実装中に分かったことは DESIGN_HISTORY.md §15。統合前の原文は git 履歴で参照できる） |
+| 最終更新 | 2026-10-07（歌声〔`--voice`・`--lyrics`。§13。経緯は DESIGN_HISTORY.md §17〕を追加。2026-10-03: 新ジャンル14〔§6.19〕と第2弾4〔§6.20。DESIGN_HISTORY.md §16〕を追加。フレームワークの再設計を統合: 形式を最初に決めて作曲する新しい枠組み〔`framework/`〕と、全51ジャンルの移植、形式ごとの Realizer・書き出し。再設計の決定の経緯と実装中に分かったことは DESIGN_HISTORY.md §15。統合前の原文は git 履歴で参照できる） |
 
 ---
 
@@ -29,6 +29,7 @@
 | logical note `n` | **書かれた音高**。`n = t + shift`（§3.1）。小数部はセント/100（微分音） |
 | 実音（sounding pitch） | 実際に聞こえる高さ。楽器ごとに書かれた音高からずれる（§3.1。全形式で同じ規約） |
 | 骨格 | 調・進行・各パートの音符の時刻と高さ。形式に依存しない部分（不変条件 I1、§10） |
+| 音節（Syllable） | 歌声の単位。頭子音・母音・種別（通常・促音・長音）を持つ言語共通の型。`NoteEvent.syl` に載り、Realizer が声の源（組込みの声／UTAU 音源）で描画する（§13） |
 | 実プレイヤー | ffmpeg 内蔵の libopenmpt（OpenMPT の再生エンジン）。自作ではない第三者の再生実装（§9.2） |
 
 ---
@@ -132,13 +133,16 @@ cli.py ──▶ engine.py ──▶ framework/（Target・Score・Genre・部�
 | `framework/context.py` | `SectionCtx`・`MeasureCtx`・`Generator`（§5.2） |
 | `framework/compose.py` | Score を作る（区間・パートの順序、乱数、依存関係、検査。§5.7） |
 | `framework/registry.py` | ジャンルの登録簿・`genres/` の自動検出（§5.6） |
-| `framework/gens/` | ジェネレータの部品集（§5.8）: `drums`（Groove）・`bass`・`comp`・`lead`・`pad`・`arp`・`fx`・`layer`・`echo`・`buildup`・`tempo`（`tempo_curve`） |
+| `framework/gens/` | ジェネレータの部品集（§5.8）: `drums`（Groove）・`bass`・`comp`・`lead`・`pad`・`arp`・`fx`・`layer`・`echo`・`buildup`・`tempo`（`tempo_curve`）・`vocal`（`Sing`・`Vocalise`・`Choir`。§13） |
 | `framework/realize/samples.py` | 音色の計画（どのサンプルを作るか）と描画の呼び出し（§4.8・§7.6） |
 | `framework/realize/lanes.py` | パートの選択・lane・予算に収める手順（ladder）・チャンネル順・パン（§7.6） |
 | `framework/realize/tracker.py` | `TrackerRealizer`（セル化・row コマンド・pattern への詰め込み・`Glide`・スウィング。§7.6） |
 | `framework/realize/encode.py` | 奏法 → 形式ごとのエフェクト・ボリューム列（`Codec`。§7.6） |
 | `framework/realize/midi.py` | `MidiRealizer`（§7.7） |
-| `framework/levels.py` | 音量の底上げの根拠になる、ジャンル × 形式の最大振幅の測定値（§7.9） |
+| `framework/levels.py` | 音量の底上げの根拠になる、ジャンル × 形式の最大振幅の測定値（歌声なし `PEAK_DB`・歌声あり `PEAK_DB_VOICE`。§7.9） |
+| `framework/realize/voice.py` | 歌声の Realizer 側（`VoiceBackend`・`VoicePlan`: 代替・音域合わせ・プリロール・サンプル。§13.5・§13.6） |
+| `voice/` | 歌声: `phoneme`・`lang/ja`・`lyrics`（歌詞）、`formant`（組込みの声）、`bank/`（UTAU 音源の取り込み。I/O と DSP）、`credits`（§13.2） |
+| `voice_cli.py`・`modweaver_voice.py` | 音源の管理コマンド（`check`・`import`・`list`・`info`・`audition`・`make-test-bank`。§13.7.2） |
 | `genres/*.py` | 69ジャンル（§6）。`_suspense.py`（suspense 2ジャンルの共通部分）・`_ornament.py`（新ジャンルの共有部品。§6.19）はジャンルではない |
 | `core/pitch.py` | Period 表・音名・スケール・和音の型・微分音（§4.1） |
 | `core/model.py` | `GmVoice`・`Cell`・`Pattern`・`SampleSpec`・`Song`（MOD の writer が読む表現）・`ChordSpec`・`ChordDef`（§3.4） |
@@ -667,6 +671,9 @@ class Generator:
 | `Layer(inst, vol, *, chordal=False, register)` | | `follow` のパートが鳴る区間で、和音の変わり目に和音か第3音の長音。乱数を使わない |
 | `Echo(delay, ratio, repeats=1)` | | `follow` のパートの `NoteEvent` を delay step 遅らせ、vel×ratio^k で写す（`dur` も写す）。区間の外に出るものは捨てる |
 | `Buildup(inst, riser=None, n_measures=4)` | | 4分→8分→16分→`Retrig(3)` と加速するスネア。最後から2つ目の小節の頭に上昇音 |
+| `Sing(inst, *, source="lead", vowels, min_dur, vel_ratio)` | `Part(..., depends=("lead",), requires=frozenset({"voice"}), ducks=…)` | `lead` の旋律をなぞって歌う（歌詞があれば音節を割り当てる）。`Glide` は引き継ぐ。§13.4.3 |
+| `Vocalise(inst, rules, motifs, vol, gate, *, vibrato, vowels)` | | 歌声パート自身が旋律を作る（`Lead` と同じ旋律生成＋母音） |
+| `Choir(inst, vol, *, vowel, voices)` | `Part(poly=声部数, min_channels=…, requires=…)` | 和音の各声を同じ母音で同時に歌う（`Pad` の歌声版）。§13.4.3 |
 | `tempo_curve(ctx, start_bpm, end_bpm, start_step, end_step, kind)` | `kind`: `linear`・`ease_in`・`ease_out` | BPM が変わる step にだけ `ctx.tempo()` を呼ぶ（free-jazz のルバート） |
 
 ---
@@ -1577,6 +1584,8 @@ Realizer が **IT と同じ Target（64ch・16-bit・44.1 kHz）で作った IT*
 
 ### 7.9 出力音量の底上げ（`core/native_level.py`・`framework/levels.py`）
 
+> 歌声ありの曲は、他パートが `Part.ducks` で下がって最大振幅が変わるので、歌声ありで測った別の表 `PEAK_DB_VOICE`（`tools/calibrate_levels.py --voice`）で底上げする（§13.6.5）。
+
 トラッカー形式は、ミックスの音量をジャンルが決めた発音の音量とサンプルの波形が決める。生成したままだと形式・ジャンルによって最大振幅が −3〜−8 dBFS と小さく、MP3（2パスの音量調整）や MIDI より小さく聞こえる。そこで**ジャンルごと・形式ごとの測定値**から倍率を決めて書き出す。
 
 - `framework/levels.py` の `PEAK_DB[ジャンル][形式+チャンネル数]` は、そのジャンルを複数の seed・全予算（MOD）・既定と最小の予算（S3M・XM・IT）で、**底上げなしで**作って libopenmpt で再生し、最大振幅の最悪値を記録した表（`tools/calibrate_levels.py` が作る。ffmpeg が要る）。鍵が無いチャンネル数は同形式の最悪値で代用する。
@@ -1600,6 +1609,10 @@ Realizer が **IT と同じ Target（64ch・16-bit・44.1 kHz）で作った IT*
 | `--output-dir` | – | `output` | `--output` を省略したときの出力フォルダ（無ければ作る）。`--output` とは同時に使えない（終了コード 2） |
 | `--tempo` | `-t` | ジャンルが決める | `120` または `80-100`（§5.5） |
 | `--channels` | `-c` | MOD はジャンルが曲ごとに決める。他の形式は形式の上限 | 意味は形式ごと（§7.1）: MOD はジャンルが宣言した 4・6・8 のうちの数（それ以外はエラー＝終了コード 2）、S3M・XM・IT・MP3 は上限（ladder がその中に収める。収まらなければ終了コード 2）、MIDI は指定不可（終了コード 2） |
+| `--voice` | – | なし | 歌声を加える（`formant` か取り込み済みの音源 id。§13.7.1）。歌声パートのあるジャンルと IT・XM・S3M・MP3・MIDI だけ（それ以外は終了コード 2） |
+| `--lyrics` | – | なし | 歌詞（文字列か `@ファイル`。§13.4.1）。`--voice` が要る |
+| `--voices-dir` | – | `voices/` ほか | 音源の置き場所（§13.5.3.1） |
+| `--list-voices` | – | – | 取り込み済みの音源を表示して終了（`--json` で機械向け） |
 | `--list-genres` | – | – | 全ジャンルの id・別名・1行説明を区分（気分・ジャンル・〜風）ごとに表示して終了 |
 | `--json` | – | – | `--list-genres` と生成結果を機械向けの JSON で出す（§8.8） |
 | `--english` | `-e` | – | 表示を英語にする（§8.5） |
@@ -1656,8 +1669,8 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 
 - stdout に JSON を1つだけ出す。非 ASCII は `\uXXXX` にする（Windows でパイプの文字コードが cp932 でも化けない）。
 - エラーは今までどおり stderr と終了コード（§8.7）。そのとき stdout には何も出さない。`-e` は JSON の中身を変えない。
-- `--list-genres --json`（カタログ）: `version`・`url`・`default_genre`・`random_genre`（`["random", "r"]`）・`default_format`・`formats`（`name`・`extension`・`description`・`channels`＝`--channels` の意味: `{"choices": [4, 6, 8]}`（MOD。ジャンルが選べる数の和集合）／`{"max": 16}`（S3M・XM・IT・MP3。上限）／`null`（MIDI。指定不可））・`tempo`（`min`・`max`）・`seed_range`・`categories`（`id`・`ja`・`en`。区分の表示名）・`genres`（`id`・`display_name`・`category`・`aliases`・`description`・`description_en`・`tempo_range`（`--tempo` で指定できる範囲）・`tempo_choices`（ジャンルが自分で選ぶテンポの候補。昇順）・`mod_channels`（MOD で選べるチャンネル数）・`channel_cap`（ジャンルの美的な上限。なければ null））・`mp3`（`available`・`ffmpeg`（パス）・`error`。`render.check_ffmpeg` と同じ検査）。ジャンルの並びは `--list-genres` と同じ（区分順・id 順）。
-- 生成時の `--json`（結果）: `genre`・`display_name`・`random_genre`・`format`・`seed`・`bpm`・`tempo_request`（`"80-100"` など。指定なしは null）・`channels`（実際に使った数）・`channel_budget`（予算＝選べた最大数）・`sample_bits`（サンプルのビット数。MIDI は null）・`channels_request`（指定なしは null）・`summary`（バナーの要約行）・`path`（絶対パス）・`repro`（`--seed` まで含む再現コマンド）。
+- `--list-genres --json`（カタログ）: `version`・`url`・`default_genre`・`random_genre`（`["random", "r"]`）・`default_format`・`formats`（`name`・`extension`・`description`・`channels`＝`--channels` の意味: `{"choices": [4, 6, 8]}`（MOD。ジャンルが選べる数の和集合）／`{"max": 16}`（S3M・XM・IT・MP3。上限）／`null`（MIDI。指定不可））・`tempo`（`min`・`max`）・`seed_range`・`categories`（`id`・`ja`・`en`。区分の表示名）・`voice_formats`（`--voice` が使える形式）・`genres`（`id`・`display_name`・`category`・`aliases`・`vocal`（歌声パートを持つか）・`description`・`description_en`・`tempo_range`（`--tempo` で指定できる範囲）・`tempo_choices`（ジャンルが自分で選ぶテンポの候補。昇順）・`mod_channels`（MOD で選べるチャンネル数）・`channel_cap`（ジャンルの美的な上限。なければ null））・`mp3`（`available`・`ffmpeg`（パス）・`error`。`render.check_ffmpeg` と同じ検査）。ジャンルの並びは `--list-genres` と同じ（区分順・id 順）。
+- 生成時の `--json`（結果）: `genre`・`display_name`・`random_genre`・`format`・`seed`・`bpm`・`tempo_request`（`"80-100"` など。指定なしは null）・`channels`（実際に使った数）・`channel_budget`（予算＝選べた最大数）・`sample_bits`（サンプルのビット数。MIDI は null）・`channels_request`（指定なしは null）・`summary`（バナーの要約行）・`path`（絶対パス）・`repro`（`--seed` まで含む再現コマンド）・`voice`（歌声ありのとき。`id`・`fingerprint`・`credit`・`terms_url`・`terms_checked`・`credits_path`。なければ null）・`lyrics`（`--lyrics` の指定。なければ null）。`--list-voices --json` は取り込み済みの声の配列（`id`・`lang`・`syllables`・`credit`・`terms_checked`・`builtin`）。
 
 ---
 
@@ -1705,6 +1718,7 @@ GUI など、ほかのプログラムから CLI を呼ぶための出力。人�
 | テンポと長さ（I5） | 全69ジャンルの MOD（最大の予算）と IT を libopenmpt で鳴らした長さが Score の時間軸（テンポの変化〔free-jazz〕・スウィングを含む）と一致する（±0.5%＋0.2 秒） |
 | `Glide`（§7.6） | MOD・S3M・XM・IT で 7・12 半音のグライドが、`tracker._glide_param` が見込んだ step 数で届く（97% 到達の時刻が ±0.12 秒） |
 | 音割れ（I6） | 全69ジャンル × MOD/XM/S3M/IT × 3 seed（1 つは音量の測定に使っていない seed）、および編成を選ぶジャンルの全編成 × MOD/XM の最大振幅 < 0 dBFS（float のまま・リサンプルなしで読む）。全ジャンルの MOD・IT は −0.5 dBFS 以下。振幅最大の矩形波に差し替えた曲では失敗すること（検査が見逃さないこと）も確認。S3M/IT は底上げが効いていること（最大振幅 > −8 dBFS）も見る |
+| 歌声（§13） | `test_voice_audition.py`: 母音の頭が拍の 1 tick 以内（スウィングあり）、ループが途切れない。`test_voice_songs.py`: 歌声あり曲（IT・XM・S3M × 3 ジャンル × 3 seed）が音割れせず、歌声なしと大きく違わない音量（XM は緩い基準）、歌声・合唱が実際に鳴る |
 | MP3 | 作れること、デコードした長さ（±0.5 秒）・ステレオ・無音でないこと・音割れ率 < 0.1%。静かなジャンルも平均が目標（−14 dBFS）の 4 dB 以内に上がり、0 dBFS を超えないこと |
 
 ### 9.3 目で・耳で確かめること（自動化の対象外）
@@ -1757,6 +1771,8 @@ OpenMPT 等で開けること、ループ境界のクリック、スウィング
 ---
 
 ## 11. 未確定・試聴で調整する項目と将来課題
+
+歌声の未実装・将来課題は §13.9。
 
 「試聴で調整」の項目（下表の状態が「試聴で再調整可」「同上」「試聴で調整」のもの）は、リポジトリ直下の **`listen_samples.py`**（`python listen_samples.py`。Windows は **`listen_samples.bat`** のダブルクリックでも可）で確かめる曲をまとめて作れる。項目・見出し・曲の一覧は `listen_samples.py` の `ITEMS` にあり、バッチは Python を起動するだけ（ASCII だけで書く。§12 と同じ）。
 
@@ -1825,6 +1841,7 @@ CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw
 - 設定: テンポ（ジャンルに任せる／固定／範囲。ユーザーがジャンルを選ぶと、固定の初期値を代表値＝`tempo_choices` の中央（偶数個なら下側）に、範囲の初期値を `tempo_choices` の最小〜最大にする。画面の作り直しや「設定に読み込む」では入力を変えない。入力欄の上下限と入力の検査はジャンルの `tempo_range`（ランダムジャンルなら CLI の全域））、チャンネル数（**形式で入力欄が変わる**: MOD はジャンルが選べる数のボタン〔選べない数は押せない。選んでいた数が使えないジャンルに替えたら「任せる」に戻す〕、XM・S3M・IT・MP3 は上限の入力欄〔1〜形式の上限〕、MIDI は指定不可。形式を替えると作り直し、合わない指定は「任せる」に戻す）、シード（毎回ランダム／固定）、形式（mp3 が使えなければ注意を出す）、保存フォルダ（`--output-dir`。既定はリポジトリの `output`）。ファイル名は CLI の既定（`<genre>_<seed>.<拡張子>`）に任せる。
 - 生成（Ctrl+Enter・F5）・中止・状態表示。入力がおかしければ CLI を呼ばずに知らせる。CLI が失敗したら終了コードごとの説明と stderr の最終行を出す。起動時のジャンル一覧の読み込みに失敗したら理由を出し、生成は押せないままにする。
 - 「作った曲」: その回に作った曲の一覧（新しい順。ランダムに選ばれたジャンルは名前に ` *` を付ける）。再生（OS の関連付け。関連付けが無ければ OpenMPT などの案内）、フォルダで表示、再現コマンドのコピー、**別の形式でも書き出す**（同じ seed で、指定があったテンポ・チャンネル数だけ渡す＝同じ曲。チャンネル数は形式で意味が違うので、元の形式と同じ意味の形式〔上限どうしなど〕にだけ引き継ぎ、MIDI など指定できない形式へは渡さない）、**設定に読み込む**（seed を固定してテンポや形式だけ変える等）。選んだ曲の要約行・パス・再現コマンドを下に出す。
+- 歌声: 「歌声」（なし／`--list-voices --json` の声）と「歌詞」（複数行）。対応ジャンル・形式は `--list-genres --json` の `vocal`・`voice_formats` で決め、使えないときは欄を無効にして理由を出す（§13.7.4）。
 - 「ログ」: 実行した引数、stderr（警告・想定外の例外のスタックトレース）、終了コードと所要時間。
 - メニュー: ファイル（保存フォルダを開く・終了）、表示（言語: 日本語／English）、ヘルプ（CLI の使い方＝`--help` の出力を別窓で表示、ModWeaver について＝カタログの版と GitHub URL）。
 
@@ -1833,3 +1850,241 @@ CLI の機能を画面から使うためのもの。起動は `modweaver_gui.pyw
 - 動作を確かめたのは Windows 11（Python 3.12。画面・pythonw 起動・mp3 書き出し）と Linux（WSLg、Python 3.10。自動テストの画面の通し確認）。macOS の実機では未確認。
 
 - 設定の保存（保存フォルダ・言語・最後の設定）、複数曲の一括生成、アプリ内での再生（標準ライブラリだけでは MOD 等を鳴らせない。現状は OS の関連付けアプリで開く）。
+
+---
+
+## 13. 歌声（`--voice`・`--lyrics`）
+
+`--voice` で、歌声のパートを持つジャンル（okinawan・enka・mood-kayo）に歌を足す。歌詞なしなら「あ」で歌い（ヴォカリーズ）、`--lyrics` を渡せば日本語の歌詞（ひらがな・カタカナ・ローマ字）で歌う。声の源は、組込みのフォルマント合成か、利用者が自分で用意した UTAU 形式（`oto.ini`＋wav）の音源。設計の経緯・実施状況・耳での確認の記録は [DESIGN_HISTORY.md](DESIGN_HISTORY.md) §17。
+
+### 13.1 方針
+
+| # | 決定 | 理由 |
+|:---|:---|:---|
+| D1 | **リポジトリに声のデータを一切含めない**（wav・`oto.ini`・取り込み済みバンク・声入りの曲を含む） | 再配布禁止・非商用・改変不可などの規約と衝突させない。グレーゾーンを作らない |
+| D2 | **本体は標準ライブラリのみ**。外部の歌声合成（NNSVS・DiffSinger 等）は入れない | 依存とデータ規約の両方を避ける |
+| D3 | 声の源は2つ。**(A) 組込みのフォルマント合成**（コードだけ。母音のみ）、**(B) 利用者が用意する UTAU 形式の音源**（歌詞対応） | A はライセンス問題が無い。B は 1 音節＝1 wav という構造がトラッカーのサンプルに直結する |
+| D4 | **歌声は opt-in**。`--voice` を付けない限り、全ジャンルの出力はバイト単位で変わらない | §2.3 原則 9 |
+| D5 | 対応形式は IT・XM・S3M（8-bit）・MP3（IT 経由）・MIDI（GM の合唱音色＋Lyric メタイベント）。MOD は非対応（8-bit・約 8 kHz・31 サンプルで声には厳しい） | 16-bit・高レート・サンプル数に余裕のある形式で品質を確保する |
+| D6 | **音素を共通の単位**にし、日本語（かな）は最初の「前段」として切り出す。バンクの引き当ては言語ごとの対応表 | 多言語の可能性を潰さない |
+| D7 | 開発中の品質評価は、再配布しない個人利用の音源を `voices/`（gitignore）に置いて行う。CI・テストは実音源に依存しない（合成した試験用バンク） | D1 と両立させる |
+
+要件（テストで保証するもの）:
+
+| ID | 内容 |
+|:---|:---|
+| V-1 | `--voice <id>` で歌声パートを加える。`<id>` は `formant` か、取り込み済みの音源の id |
+| V-2 | 歌詞なしはヴォカリーズ。`--lyrics` を渡すと日本語の歌詞で歌う |
+| V-3 | 同じ genre・seed・format・tempo・voice（バンクの内容が同じ）・lyrics からは同じファイルを出力する |
+| V-4 | 同じ genre・seed・tempo なら、声の源が違っても、**他パートの音符と、歌声パートの音符の時刻・高さは同じ**（骨格は声の源に依存しない）。歌詞は、歌う音符の時刻・高さを変えない（ただし歌詞が尽きた後の音符は歌わず、休符は音符を 1 つ飛ばし、促音は直前の音符を 1 step 詰める） |
+| V-5 | `--voice` 無しの出力は従来と同一 |
+| V-6 | 音源の取り込み・検査・試聴を行う別コマンド `modweaver_voice.py` |
+| V-7 | 声の源のクレジット・規約の要点を、バナー・`--json`・サイドファイル `<出力>.credits.txt` に出す（IT のメッセージ欄は未実装） |
+| V-8 | 非対応の形式・歌声パートの無いジャンルに `--voice` を指定したら、黙って無視せず終了コード 2 |
+| NV-1〜4 | 実行時の依存は標準ライブラリだけ／音源が 1 つも無くても全テストと `--voice formant` が動く／取り込み（重い DSP）と生成を分け、生成時にバンクを再解析しない／声のデータを git に入れない仕組みをテストで強制する |
+
+非目標: 漢字かな交じり文からの読みの自動変換（`{`・`|`・`}` はルビ記法のために予約）、機械学習による合成、他人の声の無断利用を助ける機能。
+
+### 13.2 全体像とモジュール
+
+```mermaid
+flowchart TB
+    subgraph M["framework / genres（音楽側。声のデータを知らない）"]
+        L["--lyrics"] --> LY["voice/lyrics.py + lang/ja.py<br/>[区間] ブロック・かな→Syllable"]
+        LY --> V["gens/vocal.py<br/>Sing・Vocalise・Choir<br/>旋律＋音節の割当"]
+        V --> SC["Score（NoteEvent.syl）<br/>声の源に依存しない"]
+    end
+    subgraph R["realize（形式側。ここで声の源が効く）"]
+        VO["--voice"] --> VP["voice.py VoicePlan<br/>代替・音域合わせ・プリロール・サンプル"]
+        VP --> FB["FormantBackend<br/>組込み・母音のみ"]
+        VP --> UB["UtauBackend<br/>取り込み済みキャッシュ"]
+        VP --> T["tracker / midi（既存）"]
+    end
+    SC --> VP
+```
+
+**鉄則**: `compose()` は声の源に問い合わせない。音域・音節の有無・プリロールはすべて Realizer が吸収する（V-4）。
+
+| モジュール | 役割 |
+|:---|:---|
+| `voice/phoneme.py` | `Syllable`（言語共通の音節）・母音の表。純データ（I/O 禁止をテストで検査） |
+| `voice/lang/ja.py` | 日本語の前段（かな・カタカナ・ローマ字 → モーラ → `Syllable`）。純関数 |
+| `voice/lyrics.py` | `--lyrics` の解析（文字列／`@ファイル`、`[区間]` ブロック）→ `Lyrics` |
+| `voice/formant.py` | 組込みの声（母音 5 つ。声種 female・male・child・choir）。コードだけで描画 |
+| `voice/bank/` | **I/O と DSP**（realize だけが使う）: `wavio`・`otoini`・`prefixmap`・`cut`・`resample`・`pitch`（F0 推定）・`loopfind`（母音ループ）・`credit`（`modweaver.json`）・`cache`（`.modweaver/`）・`importer`・`discover`（探索順）・`audition`・`synthetic`（試験用バンク） |
+| `voice/credits.py` | `<出力>.credits.txt` の本文 |
+| `framework/gens/vocal.py` | `Sing`・`Vocalise`・`Choir` |
+| `framework/realize/voice.py` | `VoiceBackend`・`FormantBackend`・`UtauBackend`・`VoicePlan` |
+| `voice_cli.py`・`modweaver_voice.py` | 音源の管理（§13.7.2） |
+
+層の検査: `genres` は `voice.bank`・`voice.formant`・`realize` を import しない。`voice.phoneme` は I/O を持たない。
+
+### 13.3 データモデル
+
+- **`Syllable`**（`voice/phoneme.py`、凍結）: `text`（元の表記。常にひらがな）・`lang`（`"ja"`）・`onset`（頭子音の音素列。X-SAMPA 風の ASCII。母音だけなら空）・`nucleus`（核。母音 `a i M e o`、撥音 `N`）・`coda`（日本語は空）・`kind`（`normal`／`geminate`＝促音／`extend`＝長音）。`key` は `onset+nucleus`（＋`~kind`）で、サンプルの鍵になる。バンクの別名（`oto.ini` の `あ`／`ka`）への変換は**バンク側**の役目で、前段は知らない。
+- **`NoteEvent.syl: Optional[Syllable]`**: 歌声の音符だけが持つ。`Voice` の楽器にだけ付けられ、`Voice` の楽器には必ず付ける（`SectionCtx.note` が検査）。
+- **`Voice`**（`framework/genre.py`、楽器の宣言）: `gm`（MIDI の代替の合唱音色。必須）・`timbre`（`female`・`male`・`child`・`choir`）・`volume`・`pan`・`release_s`・`range`（旋律の目安）。`patch` を持たない。`Genre.instruments` は `Instrument | Voice`。`Voice` の楽器を鳴らすパートは `requires=frozenset({"voice"})` を宣言しなければならない（クラス定義時に検査）。
+- **`Part.requires`**: 曲の機能（`Target.features` ＋ `--voice` のとき `"voice"`）がそろわないパートは**存在しない**扱い（作曲も lane の数え上げもしない。`Score.skipped_parts`）。歌声パートの乱数は専用（`<seed>:<genre>:part:vocal`）なので、他パートの音符は変わらない。
+- **`Part.ducks` / `duck_ratio` / `duck_ratios`**: そのパートが鳴る区間で、指定パートの音量を下げる。歌が主旋律なのに同じ旋律をなぞる楽器や、声と同じ帯域の楽器（弦・笛・和音）が前に出て歌詞が埋もれるのを防ぐ（`compose._apply_ducks`）。`duck_ratios` は対象ごとの倍率（`duck_ratio` を上書き）。3 ジャンルとも `ducks=("lead", 声と同じ帯域の 2 パート)`、lead は 0.2・他は 0.35、`Sing(vel_ratio=1.3)`。
+- **`compose(genre, plan, seed, features, lyrics=None)`**: `lyrics`（`voice.lyrics.Lyrics`）を `plan.extra["lyrics"]` に置く。歌声パート（`Sing`）だけが読む。
+- **例外**（`errors.py`）: `VoiceBankError`（キャッシュ・音源の不備。終了コード 3）、`VoiceNotFoundError`・`LyricsError`・`VoiceUnsupportedError`（終了コード 2）。
+- **同時発音**: `poly > 1` のパートは、同じ楽器の同じ step に、優先度が同じ音を `poly` 個まで重ねられる（合唱の声部。`_validate_section_score`。同時数は `_check_poly` が検査）。
+
+### 13.4 歌詞と旋律（音楽側）
+
+#### 13.4.1 `--lyrics` の入力
+
+文字列でも `@ファイル`でも同じ書式（UTF-8。BOM 可。CRLF 可）。`#` で始まる行はコメント。
+
+```text
+[verse]
+ゆうやけこやけで ひがくれて
+[chorus]
+らららー
+```
+
+- `[名前]` は**区間の名前**（`Section` のキー）。無い区間は歌詞なし（ヴォカリーズ）。区間は名前ごとに 1 回だけ作曲され `order` で繰り返されるので、繰り返した区間は同じ歌詞を歌う。この曲に無い区間名は `LyricsError`。
+- `[区間]` を使わない歌詞は、歌う区間へ**作曲順に流し込む**（区間をまたぐ。尽きた後の区間はヴォカリーズ）。`[区間]` と区間なしの行の混在、最初の `[区間]` の前の行は `LyricsError`。
+- 受け付ける文字: ひらがな・カタカナ・長音「ー」・小書き（ゃゅょぁぃぅぇぉ）・促音「っ」・撥音「ん」・ローマ字（ヘボン式・訓令式の混在可）・空白・句読点。漢字・英字単語は、行番号と文字を示した `LyricsError`。助詞は歌う発音（わ・え・お）で書く。`--lyrics` は `--voice` が要る（無ければ `LyricsError`）。
+
+#### 13.4.2 前段（`voice/lang/ja.py`）
+
+`parse(text) -> list[Optional[Syllable]]`。モーラ単位に分け、拗音（きゃ → onset `ky`＋`a`。し・ち・じは `S`・`tS`・`dZ`）、促音（`kind="geminate"`）、撥音（`nucleus="N"`）、長音（`kind="extend"`。直前の核を引き継ぐ）、小書きの母音（ふぁ → `F`＋`a`、うぃ → `w`＋`i`）を扱う。空白・句読点は**休符の印 `None`**（連続は 1 つにまとめ、先頭・末尾は捨てる）。母音の無声化・連母音の融合・アクセントは扱わない。
+
+#### 13.4.3 割当（`gens/vocal.py`）
+
+- **`Sing(inst, *, source="lead", vowels=("あ",), min_dur=2, vel_ratio=1.0)`**: 別パート（既定は `lead`）の旋律をなぞって歌う（島唄・演歌の型）。`min_dur` 未満の装飾の短い音は歌わない。`Glide`（しゃくり）は引き継ぐ。`Part(..., depends=("lead",), requires=frozenset({"voice"}), ducks=…)` で宣言する。歌詞があれば音節を割り当て、無ければ `vowels` を循環する。
+- **`Vocalise(inst, rules, motifs, vol, gate, *, vibrato, vowels)`**: 歌声パート自身が旋律を作る（`Lead` と同じ旋律生成）部品。
+- **`Choir(inst, vol=30, *, vowel="あ", voices=3)`**: 和音の変わり目に、構成音ごとの音符を**同じ母音で同時に**発音し、次の和音の変わり目（区間の終わりを超えない）まで伸ばす。歌声の和音は焼いて 1 つのサンプルにできないので、`Part(poly=声部数, min_channels=…)` の lane に 1 声ずつ載る（lane が足りない予算では `min_channels` でパートごと外す）。
+
+歌詞の割当規則（乱数を使わない）:
+
+1. 1 音符＝1 音節。休符 `None` はその位置の音符を 1 つ飛ばす（歌わない）。
+2. 促音は、直前の音符を 1 step 詰める（`dur` が `None` の音符は次の音符までの長さから 1 引く）。長音は、同じ母音の音符（核が `N` なら「ん」）にする。メリスマになるのは長音だけ。
+3. **歌詞が尽きたら、その区間の残りの音符は歌わない**（同じ母音の連打にしない）。`[区間]` 指定で音節が余ったら、繰り越さず切り捨てて WARNING。
+4. 区間ごとに、歌詞の位置は先頭から数え直す（区間を繰り返しても同じ歌）。
+
+### 13.5 声の源（形式側）
+
+#### 13.5.1 `VoiceBackend`（`realize/voice.py`）
+
+`info`（`VoiceInfo`: id・クレジット・規約・指紋・`fixed_pitch`）・`covers(syl)`・`bucket(pitch)`（音高の帯の番号）・`render(syl, bucket, timbre) -> VoiceSample`・`home_range()`（録音の高さの範囲〔logical note〕。自由なら `None`）。`engine.resolve_voice` が選ぶ: `formant` → `FormantBackend`、それ以外は探索（§13.5.3.1）で見つけた `UtauBackend`（無ければ `VoiceNotFoundError`）。
+
+**引き当てに失敗した音節**（その音源に無い）は、同じ母音の単独母音（「ん」は「う」）に置き換えて WARNING を音節ごとに 1 回出し（`voice 'x' has no syllable 'ぱ'; sung as 'あ'`）、バナー用の注意にも残す。母音も無ければ `PlanError`。
+
+#### 13.5.2 組込み: フォルマント合成（`voice/formant.py`）
+
+**音源データは持たず、コードだけで描画する。母音（あ・い・う・え・お）のみ**（子音は無いので、子音付きの音節は母音で歌う）。声門音源→共鳴フィルタの母音を、**ビブラート・ジッタ・シマー・息をループ長に整数周期入る形で焼き込んだ継ぎ目なしのループ**にする（静的な周期波形のループはオルガンに聞こえるため）。高い音では F1 を基本周波数の少し上へ。`choir` は 3 声を離調して重ねる。フォルマントは音高に追従しないので、音域を半オクターブ刻みの帯に分け、使われた帯だけを描く（`FormantBackend.bucket`）。品質は「レトロで機械的。母音が聞き分けられる」程度で、人の声には聞こえにくい。実用は UTAU 音源が本命。
+
+#### 13.5.3 利用者の音源: UTAU 形式（`voice/bank/`）
+
+##### 13.5.3.1 置き場所と探索順
+
+```text
+1. --voices-dir <path>              （指定があればそこだけ）
+2. 環境変数 MODWEAVER_VOICES        （; または : 区切りで複数可）
+3. <リポジトリ>/voices/             （既定。.gitignore 済み）
+4. ~/.modweaver/voices/
+```
+
+各音源は 1 フォルダ＝1 つの id（フォルダ名。ASCII の英数・`-`・`_`）。`oto.ini`＋wav（＋`prefix.map`）が**直下**にあること。`modweaver.json`（利用者が書く）と、取り込みが作る `.modweaver/`（`bank.json`・`seg/*.pcm`・`report.txt`。消してよい）を持つ。
+
+##### 13.5.3.2 `modweaver.json`
+
+`id`・`lang`・`alias_style`・`credit`（**必須**。クレジット不要は `"credit": ""` と `"credit_required": false` を明示）・`terms_url`・`terms_checked`・`notes`・`alias_map`。`terms_checked` が偽の音源で生成するとバナーが規約の確認を促す。ModWeaver は規約の内容を判断しない。無ければ取り込みは雛形を作ってエラーで止まる。
+
+##### 13.5.3.3 取り込み（`modweaver_voice.py import`）
+
+1. `oto.ini` の文字コードを判定（UTF-8 厳密 → cp932）。wav は `wave` で開く（PCM 8/16/24/32-bit、ステレオはモノラルに混ぜる。浮動小数点・圧縮は非対応でファイル名を示す）。
+2. **単独音（CV）だけ**取り込む（VCV／CVVC の別名は「未対応」として報告）。
+3. 切り出し（`offset`・`consonant`・`cutoff`・`preutterance`）。**`cutoff` は正＝wav の末尾から捨てる長さ、負＝`offset` からの長さ**（UTAU の流儀。実音源で確定）。`overlap` は使わない。
+4. 母音部のピークを揃える（0.85）。44.1 kHz へ再サンプル（窓付き sinc の純 Python。取り込み時だけ）。
+5. **母音ループの検出**（`loopfind`）: 複数の長さ・始点・F0 のオクターブ違いを試して、基本周期の整数倍で振幅と位相が連続する区間を探し、継ぎ目にクロスフェードを焼き込む。安定区間が短い音節はワンショット。
+6. F0 推定（`pitch`、YIN 系）と音源の代表 F0（中央値）。取り込んだファイルの SHA-256 を連結した**指紋**を `bank.json` に記録（バナーに先頭 8 桁）。`report.txt`: 取り込めた音節・取り込めなかった別名・ループ不可・警告。
+7. 150 音節で約 80 秒（純 Python。取り込みのときだけ）。
+
+##### 13.5.3.4 引き当てと多音高（`prefix.map`）
+
+`UtauBackend` は、音節の `text`（ひらがな）→ 無ければ母音のかなで別名を引く。**多音高の音源**（`prefix.map`: `<音名><TAB><接頭辞><TAB><接尾辞>`。別名 ＝ 接頭辞＋基の別名＋接尾辞）は、取り込みが音域ごとの版を `variants`（`<基の別名>@<MIDI note>`）に、音域の一覧を `pitches`・`pitch_hz` に記録する。どれにも当たらない別名は「既定」の 1 つの音域。`syllables`（基の別名 → Syl）は中央の音域の版で、`audition`・一覧がそのまま使える。生成時は `bucket(pitch)` が**録音の高さが最も近い音域**を選び、その音域に無い音節は近い音域の版を使う。実バンクでの検証は未実施（合成の多音高バンクで検証）。
+
+### 13.6 Realizer（形式側）
+
+#### 13.6.1 サンプルの計画（`VoicePlan`・`samples.py`）
+
+歌声のサンプルの鍵は `VoiceSlot(inst, 音節の key, 音高の帯, pan)`（既存の `SampleKey` とは別の型）。名前は `v:<id 先頭 6>:<key>.<帯>`（ASCII 22 文字まで）。16-bit 形式（IT・XM）は 16-bit のまま、**S3M は 8-bit にして 1 サンプルの上限（64000 バイト）に収め**（超える音節は再サンプルし、ループは偶数に丸める）、`SampleSpec` にする。`sounding_hz` は音源（の版）の F0。サンプル数は「使われた音節 × 帯」だけ増え、`max_samples`（IT 99・XM 128・S3M 99）を超えれば既存の計画がエラーにする（置換規則は未実装）。
+
+#### 13.6.2 音域合わせ
+
+録音の高さが決まっている音源（`fixed_pitch`）は、歌声パートの音高の中央値を録音の範囲 `[lo, hi]` の中央に合わせて**オクターブ単位だけ**全体を移し（`octave`）、範囲の外 6.5 半音を超える個別の音だけ 1 オクターブ折り返す（WARNING 1 行）。残る差は再生レートで吸収する。**Score の `pitch` は変えない**（Placement の物理的な音高だけを直す。V-4）。多音高の音源は、音域の内側の移調が隣り合う音域の間隔の半分（約 3 半音）以内になる。
+
+#### 13.6.3 プリロール整列（子音を拍の前に出す）
+
+UTAU の音節は「子音→母音」で母音が拍に乗る。トラッカーはセルの先頭＝発音なので、そのまま置くと子音が拍に乗って母音が遅れる。そこで:
+
+1. 使われた音節の `preutterance` の最大値を、曲の初期 BPM の 1 tick の長さ（`2500/BPM` ms）で切り上げた `L` tick を求める。
+2. 各サンプルの先頭に、母音の頭がちょうど `L` tick の位置に来る無音を足す。
+3. 歌声の音符を、拍より `L` tick 前の row に、`Delay`（スウィングの row ごとの tick 長から逆算）を付けて置く。区間の先頭に収まらない音符は行 0・`Delay 0`（母音が遅れる）。同じ lane・同じ row に重なった音符は 1 つにする。
+4. 直前の音符の末尾は、次の音節の発音で自然に短くなる。
+
+初期 BPM で計算し、`TempoEvent` の途中変化では近似（未対応）。実プレイヤーで、母音の頭と拍の誤差が 1 tick 以内（スウィング 2:1・3:1 でも）。
+
+#### 13.6.4 奏法
+
+`Glide`（しゃくり）は `Sing` が引き継ぐ。ビブラートは声のサンプルに焼き込み済みなので引き継がない。`Delay`・`Retrig`・`Cut`・`Arpeggio` は歌声では使わない。音量・`Automation("volume")` はそのまま。
+
+#### 13.6.5 音量
+
+- 取り込み時に母音部のピークを揃える。
+- 歌声ありの曲は、他パートが `Part.ducks` で下がる（§13.3）ので歌声なしの最大振幅とは違う。`framework/levels.py` の **`PEAK_DB_VOICE`**（`tools/calibrate_levels.py --voice` が formant の声で測る）で底上げする（鍵は歌声の lane を含む実際のチャンネル数。測定値に `VOICE_HEADROOM_DB`＝0.5 dB を足す）。
+- 声が前に出ているかの基準: 声のみ／声以外を別々に描画し、帯域ごとに比べて、**1.5〜6 kHz で声が +2 dB 以上**（歌詞の聞き取りやすさの条件。新しい歌声ジャンルを足すときの確認手順）。
+- **XM は全体音量が無く**（声の音量は 64 が上限）、声を前に出すために下げた分を持ち上げられないので、歌声あり曲は歌声なしより約 5〜8 dB 小さい。IT・S3M は全体音量で持ち上げる。
+
+#### 13.6.6 MIDI
+
+`MidiRealizer` は `Voice` の `gm`（合唱音色）で鳴らし、歌声の音符ごとに、発音と同じ tick に **Lyric メタイベント（FF 05。UTF-8）**として `Syllable.text` を入れる（歌詞なしは「あ」）。声の源・バンクは無関係。
+
+### 13.7 CLI・GUI・出力
+
+#### 13.7.1 生成 CLI
+
+| オプション | 説明 |
+|:---|:---|
+| `--voice ID` | 歌声を加える。`formant` か取り込み済みの音源 id。対応形式（`engine.VOICE_FORMATS` ＝ it・xm・s3m・mp3・midi）・歌声パートのあるジャンルだけ |
+| `--lyrics TEXT` / `@FILE` | §13.4.1。`--voice` が要る |
+| `--voices-dir PATH` | 音源の置き場所（§13.5.3.1） |
+| `--list-voices` | 取り込み済みの音源（id・言語・音節数・クレジット・規約確認）を表示して終了。`--json` で機械向け（先頭の行は組込みの `formant`） |
+
+終了コードは §8.7（未導入の id・非対応形式・歌詞の誤りは 2、キャッシュの破損は 3）。バナーは声の行（id・指紋・クレジット）、再現コマンドは `--voice`・`--voices-dir`・`--lyrics` を含む。`--list-genres --json` の各ジャンルに `vocal`（歌声パートを持つか）、全体に `voice_formats`、生成結果の `--json` に `voice`（`id`・`fingerprint`・`credit`・`terms_url`・`terms_checked`・`credits_path`）と `lyrics` が入る。
+
+#### 13.7.2 音源の管理 CLI（`modweaver_voice.py`。標準ライブラリのみ・ASCII の `.bat` から呼べる）
+
+`check <フォルダ>`（読み取り検査。書かない）・`import <フォルダ> [--id] [--rate]`（§13.5.3.3）・`list`・`info <id>`・`audition <id> [--text] [--out] [--no-align]`（音源だけを鳴らす最小の IT。音節の聴き比べ・母音ループ・プリロールの確認。品質評価の入口）・`make-test-bank <フォルダ> [--encoding] [--multipitch]`（合成の試験用バンク。声のデータではない）。
+
+#### 13.7.3 クレジット（V-7）
+
+バナーと `--json`（id・指紋の先頭 8 桁・クレジット・規約 URL・`terms_checked`）。`<出力>.credits.txt`（声を使った曲。MIDI は除く）にクレジット・規約 URL・`terms_checked`・ModWeaver の版・「この曲には音源のサンプルが含まれ、音源の規約が公開・商用利用に及ぶ」旨（法的な助言ではない）。IT・XM・S3M では楽器名・サンプル名（`v:<id>:…`）にも入る。MP3 は ID3 を付けない。
+
+#### 13.7.4 GUI
+
+`--list-voices --json` で声の選択肢を、`--list-genres --json` の `vocal`・`voice_formats` で使える条件を受け取る（ジャンル・形式を GUI に書かない）。「歌声」（なし／取り込み済みの声）と「歌詞」（複数行。`[区間]` ブロック可）。ランダムジャンル・歌声パートの無いジャンル・非対応形式では欄を無効にして理由を出し、`terms_checked` が偽の音源には警告を出す。「別の形式でも書き出す」「設定に読み込む」は声と歌詞を引き継ぐ（非対応形式へは声を渡さない）。
+
+### 13.8 リポジトリの運用とテスト
+
+- **置かないものを仕組みで守る（D1）**: `.gitignore` に `/voices/`・`.modweaver/`。`tests/voice/test_bank.py::test_no_voice_data_in_git` が `git ls-files` に `*.wav`・`*.pcm`・`oto.ini`・`bank.json`・`voices/`・`.modweaver/` が無いことを検査する。`output/` の声入りの曲は共有しない。Issue・PR に声入りのファイルを添付しない（README に明記）。
+- **開発中の評価（D7）**: 個人利用の音源を `voices/<id>/` に置き、`modweaver_voice.py audition` と、声のみ／声以外を別々に描画した帯域別の比較で確かめる。耳での確認が要る（人の声に聞こえるか、歌詞が聞き取れるか）。
+- **テスト**: `tests/voice/`（`test_bank`＝取り込み・prefix.map・探索、`test_vocal`＝宣言・作曲・音域合わせ・プリロール・ducks・多音高・S3M・CLI、`test_lyrics`＝前段・書式・割当・MIDI の歌詞、`test_choir`）。試験用バンクは `voice/bank/synthetic.py` がフォルマント合成から wav と `oto.ini` を一時フォルダに生成する（実音源に依存しない）。実プレイヤー（`tests/realplayer/test_voice_audition.py`・`test_voice_songs.py`）: 母音の頭と拍の誤差が 1 tick 以内、歌声あり曲が音割れせず（IT・XM・S3M）歌声なしと大きく違わない音量（XM は緩い基準。§13.6.5）、歌声が実際に鳴っている、合唱が鳴る。
+
+### 13.9 未実装・将来課題
+
+| 項目 | 内容 |
+|:---|:---|
+| VCV／CVVC 音源 | 連続音の別名は取り込まない（手元に実バンクが無く、検証できない） |
+| formant の子音 | 子音付きの音節は母音で歌う。母音も無い音源・`formant` では歌詞が聞き取れない |
+| 歌詞付き `Choir`・合唱を使うジャンル | `Choir` は母音のみ。gospel-shout・gagaku などの採用は未定 |
+| IT のメッセージ欄のクレジット | 未実装（楽器名・サンプル名・サイドファイル・バナーのみ） |
+| MOD の歌声 | 非対応 |
+| `TempoEvent` の途中変化でのプリロール | 初期 BPM で近似 |
+| 多音高音源の実バンクでの検証 | 合成バンクでのみ検証 |
+| 2 つ目の前段（英語の簡易 g2p など） | `Syllable`・`VoiceBackend` の形を変えずに足せる想定（未検証） |
+| `--voice-strict`・サンプル数超過時の置換・`tools/voice_eval.py` | 設計案にあったが未実装 |
+| 取り込みの速度 | 約 80 秒（150 音節）。進捗表示・並列は必要になったら |

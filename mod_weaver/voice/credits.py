@@ -1,4 +1,4 @@
-"""歌声を使った曲のクレジット（``<出力>.credits.txt``。VOCAL_DESIGN.md §6.3・V-7）。法的な助言ではない。"""
+"""歌声を使った曲のクレジット（``<出力>.credits.txt``。DESIGN.md §13.7.3・V-7）。法的な助言ではない。"""
 from __future__ import annotations
 
 from .. import __version__

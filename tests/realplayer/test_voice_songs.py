@@ -1,4 +1,4 @@
-"""歌声つきの曲を実プレイヤー（libopenmpt）で再生する（VOCAL_DESIGN.md P3・R3）: 音割れしない・歌声が鳴っている・
+"""歌声つきの曲を実プレイヤー（libopenmpt）で再生する（DESIGN.md §13.6.5・DESIGN_HISTORY.md §17.5 R3）: 音割れしない・歌声が鳴っている・
 音量が歌声なしの曲と大きくは違わない。"""
 import pytest
 
@@ -27,7 +27,7 @@ def test_voice_song_does_not_clip_and_is_not_much_quieter(gid, fmt, seed):
     without = peak(engine.build(g, seed, fmt).data, f".{fmt}")
     # R3: 約 -3 dB 以内。XM はマスター音量が無く、声（音量 64・サンプルのピーク 0.85 が上限で、ミキサーが 1 チャンネルぶんしか
     # 通さない）を前に出すために他パートを下げた分（Part.ducks）を持ち上げられないので、約 -8 dB まで許す
-    # （バランスは直してあり、音量はプレイヤー側で補える。VOCAL_DESIGN.md「歌詞の聞き取りやすさ」）
+    # （バランスは直してあり、音量はプレイヤー側で補える。DESIGN.md §13.6.5・DESIGN_HISTORY.md §17.4.5）
     lo, floor = (0.2, 0.4) if fmt == "xm" else (0.3, 0.7)
     assert lo < with_v < 1.0, f"{gid} {fmt} {seed}: peak {with_v:.3f}"
     assert with_v > without * floor, f"{gid} {fmt} {seed}: voice {with_v:.3f} vs plain {without:.3f}"

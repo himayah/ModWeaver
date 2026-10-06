@@ -47,7 +47,7 @@ class Instrument:
 
 @dataclass(frozen=True)
 class Voice:
-    """歌声の楽器（VOCAL_DESIGN.md §3.2）。``patch`` を持たない（声の源は ``--voice`` で決まる）。"""
+    """歌声の楽器（DESIGN.md §13.3.2）。``patch`` を持たない（声の源は ``--voice`` で決まる）。"""
     gm: GmVoice                      # MIDI の代替（合唱音色など）。必須
     timbre: str = "female"           # "female" | "male" | "child" | "choir"。formant の声種と音源選びの手がかり
     volume: Optional[int] = None     # 既定音量（None は 40）
@@ -217,7 +217,7 @@ def _validate_declaration(cls: type) -> None:
         if isinstance(getattr(part.gen, "inst", None), str) and isinstance(cls.instruments.get(part.gen.inst), Voice) \
                 and "voice" not in part.requires:
             raise PlanError(f"{cls.id}: part {part.name!r} plays a Voice instrument, so it must declare "
-                             f"requires=frozenset({{'voice'}}) (VOCAL_DESIGN.md D4)")
+                             f"requires=frozenset({{'voice'}}) (DESIGN.md §13.1 D4)")
         if part.follow is not None and part.follow not in name_set:
             raise PlanError(f"{cls.id}: part {part.name!r} follows unknown part {part.follow!r}")
         for tgt in part.ducks:

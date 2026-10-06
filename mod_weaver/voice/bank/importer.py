@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ...errors import VoiceBankError
-from . import cache, credit, otoini
+import dataclasses
+
+from . import cache, credit, otoini, prefixmap
 from .cut import cut
 from .loopfind import find_loop
 from .pitch import estimate_f0, hz_to_midi
@@ -72,6 +74,12 @@ def import_bank(folder: Path, *, id_override: str = "", rate: int = TARGET_RATE,
     wavs: dict[str, tuple[int, list[float]]] = {}
     syls: dict[str, cache.Syl] = {}
     pcms: dict[str, list[float]] = {}
+    found: list[tuple[str, Optional[int], cache.Syl]] = []      # (基の別名, prefix.map の音域, Syl)
+    pm_entries: list = []
+    pm_path = folder / "prefix.map"
+    pm_bad: list[str] = []
+    if pm_path.is_file():
+        pm_entries, pm_bad = prefixmap.parse(otoini.decode(pm_path.read_bytes(), "prefix.map"))
     report = [f"voice: {meta.id}", f"alias style: {res.style}"]
     warn = [f"missing wav: {w}" for w in res.missing_wavs]
     warn += [f"oto.ini {b}" for b in res.bad_lines]
@@ -97,8 +105,9 @@ def import_bank(folder: Path, *, id_override: str = "", rate: int = TARGET_RATE,
         f0 = estimate_f0(seg[pre:], rate)
         lr = find_loop(seg, rate, pre, f0)
         data = lr.data
-        key = f"{len(syls):04d}.pcm"
-        syls[e.alias] = cache.Syl(e.alias, key, len(data), pre, lr.loop, f0, round(peak, 5), lr.mismatch)
+        key = f"{len(pcms):04d}.pcm"
+        base, pid = prefixmap.split_alias(e.alias, pm_entries) if pm_entries else (e.alias, None)
+        found.append((base, pid, cache.Syl(base, key, len(data), pre, lr.loop, f0, round(peak, 5), lr.mismatch)))
         pcms[key] = data
         if f0:
             f0s.append(f0)
@@ -108,12 +117,17 @@ def import_bank(folder: Path, *, id_override: str = "", rate: int = TARGET_RATE,
             quality.append(f"{e.alias} (mismatch {lr.mismatch:.2f})")
         if progress:
             progress(e.alias)
-    if not syls:
+    if not found:
         raise VoiceBankError("nothing could be imported:\n  " + "\n  ".join(warn))
+    warn += pm_bad
+    pitches, pitch_hz, variants = _group_pitches(found, syls)
     home = statistics.median(f0s) if f0s else None
-    info = cache.BankInfo(meta.id, meta.lang, rate, home, _fingerprint(folder, list(wavs)),
-                          meta.credit, meta.credit_required, meta.terms_url, meta.terms_checked, syls)
+    info = cache.BankInfo(meta.id, meta.lang, rate, home, _fingerprint(folder, list(wavs) + (["prefix.map"] if pm_entries else [])),
+                          meta.credit, meta.credit_required, meta.terms_url, meta.terms_checked, syls,
+                          pitches, pitch_hz, variants)
     report.append(f"imported: {len(syls)} syllables @ {rate} Hz")
+    if pitches:
+        report.append("pitch ranges (prefix.map): " + ", ".join(f"MIDI {p} ({hz:.0f} Hz)" for p, hz in zip(pitches, pitch_hz)))
     report.append("home F0: " + (f"{home:.1f} Hz (MIDI {hz_to_midi(home):.1f})" if home else "unknown"))
     report.append(f"skipped aliases: {len(res.skipped)}")
     report += [f"  {a}: {why}" for a, why in res.skipped[:50]]
@@ -128,3 +142,34 @@ def import_bank(folder: Path, *, id_override: str = "", rate: int = TARGET_RATE,
     text = "\n".join(report) + "\n"
     cache.save(folder, info, pcms, text)
     return info, text
+
+
+def _group_pitches(found, syls: dict) -> tuple[tuple, tuple, dict]:
+    """取り込んだ (基の別名, 音域, Syl) から、``syls``（基の別名 → Syl）を埋め、多音高なら (pitches, pitch_hz, variants) を返す。
+    多音高 = 音域が 2 種類以上ある（prefix.map に当たらない別名は「既定」の 1 つの音域）。単一音高は ``((), (), {})``。"""
+    pids = {pid for _b, pid, _s in found}
+    if len(pids) < 2:
+        for base, _pid, s in found:
+            syls.setdefault(base, s)
+        return (), (), {}
+    f0_of: dict = {}
+    for _b, pid, s in found:
+        if s.f0:
+            f0_of.setdefault(pid, []).append(s.f0)
+    med = {pid: statistics.median(v) for pid, v in f0_of.items()}
+    # 既定の音域（pid=None）は、代表 f0 に近い MIDI note を名前にする（prefix.map の音域と重なれば同じ音域として扱う）
+    ids = {pid: (pid if pid is not None else round(hz_to_midi(med[pid])) if pid in med else 0) for pid in pids}
+    order = sorted(pids, key=lambda p: med.get(p, 0.0))
+    pitches = tuple(ids[p] for p in order)
+    pitch_hz = tuple(med.get(p, 0.0) for p in order)
+    variants = {}
+    for base, pid, s in found:
+        s = dataclasses.replace(s, pitch=ids[pid])
+        variants[f"{base}@{ids[pid]}"] = s
+    mid = len(pitches) // 2                                          # 単一音高として使う版（audition・一覧）は中央の音域
+    have: dict[str, dict[int, cache.Syl]] = {}
+    for base, pid, _s in found:
+        have.setdefault(base, {})[pitches.index(ids[pid])] = variants[f"{base}@{ids[pid]}"]
+    for base, by_idx in have.items():
+        syls[base] = by_idx[min(by_idx, key=lambda i: abs(i - mid))]
+    return pitches, pitch_hz, variants

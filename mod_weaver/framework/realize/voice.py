@@ -73,7 +73,7 @@ class VoiceBackend(Protocol):
     def covers(self, syl: Syllable) -> bool: ...
     def bucket(self, pitch: float) -> int: ...
     def render(self, syl: Syllable, bucket: int, timbre: str) -> VoiceSample: ...
-    def home_hz(self) -> Optional[float]: ...
+    def home_range(self) -> Optional[tuple[float, float]]: ...     # 録音の高さの範囲（logical note）。None は自由
 
 
 class FormantBackend:
@@ -85,7 +85,7 @@ class FormantBackend:
     def bucket(self, pitch: float) -> int:
         return round(pitch / BUCKET_SEMITONES)
 
-    def home_hz(self) -> Optional[float]:
+    def home_range(self) -> Optional[tuple[float, float]]:
         return None
 
     def render(self, syl: Syllable, bucket: int, timbre: str) -> VoiceSample:
@@ -114,13 +114,32 @@ class UtauBackend:
         return self.alias(syl) is not None
 
     def bucket(self, pitch: float) -> int:
-        return 0
+        """単一音高の音源は 0。多音高（prefix.map）は、録音の高さが最も近い音域の番号（``bank.pitches`` の添字）。"""
+        if not self.bank.pitches:
+            return 0
+        return min(range(len(self.bank.pitch_hz)), key=lambda i: abs(logical_of_hz(self.bank.pitch_hz[i]) - pitch))
 
-    def home_hz(self) -> Optional[float]:
-        return self.bank.home_hz
+    def home_range(self) -> Optional[tuple[float, float]]:
+        if self.bank.pitches:
+            return logical_of_hz(min(self.bank.pitch_hz)), logical_of_hz(max(self.bank.pitch_hz))
+        if self.bank.home_hz:
+            h = logical_of_hz(self.bank.home_hz)
+            return h, h
+        return None
+
+    def _syllable(self, syl: Syllable, bucket: int):
+        """引き当てた音節の、``bucket`` の音域の版（その音域に無ければ、近い音域の版）。"""
+        alias = self.alias(syl)
+        if not self.bank.pitches:
+            return self.bank.syllables[alias]
+        for i in sorted(range(len(self.bank.pitches)), key=lambda i: abs(i - bucket)):
+            s = self.bank.variants.get(f"{alias}@{self.bank.pitches[i]}")
+            if s is not None:
+                return s
+        return self.bank.syllables[alias]
 
     def render(self, syl: Syllable, bucket: int, timbre: str) -> VoiceSample:
-        s = self.bank.syllables[self.alias(syl)]
+        s = self._syllable(syl, bucket)
         raw = cache.load_pcm(self.folder, s)
         data = [v / 32767.0 for v in struct.unpack(f"<{s.n}h", raw)]
         return VoiceSample(data, self.bank.rate, s.loop, s.f0 or self.bank.home_hz or 220.0, s.pre)
@@ -152,9 +171,9 @@ class VoicePlan:
             return
         self._substitute(placements_by_section)
         voice_ps = [p for ps, _a in placements_by_section.values() for p in ps if p.kind == "note" and p.syl is not None]
-        home = self.backend.home_hz()
+        home = self.backend.home_range()
         if home:
-            self._fold(placements_by_section, voice_ps, logical_of_hz(home))
+            self._fold(placements_by_section, voice_ps, home)
             voice_ps = [p for ps, _a in placements_by_section.values() for p in ps
                         if p.kind == "note" and p.syl is not None]
         self._lead(placements_by_section, voice_ps, tick_for_step)
@@ -183,17 +202,21 @@ class VoicePlan:
             self.notes.append(f"voice: {len(set(self.missing))} syllable(s) missing in the bank, replaced by vowels: "
                               f"{' '.join(sorted(set(self.missing)))}")
 
-    def _fold(self, by_section: dict, voice_ps: list[Placement], h: float) -> None:
+    def _fold(self, by_section: dict, voice_ps: list[Placement], home: tuple[float, float]) -> None:
+        """``home`` = 録音の高さの範囲（単一音高なら lo == hi）。範囲の中央に合わせてオクターブ単位で移し、範囲の外 6.5 半音を
+        超える音だけ 1 オクターブ折り返す。"""
+        lo, hi = home
+        h = (lo + hi) / 2
         m = statistics.median(p.pitch for p in voice_ps)
         self.octave = round((m - h) / 12)
         folded = 0
         remap: dict[int, Placement] = {}
         for p in voice_ps:
             n = p.pitch - 12 * self.octave
-            if n - h > FOLD_LIMIT_SEMITONES:
+            if n - hi > FOLD_LIMIT_SEMITONES:
                 n -= 12
                 folded += 1
-            elif h - n > FOLD_LIMIT_SEMITONES:
+            elif lo - n > FOLD_LIMIT_SEMITONES:
                 n += 12
                 folded += 1
             remap[id(p)] = dataclasses.replace(p, pitch=n)

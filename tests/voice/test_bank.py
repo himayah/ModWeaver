@@ -295,3 +295,42 @@ def test_no_voice_data_in_git():
     assert not bad, f"voice data must not be committed (D1): {bad}"
     ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "/voices/" in ignore and ".modweaver/" in ignore
+
+
+# ---- prefix.map（多音高。P5） ----
+
+def test_prefix_map_parse_and_split():
+    from mod_weaver.voice.bank import prefixmap
+    ents, bad = prefixmap.parse("C3\t\t_L\r\nA3\t\t_M\nE4\t↑\t\nxx\t\t\n\nC5\t\t\n")
+    assert [(e.midi, e.prefix, e.suffix) for e in ents] == [(48, "", "_L"), (57, "", "_M"), (64, "↑", "")]   # 空の行は捨てる
+    assert len(bad) == 1 and "xx" in bad[0]
+    assert prefixmap.split_alias("あ_L", ents) == ("あ", 48)
+    assert prefixmap.split_alias("↑か", ents) == ("か", 64)
+    assert prefixmap.split_alias("さ", ents) == ("さ", None)                       # どれにも当たらない＝既定の高さ
+    assert prefixmap.split_alias("_L", ents) == ("_L", None)                        # 基の別名が空になる当たり方は採らない
+    assert prefixmap.note_to_midi("C4") == 60 and prefixmap.note_to_midi("A#2") == 46 and prefixmap.note_to_midi("Bb2") == 46
+    assert prefixmap.note_to_midi("H4") is None
+
+
+@pytest.fixture(scope="module")
+def multi_bank(tmp_path_factory):
+    d = tmp_path_factory.mktemp("mb") / "mpb"
+    synthetic.make_test_bank(d, pitches=synthetic.MULTI_PITCH)
+    info, report = importer.import_bank(d)
+    return d, info, report
+
+
+def test_multi_pitch_import_groups_variants(multi_bank):
+    d, info, report = multi_bank
+    assert info.pitches == (48, 57, 64) and len(info.syllables) == 25 and len(info.variants) == 75
+    assert [round(h) for h in info.pitch_hz] == [164, 219, 328] or all(abs(h - t) < 8 for h, t in zip(info.pitch_hz, (165, 220, 330)))
+    assert info.syllables["あ"].pitch == 57                                          # 単一音高として見せる版は中央の音域
+    assert info.variants["か@48"].f0 < info.variants["か@57"].f0 < info.variants["か@64"].f0
+    assert "pitch ranges" in report
+    again = cache.load_info(d)
+    assert again.pitches == info.pitches and again.variants.keys() == info.variants.keys()
+
+
+def test_single_pitch_bank_has_no_variants(bank):
+    info = bank[1]
+    assert info.pitches == () and info.variants == {}

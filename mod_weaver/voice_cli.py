@@ -35,6 +35,7 @@ def _parser(prog: str) -> argparse.ArgumentParser:
     t = sub.add_parser("make-test-bank", help="generate a synthetic test bank (no third-party data)")
     t.add_argument("folder", type=Path)
     t.add_argument("--encoding", default="utf-8", choices=["utf-8", "cp932"])
+    t.add_argument("--multipitch", action="store_true", help="three pitch ranges with a prefix.map (multi-pitch bank)")
     return p
 
 
@@ -112,7 +113,8 @@ def _cmd_audition(args) -> int:
 
 
 def _cmd_make_test_bank(args) -> int:
-    aliases = synthetic.make_test_bank(args.folder, encoding=args.encoding)
+    aliases = synthetic.make_test_bank(args.folder, encoding=args.encoding,
+                                       pitches=synthetic.MULTI_PITCH if args.multipitch else ())
     print(f"wrote synthetic test bank ({len(aliases)} syllables) to {args.folder}")
     print(f"next: python modweaver_voice.py import {args.folder}")
     return EXIT_OK

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -26,6 +26,7 @@ class Syl:
     f0: Optional[float]
     peak: float                       # 取り込み時の母音部ピーク（正規化前）
     mismatch: Optional[float] = None
+    pitch: Optional[int] = None       # 多音高の音源: この版の音域の MIDI note（prefix.map）。単一音高は None
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,10 @@ class BankInfo:
     credit_required: bool
     terms_url: str
     terms_checked: bool
-    syllables: dict
+    syllables: dict                   # 基の別名 → Syl（多音高の音源では中央の音域の版）
+    pitches: tuple = ()               # 多音高: 音域の MIDI note を f0 の低い順に（空＝単一音高）
+    pitch_hz: tuple = ()              # pitches と同じ順の、その音域の代表 f0
+    variants: dict = field(default_factory=dict)   # 多音高: ``<基の別名>@<MIDI note>`` → Syl
 
 
 def pcm_to_bytes(x: list[float]) -> bytes:
@@ -54,9 +58,11 @@ def save(folder: Path, info: BankInfo, pcms: dict[str, list[float]], report: str
         old.unlink()
     for name, x in pcms.items():
         (seg / name).write_bytes(pcm_to_bytes(x))
-    d = {"version": VERSION, **{k: v for k, v in info.__dict__.items() if k != "syllables"},
-         "syllables": {a: {k: (list(v) if isinstance(v, tuple) else v) for k, v in s.__dict__.items()}
-                       for a, s in info.syllables.items()}}
+    def enc(syls: dict) -> dict:
+        return {a: {k: (list(v) if isinstance(v, tuple) else v) for k, v in s.__dict__.items()} for a, s in syls.items()}
+
+    d = {"version": VERSION, **{k: v for k, v in info.__dict__.items() if k not in ("syllables", "variants")},
+         "syllables": enc(info.syllables), "variants": enc(info.variants)}
     (out / "bank.json").write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "report.txt").write_text(report, encoding="utf-8")
 
@@ -67,9 +73,12 @@ def load_info(folder: Path) -> BankInfo:
         d = json.loads(path.read_text(encoding="utf-8"))
         if d.get("version") != VERSION:
             raise ValueError(f"version {d.get('version')} != {VERSION}")
-        syls = {a: Syl(**{**s, "loop": tuple(s["loop"]) if s["loop"] else None}) for a, s in d["syllables"].items()}
+        def dec(raw: dict) -> dict:
+            return {a: Syl(**{**s, "loop": tuple(s["loop"]) if s["loop"] else None}) for a, s in raw.items()}
+
         return BankInfo(d["id"], d["lang"], d["rate"], d["home_hz"], d["fingerprint"], d["credit"],
-                        d["credit_required"], d["terms_url"], d["terms_checked"], syls)
+                        d["credit_required"], d["terms_url"], d["terms_checked"], dec(d["syllables"]),
+                        tuple(d.get("pitches", ())), tuple(d.get("pitch_hz", ())), dec(d.get("variants", {})))
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise VoiceBankError(f"{path}: cache missing or broken ({e}); run 'modweaver_voice.py import' again") from e
 

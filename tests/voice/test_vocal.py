@@ -118,7 +118,7 @@ def test_utau_range_fit_folds_by_octaves(bank):
     g = engine.get_genre("enka")
     plan = VoicePlan(b, g, 100)
     syl = vowel_syllable("あ")
-    h = logical_of_hz(b.home_hz())
+    h = b.home_range()[0]
     mk = lambda n: lanesmod.Placement(0, 0, "note", "voice", float(n), 40, 4, (), syl=syl)
     by = {"s": ([mk(30), mk(32), mk(34), mk(36), mk(20)], [])}
     plan.prepare(by, {"s": (6, None)})
@@ -358,3 +358,41 @@ def test_duck_ratio_for_a_part_that_is_not_ducked_is_rejected():
     ns = {"parts": tuple(bad if p.name == "vocal" else p for p in g.parts)}
     with pytest.raises(PlanError, match="duck ratio"):
         type("Tmp", (type(g),), ns)()
+
+
+# ---- 多音高バンク（P5） ----
+
+@pytest.fixture(scope="module")
+def multi_bank(tmp_path_factory):
+    d = tmp_path_factory.mktemp("mb") / "mpb"
+    synthetic.make_test_bank(d, pitches=synthetic.MULTI_PITCH)
+    importer.import_bank(d)
+    return d
+
+
+def test_multi_pitch_picks_the_nearest_range_and_keeps_shifts_small(multi_bank, bank):
+    def worst_shift(folder):
+        b = UtauBackend(folder)
+        plan = VoicePlan(b, engine.get_genre("enka"), 100)
+        syl = vowel_syllable("あ")
+        mk = lambda i, n: lanesmod.Placement(8 * i, 0, "note", "voice", float(n), 40, 4, (), syl=syl)
+        by = {"s": ([mk(i, n) for i, n in enumerate((18, 21, 24, 27, 30, 33, 36))], [])}
+        plan.prepare(by, {"s": (6, None)})
+        lo, hi = b.home_range()
+        inside, outside = [], []
+        for p in by["s"][0]:
+            f0 = plan._render(p.syl, b.bucket(p.pitch)).home_hz
+            (inside if lo <= p.pitch <= hi else outside).append(abs(p.pitch - logical_of_hz(f0)))
+        return max(inside + outside), max(inside, default=0.0), len({b.bucket(p.pitch) for p in by["s"][0]})
+    multi, multi_inside, n_ranges = worst_shift(multi_bank)
+    single, _, _ = worst_shift(bank)
+    # 録音の高さの範囲の内側は、隣り合う音域の間隔の半分（約 3 半音）以内。外側は折り返しの上限（6.5）まで。単一音高より小さい
+    assert n_ranges >= 2 and multi_inside <= 3.5 and multi < single
+
+
+def test_multi_pitch_song_builds_with_per_range_samples(multi_bank):
+    b = engine.build(engine.get_genre("enka"), 3, "it", voice=multi_bank.name, voices_dir=str(multi_bank.parent),
+                     lyrics="かきくけこ さしすせそ")
+    from mod_weaver.core import native
+    assert not [i for i in native.verify("it", b.data) if i.level == "ERROR"]
+    assert b.data.count(b"v:mpb:") > 5                                          # 音節 × 音域のサンプル

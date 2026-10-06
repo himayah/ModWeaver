@@ -28,11 +28,11 @@ LEAD_MS, VOWEL_MS, TAIL_MS = 30, 420, 25
 _resonate = formant.resonate
 
 
-def _vowel(v: str, n: int, rate: int, rng: random.Random) -> list[float]:
+def _vowel(v: str, n: int, rate: int, rng: random.Random, f0: float = F0) -> list[float]:
     src, ph, prev = [], 0.0, 0.0
     for i in range(n):
         t = i / rate
-        ph += F0 * (1 + 0.01 * math.sin(2 * math.pi * 5.5 * t)) / rate
+        ph += f0 * (1 + 0.01 * math.sin(2 * math.pi * 5.5 * t)) / rate
         ph -= math.floor(ph)
         p = 0.5 * (1 - math.cos(math.pi * ph / 0.6)) if ph < 0.6 else math.cos(math.pi * (ph - 0.6) / 0.8)
         src.append((p - prev) * 12)
@@ -44,24 +44,24 @@ def _vowel(v: str, n: int, rate: int, rng: random.Random) -> list[float]:
     return [m + rng.uniform(-0.01, 0.01) for m in mix]
 
 
-def _consonant(c: str, n: int, rate: int, rng: random.Random) -> list[float]:
+def _consonant(c: str, n: int, rate: int, rng: random.Random, f0: float = F0) -> list[float]:
     noise = [rng.uniform(-1, 1) for _ in range(n)]
     if c == "k":
         out = _resonate(noise, 1800, 600, rate)
     elif c == "s":
         out = [b - a for a, b in zip([0.0] + noise, noise)]          # 高域寄りの雑音
     else:                                                            # m・n: 低域の鼻音の唸り
-        out = _resonate([math.sin(2 * math.pi * F0 * i / rate) + 0.3 * x for i, x in enumerate(noise)],
+        out = _resonate([math.sin(2 * math.pi * f0 * i / rate) + 0.3 * x for i, x in enumerate(noise)],
                         300 if c == "m" else 400, 100, rate)
     return [v * math.sin(math.pi * (i + 0.5) / n) ** 0.5 for i, v in enumerate(out)]
 
 
-def make_syllable(c: str, v: str, rate: int, seed: int = 0) -> tuple[list[float], int]:
+def make_syllable(c: str, v: str, rate: int, seed: int = 0, f0: float = F0) -> tuple[list[float], int]:
     """(波形, 子音の長さ ms)。波形は 先頭の無音 → 子音 → 母音 → 末尾の無音。"""
     rng = random.Random(seed)
     ms = rate / 1000.0
     cn = round(CONSONANT_MS[c] * ms)
-    vo = _vowel(v, round(VOWEL_MS * ms), rate, rng)
+    vo = _vowel(v, round(VOWEL_MS * ms), rate, rng, f0)
     peak = max(abs(a) for a in vo) or 1.0
     vo = [a / peak * 0.7 for a in vo]
     attack = round(12 * ms)
@@ -70,22 +70,31 @@ def make_syllable(c: str, v: str, rate: int, seed: int = 0) -> tuple[list[float]
     rel = round(40 * ms)
     for i in range(rel):
         vo[-1 - i] *= (i + 1) / rel
-    cs = [a * 0.45 for a in _consonant(c, cn, rate, rng)] if cn else []
+    cs = [a * 0.45 for a in _consonant(c, cn, rate, rng, f0)] if cn else []
     return [0.0] * round(LEAD_MS * ms) + cs + vo + [0.0] * round(TAIL_MS * ms), CONSONANT_MS[c]
 
 
-def make_test_bank(folder: Path, rate: int = 22050, encoding: str = "utf-8") -> list[str]:
-    """``folder`` に試験用バンクを書く。戻り値: 別名のリスト。oto.ini の文字コードは ``encoding``（cp932 も試せる）。"""
+# 多音高の試験用バンク: (prefix.map の音名, 接尾辞, 基本周波数)。別名は ``あ_L`` のように接尾辞が付く
+MULTI_PITCH = (("C3", "_L", 165.0), ("A3", "_M", 220.0), ("E4", "_H", 330.0))
+
+
+def make_test_bank(folder: Path, rate: int = 22050, encoding: str = "utf-8", pitches: tuple = ()) -> list[str]:
+    """``folder`` に試験用バンクを書く。戻り値: 別名のリスト。oto.ini の文字コードは ``encoding``（cp932 も試せる）。
+    ``pitches`` = ``MULTI_PITCH`` のような (音名, 接尾辞, F0) の列を渡すと、音域ごとの版と ``prefix.map`` も書く。"""
     folder.mkdir(parents=True, exist_ok=True)
     lines, aliases = [], []
-    for c, row in KANA.items():
-        for v, kana in zip("aiueo", row):
-            wave_, cms = make_syllable(c, v, rate, seed=len(aliases))
-            name = f"{c}{v}.wav"
-            write_wav16(folder / name, rate, wave_)
-            pre = cms if cms else 10
-            lines.append(f"{name}={kana},{LEAD_MS},{pre + 40},{TAIL_MS},{pre},{min(pre, 20)}")
-            aliases.append(kana)
+    variants = [("", "", F0)] if not pitches else [(suf, name, f0) for name, suf, f0 in pitches]
+    for suffix, _name, f0 in variants:
+        for c, row in KANA.items():
+            for v, kana in zip("aiueo", row):
+                wave_, cms = make_syllable(c, v, rate, seed=len(aliases), f0=f0)
+                name = f"{c}{v}{suffix}.wav"
+                write_wav16(folder / name, rate, wave_)
+                pre = cms if cms else 10
+                lines.append(f"{name}={kana}{suffix},{LEAD_MS},{pre + 40},{TAIL_MS},{pre},{min(pre, 20)}")
+                aliases.append(kana + suffix)
+    if pitches:
+        (folder / "prefix.map").write_bytes("".join(f"{n}\t\t{s}\r\n" for n, s, _f in pitches).encode(encoding))
     (folder / "oto.ini").write_bytes(("\n".join(lines) + "\n").encode(encoding))
     (folder / "modweaver.json").write_text(json.dumps({
         "id": folder.name if folder.name.replace("-", "").replace("_", "").isalnum() else "testbank",

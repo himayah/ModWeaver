@@ -190,6 +190,10 @@ https://github.com/himayah/ModWeaver
 | `--output-dir` | – | `output` | Output folder when `--output` is omitted (created if missing). Cannot be combined with `--output` |
 | `--list-genres` | – | – | Print the id, aliases and description of every available genre, grouped into moods, genres and styles, then exit (code 0). Nothing is generated |
 | `--json` | – | – | Print the genre list (`--list-genres`) or the generation result as machine-readable JSON (for the GUI and other programs; see [DESIGN.md](DESIGN.md) §8.8) |
+| `--voice` | – | none | Add a sung part: `formant` (built-in voice) or the id of a voice bank imported with `modweaver_voice.py`. Only genres with a vocal part (okinawan, enka, mood-kayo) and the IT, XM, MP3 and MIDI formats. See [Adding a singing voice](#5-adding-a-singing-voice---voice----lyrics) |
+| `--lyrics` | – | none | Lyrics (hiragana, katakana or romaji): a string or `@FILE`. Needs `--voice` |
+| `--voices-dir` | – | `voices/` etc. | Where voice banks are searched |
+| `--list-voices` | – | – | List the imported voice banks and exit (`--json` for machine-readable output) |
 | `--english` | `-e` | – | Show the usage, genre descriptions and results in English (Japanese by default) |
 | `--version` | `-v` | – | Print the version and the GitHub repository URL, then exit (code 0) |
 | `--help` | `-h` | – | Print the usage and the option list (ending with the genre ids per group), then exit (code 0) |
@@ -339,6 +343,77 @@ On Windows, **double-click `modweaver_gui.bat`** (no console window). It works e
 - Pick a genre from the list on the left (search and filter by group, or tick "Pick a random genre"), set the tempo, channels, seed, format and output folder, then press "Generate" (Ctrl+Enter / F5). Picking a genre fills the tempo fields with its typical tempo (Fixed) and its usual range (Range); the channel field depends on the format (buttons for the numbers the genre offers for MOD, an upper-limit field for XM, S3M, IT and MP3, unavailable for MIDI).
 - From the "Songs" list you can play a song (in the application your OS associates with the file), show it in its folder, copy the command that reproduces it, **Export As** another format (the same song as MP3, MIDI, ...), or **Load into Settings** (keep the seed and change only the tempo or format).
 - The genre list and available formats are read from the CLI (`--list-genres --json`) at startup. The GUI runs `modweaver.py` behind the scenes, so it can do exactly what the CLI can.
+
+### 5. Adding a singing voice (`--voice` / `--lyrics`)
+
+Some genres (**okinawan, enka, mood-kayo**) have a sung part that follows the main melody. It sounds only when you pass `--voice` (songs without it are byte-for-byte what they were). Supported formats: IT, XM, MP3, MIDI (MOD and S3M are not supported).
+
+```mermaid
+flowchart LR
+    A["--voice formant"] --> S["song with a voice"]
+    B["a UTAU-format voice bank you provide<br/>voices/&lt;id&gt;/"] -->|"modweaver_voice.py import"| C["imported"] -->|"--voice &lt;id&gt;"| S
+    L["--lyrics"] --> S
+```
+
+**No voice data ships with ModWeaver.** A voice bank (UTAU-style `oto.ini` + wav files) is something you **download yourself** from its distributor. ModWeaver does not redistribute any bank.
+
+#### Try it without a bank
+
+```bash
+python modweaver.py --genre enka --format it --voice formant
+```
+
+The built-in voice (`formant`) is a code-generated vowel choir ("ah~"). **It is retro and mechanical and hard to mistake for a person**, so treat it as a bonus. It cannot sing lyrics (syllables with consonants are sung as their vowel).
+
+#### Preparing a bank
+
+1. **Read the terms**: commercial use, modification (cutting, looping, pitch changes), conditions for publishing songs (credit, prohibited content) and use inside software. The voice ends up **embedded in the song as samples**. Checking is your responsibility (this is not legal advice).
+2. **Choose**: a single-note (CV) bank with fairly long vowels works best. Connected (VCV, CVVC) banks are not supported.
+3. **Place it**: extract it so that `oto.ini` and the wav files sit **directly** in `voices/<id>/` (no nesting; use an ASCII folder name). Garbled zip names can be avoided with e.g. `unzip -O cp932 x.zip` (Linux). `voices/` is in `.gitignore`.
+4. **Import it**:
+
+```bash
+python modweaver_voice.py check  voices/<id>     # read-only inspection
+python modweaver_voice.py import voices/<id>     # import (about a minute for 150 syllables)
+python modweaver_voice.py audition <id>          # listen to it alone
+python modweaver_voice.py list
+```
+
+If `modweaver.json` is missing, `import` writes a template `voices/<id>/modweaver.json` and stops with an error. Fill in `credit` (as the distributor requires), `terms_url` and `terms_checked` yourself, then run `import` again.
+
+#### Making a song sing
+
+```bash
+python modweaver.py --genre enka --seed 3 --format it --voice <id>                     # sings "ah" (vocalise)
+python modweaver.py --genre enka --seed 3 --format it --voice <id> --lyrics "ゆうやけこやけで ひがくれて"
+python modweaver.py --genre enka --seed 3 --format it --voice <id> --lyrics @song.txt
+```
+
+Adding a voice does not change the other parts' notes. A `<output>.credits.txt` with the bank's credit is written next to the song.
+
+#### Writing lyrics
+
+- Allowed: hiragana, katakana, romaji (Hepburn and Kunrei may be mixed), the long-vowel mark ー, small kana (ゃゅょぁぃぅぇぉ), the sokuon っ and the moraic ん. **Kanji are not supported** (write particles as sung: わ, え, お). Anything else is an error with the line number (exit code 2).
+- Spaces and punctuation (、。 etc.) are **rests** (they skip one melody note). っ shortens the previous note slightly; ー holds the same vowel.
+- One syllable goes to one note, and **once the lyrics run out the remaining notes are not sung**; write more lyrics if you want more singing.
+- A plain string is poured into the sung sections in order. To lay lyrics out per section, use `@FILE`:
+
+```text
+# comment
+[verse]
+ゆうやけこやけで ひがくれて
+[chorus]
+らららー
+```
+
+`[name]` is a section name of the song (`verse`, `chorus`, ... they differ per genre). A name the song does not have is an error; sections you do not list are sung as "ah". A repeated section sings the same lyrics.
+- A syllable missing from the bank (e.g. no p-row) is sung as its vowel, with a warning.
+
+#### Before publishing or using commercially
+
+The song contains the bank's voice. Follow the bank's terms (credit, prohibited content, commercial use). If `terms_checked` is `false` for the bank, a reminder is printed.
+
+**Do not attach files containing a bank's voice to the repository, Issues or PRs.**
 
 ---
 

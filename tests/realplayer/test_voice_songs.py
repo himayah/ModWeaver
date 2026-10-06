@@ -43,3 +43,15 @@ def test_voice_is_audible(gid, fmt, bank):
         n = min(len(plain.samples), len(sung.samples))
         diff = sum((a - b) ** 2 for a, b in zip(plain.samples[:n], sung.samples[:n])) / n
         assert diff ** 0.5 > 300, f"{gid} {kw}: voice not audible (rms diff {diff ** 0.5:.0f})"
+
+
+@pytest.mark.parametrize("fmt", ["it", "s3m"])
+def test_choir_is_audible_and_does_not_clip(fmt):
+    from tests.voice.test_choir import _choir_genre
+    base = engine.build(engine.get_genre("enka"), 3, fmt, voice="formant").data
+    with_choir = engine.build(_choir_genre(), 3, fmt, voice="formant").data
+    assert 0.3 < peak(with_choir, f".{fmt}") < 1.0
+    a, b = decode(base, f".{fmt}"), decode(with_choir, f".{fmt}")
+    n = min(len(a.samples), len(b.samples))
+    diff = sum((x - y) ** 2 for x, y in zip(a.samples[:n], b.samples[:n])) / n
+    assert diff ** 0.5 > 300, f"choir not audible (rms diff {diff ** 0.5:.0f})"

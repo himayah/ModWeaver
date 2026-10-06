@@ -112,7 +112,7 @@ def test_replay_request_keeps_the_voice_only_in_voice_formats(catalog):
     song = _song(format="it", voice="teto", lyrics="あ")
     assert bridge.replay_request(song, "xm", None, catalog) == Request("pop", 5, "xm", None, None, None, "teto", "あ")
     assert bridge.replay_request(song, "mod", None, catalog) == Request("pop", 5, "mod", None, None, None)
-    assert bridge.replay_request(song, "s3m", None, catalog).voice is None
+    assert bridge.replay_request(song, "s3m", None, catalog).voice == "teto"      # S3M も歌声に対応した
 
 
 def test_voices_are_read_from_the_cli_and_a_failure_is_empty(monkeypatch):

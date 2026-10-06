@@ -10,6 +10,7 @@ from typing import Mapping, Optional, Sequence
 
 from ...core.composer import RhythmMotif, ScaleRules
 from ...voice.phoneme import KANA_OF_VOWEL, Syllable, vowel_syllable
+from ...core.pitch import CHORD_QUALITIES
 from ..context import Generator, MeasureCtx, SectionCtx
 from ..score import Glide, NoteEvent, Vibrato
 from .lead import Lead
@@ -111,3 +112,30 @@ def _vowel_of(syl: Syllable) -> Syllable:
     """子音を除いた母音だけの音節（長音・メリスマ用）。"""
     kana = KANA_OF_VOWEL.get(syl.nucleus, "ん")
     return Syllable(kana, syl.lang, nucleus=syl.nucleus)
+
+
+class Choir(Generator):
+    """和音を母音で歌う合唱（``Pad`` の歌声版。VOCAL_DESIGN.md §4.4）。和音の変わり目に、構成音ごとの音符を同じ母音で発音し、
+    次の和音の変わり目（区間の終わりを超えない）まで伸ばす。歌声の和音は焼いて 1 つのサンプルにできないので、``Part(poly=声部数)`` の
+    lane に 1 声ずつ載せる（lane が足りない予算では ``Part.min_channels`` でパートごと外す）。
+
+    ``Part(name, Choir("choir", voices=3), poly=3, min_channels=8, requires=frozenset({"voice"}))`` のように宣言する。"""
+
+    def __init__(self, inst: str, vol: int = 30, *, vowel: str = "あ", voices: int = 3) -> None:
+        self.inst = inst
+        self.vol = vol
+        self.syl = vowel_syllable(vowel)
+        self.voices = voices
+
+    def measure(self, m: MeasureCtx) -> None:
+        if not m.is_chord_change:
+            return
+        steps, plan = m.m.steps, m.plan.measures
+        for nxt in plan[m.m.index + 1:]:                 # 次の和音の変わり目までの長さ（区間の終わりまで）
+            if nxt.chord_offset == 0:
+                break
+            steps += nxt.steps
+        intervals = CHORD_QUALITIES[m.m.quality][:self.voices]
+        base = m.m.chord.harmony
+        for tone in intervals:
+            m.note(0, self.inst, base + tone, vel=m.scale_vol(self.vol), dur=steps, syl=self.syl)

@@ -141,6 +141,8 @@ def _validate_section_score(genre: "Genre", sec_score: SectionScore) -> None:
             best = max(e.prio for e in group)
             winners = [e for e in group if e.prio == best]
             if len(winners) > 1:
+                if len(winners) == len(group) <= part.poly:
+                    continue         # poly > 1 のパートが同じ楽器の音を同時に重ねる（合唱の声部など。同時数は _check_poly が検査）
                 raise PlanError(f"{genre.id}: part {part_name!r} inst {inst!r} step {step}: "
                                  f"{len(winners)} NoteEvents with the same priority {best}")
             dropped.update(id(e) for e in group if e is not winners[0])

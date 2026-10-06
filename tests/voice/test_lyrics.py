@@ -181,3 +181,26 @@ def test_cli_lyrics_exit_codes(bank, tmp_path, capsys):
     assert cli.main(base + ["--lyrics", "夕焼け"]) == 2
     assert "cannot sing" in capsys.readouterr().err
     assert cli.main(["--genre", "enka", "--lyrics", "あ", "-o", str(out)]) == 2
+
+
+# ---- MIDI の歌詞（Lyric メタイベント。P5） ----
+
+def test_midi_has_a_lyric_event_on_every_sung_note(bank):
+    from mod_weaver.core.midi import parse_midi
+    b = _build(bank, "ゆうやけ こやけ", fmt="midi")
+    tracks = parse_midi(b.data).tracks
+    sung = [t for t in tracks if any(m[:2] == b"\xff\x05" for _, m in t)]
+    assert len(sung) == 1                                           # 歌声のトラック 1 つだけ
+    lyrics = [(tick, m[3:].decode("utf-8")) for tick, m in sung[0] if m[:2] == b"\xff\x05"]
+    ons = sorted(tick for tick, m in sung[0] if m and 0x90 <= m[0] <= 0x9F and len(m) > 2 and m[2] > 0)
+    assert [t for t, _ in lyrics] == ons and len(lyrics) == len(ons)    # 発音と同じ tick に 1 つずつ
+    assert [s for _, s in lyrics][:7] == list("ゆうやけ") + list("こやけ")[:3]      # 歌詞が尽きた後の区間は「あ」
+
+
+def test_midi_without_lyrics_gets_the_vocalise_vowel_and_other_tracks_none(bank):
+    from mod_weaver.core.midi import parse_midi
+    plain = engine.build(engine.get_genre("enka"), 3, "midi")
+    assert not any(m[:2] == b"\xff\x05" for t in parse_midi(plain.data).tracks for _, m in t)
+    voiced = _build(bank, None, fmt="midi")
+    texts = {m[3:].decode() for t in parse_midi(voiced.data).tracks for _, m in t if m[:2] == b"\xff\x05"}
+    assert texts == {"あ"}

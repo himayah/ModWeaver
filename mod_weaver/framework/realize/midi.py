@@ -55,6 +55,7 @@ class _Note:
     step_time: object = None           # step → 絶対 tick（区間の時間割。奏法の位置の計算に使う）
     step: int = 0
     explicit_end: bool = False
+    lyric: Optional[str] = None        # 歌声の音符の歌詞（音節の表記。MIDI の Lyric メタイベントになる）
 
 
 @dataclass
@@ -69,6 +70,7 @@ class _Voice:
     glide_from: Optional[float] = None     # 直前の音からのグライド（半音の差。ベンドで動かす）
     glide_ticks: int = 0
     cc1: list = field(default_factory=list)   # (tick, 値) ビブラートの CC1
+    lyric: Optional[str] = None
 
 
 class _Info:
@@ -211,7 +213,8 @@ def _expand_event(info: _Info, part: str, e: NoteEvent, tm, sec_end: int, bpm: i
             midi = info.midi_pitch(e.inst, e.pitch + tone)
         start = start0 + (round(i * e.strum_ms / ms_per_tick) if e.strum_ms else 0)
         out.append(_Note(part, e.inst, start, None if end is None else max(end, start + 1), sec_end, midi, vel,
-                         e.arts, tm, e.step, explicit_end=e.dur is not None))
+                         e.arts, tm, e.step, explicit_end=e.dur is not None,
+                         lyric=e.syl.text if e.syl is not None and i == 0 else None))
     return out
 
 
@@ -279,7 +282,7 @@ def _build_voices(genre: "Genre", notes: list[_Note]) -> dict[str, list[_Voice]]
 
 def _segments(n: _Note) -> list[_Voice]:
     def v(start, end, midi):
-        return _Voice(n.part, n.inst, start, end, midi, n.vel)
+        return _Voice(n.part, n.inst, start, end, midi, n.vel, lyric=n.lyric if start == n.start else None)
 
     arp = next((a for a in n.arts if isinstance(a, Arpeggio)), None)
     retrig = next((a for a in n.arts if isinstance(a, Retrig)), None)
@@ -441,6 +444,8 @@ def _write(genre, score, info: _Info, conductor, voices_by_part, automations, se
             if st["exp"] != 127 and ch != DRUM_CHANNEL:
                 ev.append((v.start, CTRL, _cc(ch, 11, 127)))
                 st["exp"] = 127
+            if v.lyric:
+                ev.append((v.start, CTRL, _meta(0x05, v.lyric.encode("utf-8"))))     # 歌詞（SMF の Lyric。UTF-8）
             ev.append((v.start, ON, bytes([0x90 | ch, note, velocity(v.vel)])))
             ev.append((ends[i], OFF, bytes([0x80 | ch, note, 0])))
 

@@ -861,4 +861,4 @@ flowchart LR
 - VCV／CVVC 音源（連続音）。手元に実バンクが無く検証できない。
 - formant の子音。formant では子音付きの音節は母音で歌う。
 - `Choir` を使うジャンル（gospel-shout・gagaku など）と、歌声パートを持つ新しいジャンル（pop 系は `Vocalise` で独自の旋律が要る）。ユーザーが後回しにした。
-- MOD の歌声（IT のメッセージ欄のクレジットは 2026-10-08 に実装済み）、`TempoEvent` の途中変化でのプリロール、2 つ目の前段（英語など。P6）、`--voice-strict`・サンプル数超過時の置換・`tools/voice_eval.py`（設計案にあったが不要になった）。
+- MOD の歌声（IT のメッセージ欄のクレジットは 2026-10-08 に実装済み）、`TempoEvent` の途中変化でのプリロール（実測で 1 tick 未満の誤差と分かり見送り）、2 つ目の前段（英語など。P6）、`--voice-strict`・サンプル数超過時の置換・`tools/voice_eval.py`（設計案にあったが不要になった）。

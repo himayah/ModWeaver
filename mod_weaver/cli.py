@@ -320,9 +320,22 @@ def _wrap(text: str, width: int) -> list[str]:
     """表示幅で折り返す。英数字の語（``free-jazz,`` 等）は分割せず、日本語は1文字ごとに折り返せる。"""
     lines, line = [], ""
     for tok in re.findall(r"[!-~]+| +|.", text):
-        if line and _cols(line + tok) > width and tok not in _NO_LINE_START:   # 句読点・閉じ括弧は行頭に置かない
-            lines.append(line.rstrip())
-            line = ""
+        if line and _cols(line + tok) > width:
+            if tok not in _NO_LINE_START:
+                lines.append(line.rstrip())
+                line = ""
+            elif _cols(line) > width:                       # 句読点・閉じ括弧が続いて溢れる: 直前の1文字ごと次の行へ送る
+                j = len(line)
+                while j > 0 and line[j - 1] in _NO_LINE_START:
+                    j -= 1
+                if j > 0 and "!" <= line[j - 1] <= "~":        # 英数字の語は分割しない（語ごと送る）
+                    while j > 0 and "!" <= line[j - 1] <= "~":
+                        j -= 1
+                else:
+                    j -= 1
+                if j > 0 and (_cols(line[j]) == 2 or "!" <= line[j] <= "~"):
+                    lines.append(line[:j].rstrip())
+                    line = line[j:]
         if line or not tok.isspace():
             line += tok
     if line:

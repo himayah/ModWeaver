@@ -8,8 +8,8 @@ from __future__ import annotations
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
 from ..framework.context import Generator, MeasureCtx
-from ..framework.gens import Arp, Groove, hits
-from ..framework.genre import Genre, Harmony, Kit, Part, Section
+from ..framework.gens import Arp, Choir, Groove, hits
+from ..framework.genre import Genre, Harmony, Kit, Part, Section, Voice
 from ..framework.registry import register_genre
 from ._ornament import Heterophony, OrnamentedLead, WithTempo, inst as _inst
 
@@ -53,8 +53,8 @@ class GagakuGenre(Genre):
     id = "gagaku"
     category = "genre"
     display_name = "Gagaku (Court Music Style)"
-    description = "雅楽風。笙・篳篥・龍笛風の音色、塩梅（しゃくり）、序破急のテンポ変化（雅楽そのものの再現ではない）"
-    description_en = "Gagaku-style court music: sho-like sustained chords, hichiriki-like melody with scoops, jo-ha-kyu tempo (not a faithful reproduction)"
+    description = "雅楽風。笙・篳篥・龍笛風の音色、塩梅（しゃくり）、序破急のテンポ変化（雅楽そのものの再現ではない。--voice で合唱を加えられる）"
+    description_en = "Gagaku-style court music: sho-like sustained chords, hichiriki-like melody with scoops, jo-ha-kyu tempo (not a faithful reproduction; a sung choir with --voice)"
     title = "Gagaku Suite"
     tempo_choices = (46, 50, 54, 58)
 
@@ -66,13 +66,14 @@ class GagakuGenre(Genre):
         "hichiriki": _inst("jp_hichiriki", GmVoice(program=68), volume=44),
         "ryuteki": _inst("jp_ryuteki", GmVoice(program=73), volume=34),
         "biwa": _inst("jp_biwa", GmVoice(program=106)),
+        "vchoir": Voice(GmVoice(program=52), timbre="choir", volume=36),     # --voice で笙の合竹に重ねて「あ」を歌う
     }
     harmony = Harmony(keys=(2, 7, 9, 4), mode="major_pent", mode_by_quality={"sus4": "major_pent", "sus2": "ritsu"},
                       progressions=PROGRESSIONS, n_progressions=1)
     sections = {
         "jo": _sec({"sho", "drums"}, intensity=0.5, measures=8, motifs="jo", groove="jo"),
-        "ha": _sec({"sho", "drums", "hichiriki", "biwa"}, intensity=0.75, measures=12, motifs="ha", groove="ha"),
-        "kyu": _sec({"sho", "drums", "hichiriki", "biwa"}, intensity=1.0, measures=12, motifs="kyu", groove="kyu"),
+        "ha": _sec({"sho", "drums", "hichiriki", "biwa", "vchoir"}, intensity=0.75, measures=12, motifs="ha", groove="ha"),
+        "kyu": _sec({"sho", "drums", "hichiriki", "biwa", "vchoir"}, intensity=1.0, measures=12, motifs="kyu", groove="kyu"),
         "outro": _sec({"sho", "drums", "hichiriki"}, intensity=0.4, measures=4, motifs="jo", groove="jo"),
     }
     form = ("jo", "ha", "kyu", "outro")
@@ -88,5 +89,7 @@ class GagakuGenre(Genre):
         Part("ryuteki", Heterophony("ryuteki", delay=2, drop=0.35, shift=0, vol_ratio=0.75, lo=12, hi=35, min_dur=2),
              follow="hichiriki", pan=96, min_channels=6),
         Part("biwa", Arp("biwa", (12, 28), (0, 8), vol=34), pan=70, min_channels=6),
+        Part("vchoir", Choir("vchoir", vol=40), poly=3, pan=128, min_channels=10, requires=frozenset({"voice"}),
+             ducks=("sho",), duck_ratio=0.5),
     )
     mod_channels = {4: 1, 6: 2}

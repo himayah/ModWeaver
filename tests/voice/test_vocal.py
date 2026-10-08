@@ -207,7 +207,7 @@ def test_cli_exit_codes_and_credits(tmp_path, bank, capsys):
 
 def test_catalog_marks_vocal_genres():
     cat = cli.catalog()
-    assert {g["id"] for g in cat["genres"] if g["vocal"]} == set(VOCAL_GENRES)
+    assert {g["id"] for g in cat["genres"] if g["vocal"]} == set(VOCAL_GENRES) | {"gospel-shout", "gagaku"}     # 母音の合唱（Choir）だけのジャンルを含む
     assert cat["voice_formats"] == ["it", "xm", "s3m", "mp3", "midi"]
 
 

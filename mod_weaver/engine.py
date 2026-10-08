@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import dataclasses
+
 import logging
 import random
 from dataclasses import dataclass, field
@@ -202,6 +204,9 @@ def build(genre: Genre, seed: int, fmt: str = formats.DEFAULT_FORMAT, *, tempo: 
         return Built(genre, seed, fmt, plan, score, target, data, _midi_channels(data), None,
                      backend.info if backend else None)
     rs = realize(genre, score, plan, target, voice=backend)
+    if backend is not None and fmt == "it":
+        from .voice.credits import credits_message
+        rs = dataclasses.replace(rs, message=credits_message(backend.info, genre, seed))
     module = native.serialize(rs)
     bits = rs.samples[0].bits if rs.samples else None
     if fmt == "mp3":

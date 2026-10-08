@@ -148,6 +148,19 @@ def test_syllable_without_vowel_fallback_is_an_error(bank):
 
 # ---- 生成・形式・CLI ----
 
+def test_it_message_carries_the_voice_credit_only_with_a_voice():
+    import struct
+    g = engine.get_genre("enka")
+    d = engine.build(g, 3, "it", voice="formant").data
+    length, off = struct.unpack("<HI", d[0x36:0x3C])
+    assert d[0x2E] & 1 and length and d[off + length - 1] == 0
+    text = d[off:off + length - 1].decode("ascii")
+    assert "genre=enka" in text and "Voice: formant" in text and "\r" in text
+    plain = engine.build(g, 3, "it").data
+    assert struct.unpack("<HI", plain[0x36:0x3C]) == (0, 0) and not plain[0x2E] & 1
+    assert not [i for i in engine.verify_data(engine.build(g, 3, "it", voice="formant")) if i.level == "ERROR"]
+
+
 @pytest.mark.parametrize("fmt", ["it", "xm", "s3m"])
 @pytest.mark.parametrize("gid", VOCAL_GENRES)
 def test_generates_and_verifies_with_voice(gid, fmt):

@@ -130,6 +130,18 @@ def _instrument_header(index: int, spec, release_s: Optional[float], bpm: int) -
     return bytes(h)
 
 
+def _message_bytes(text: str) -> bytes:
+    """曲メッセージ（改行は CR、末尾は NUL。IT の上限 8000 バイト）。"""
+    if not text:
+        return b""
+    if not text.isascii():
+        raise PlanError(f"IT message must be ASCII: {text!r}")
+    data = text.replace("\r\n", "\n").replace("\n", "\r").encode("ascii") + b"\x00"
+    if len(data) > 8000:
+        raise PlanError(f"IT message too long: {len(data)} > 8000")
+    return data
+
+
 def serialize(rs: RealizedSong) -> bytes:
     n_channels = rs.n_channels
     if not 1 <= n_channels <= it.MAX_CHANNELS:
@@ -147,11 +159,13 @@ def serialize(rs: RealizedSong) -> bytes:
 
     out = bytearray(b"IMPM")
     out += it._text(rs.title, 26, "title")
+    message = _message_bytes(rs.message)
     out += bytes([4, 16])
     out += struct.pack("<HHHHHHHH", len(orders), n, n, n_patterns, it.CWT_V, it.CMWT,
-                       it.FLAG_STEREO | FLAG_INSTRUMENTS | it.FLAG_OLD_EFFECTS, 0)
+                       it.FLAG_STEREO | FLAG_INSTRUMENTS | it.FLAG_OLD_EFFECTS, 1 if message else 0)
     out += bytes([it.GLOBAL_VOLUME, rs.mix_volume, rs.initial_speed, rs.initial_bpm, 128, 0])
-    out += struct.pack("<HII", 0, 0, 0)
+    msg_pos = len(out)
+    out += struct.pack("<HII", len(message), 0, 0)         # MsgLgth, MsgOff（後で書く）, Reserved
     pans = [it.pan64(p) for p in rs.channel_pans]
     out += bytes(pans + [32 | it.CHANNEL_DISABLED] * (64 - len(pans)))
     out += bytes([64] * 64)
@@ -172,6 +186,9 @@ def serialize(rs: RealizedSong) -> bytes:
     for _ in rs.samples:
         smp_offsets.append(len(out))
         out += bytes(it.SAMPLE_HEADER_SIZE)
+    if message:
+        struct.pack_into("<I", out, msg_pos + 2, len(out))
+        out += message
     pat_offsets = []
     for g in rs.patterns[:n_patterns]:
         pat_offsets.append(len(out))

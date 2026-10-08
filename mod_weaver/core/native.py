@@ -118,6 +118,7 @@ class RealizedSong:
     sample_release: tuple[Optional[float], ...] = ()   # sample 番号順の ``Instrument.release_s``（None は即時に止める）
     measure_rows: tuple[tuple[int, ...], ...] = ()     # pattern ごとの小節長の列（MIDI 用の情報。MOD の WriteOptions へ）
     rows_per_measure: int = 16
+    message: str = ""                                  # IT の曲メッセージ（ASCII。空なら付けない。歌声のクレジット）
 
     @property
     def n_channels(self) -> int:

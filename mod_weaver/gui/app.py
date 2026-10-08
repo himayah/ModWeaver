@@ -62,12 +62,20 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._quit)
 
         self._build()
+        self._fit_to_content()
         self._load_catalog()
         self.after(POLL_MS, self._poll)
 
     # ------------------------------------------------------------------
     # 共通
     # ------------------------------------------------------------------
+
+    def _fit_to_content(self) -> None:
+        """初期サイズが内容より小さいと下のログ欄が潰れるので、画面に収まる範囲で広げる。"""
+        self.update_idletasks()
+        w = min(max(1040, self.winfo_reqwidth()), self.winfo_screenwidth() - 80)
+        h = min(max(760, self.winfo_reqheight()), self.winfo_screenheight() - 120)
+        self.geometry(f"{w}x{h}")
 
     def t(self, key: str, **kw) -> str:
         text = TEXTS[self.lang.get()][key]

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from ..core.composer import RhythmMotif, ScaleRules
 from ..core.model import ChordSpec, GmVoice
-from ..framework.gens import BassLine, Choir, Comp, Groove, Layer, hits
+from ..framework.gens import BassLine, Choir, Comp, Groove, Layer, Sing, hits
 from ..framework.genre import Genre, Harmony, Kit, Part, Section, Voice
 from ..framework.plan import Meter, Swing
 from ..framework.registry import register_genre
@@ -47,8 +47,8 @@ class GospelShoutGenre(Genre):
     id = "gospel-shout"
     category = "style"
     display_name = "Gospel Shout"
-    description = "ゴスペルのシャウト。ハネるシャッフル、シャウトの和声、ハンドクラップ、オルガンのグリッサンド、倍速のヴァンプ（--voice で聖歌隊が歌う）"
-    description_en = "Gospel shout: swung shuffle, shout chord changes, handclaps, organ glissandi and a double-time vamp (a sung choir with --voice)"
+    description = "ゴスペルのシャウト。ハネるシャッフル、シャウトの和声、ハンドクラップ、オルガンのグリッサンド、倍速のヴァンプ（--voice でリードを歌い、聖歌隊が重なる）"
+    description_en = "Gospel shout: swung shuffle, shout chord changes, handclaps, organ glissandi and a double-time vamp (a sung lead and choir with --voice)"
     title = "Gospel Shout"
     tempo_choices = (150, 156, 162, 168, 172)
 
@@ -61,15 +61,16 @@ class GospelShoutGenre(Genre):
         "piano": _inst("keys_piano", GmVoice(program=0), volume=38),
         "organ": _inst("keys_organ", GmVoice(program=16), volume=40),
         "choir": _inst("vox_choir", GmVoice(program=52), volume=30),
+        "voice": Voice(GmVoice(program=54), timbre="female", volume=46),     # --voice で歌う（旋律は lead と同じ）
         "vchoir": Voice(GmVoice(program=52), timbre="choir", volume=40),     # --voice で「あ」を歌う（和音の各声）
     }
     harmony = Harmony(keys=(0, 5, 7, 2), mode="ionian", progressions=PROGRESSIONS, n_progressions=2)
     _band = {"drums", "bass", "comp", "lead"}
     sections = {
         "intro": _sec({"drums", "comp", "bass"}, intensity=0.6, measures=4),
-        "verse": _sec(_band, intensity=0.75),
-        "chorus": _sec(_band | {"choir", "vchoir"}, prog=1, intensity=0.95, motifs="shout"),
-        "vamp": _sec(_band | {"choir", "vchoir"}, prog=0, intensity=1.0, groove="vamp", motifs="shout"),
+        "verse": _sec(_band | {"vocal"}, intensity=0.75),
+        "chorus": _sec(_band | {"choir", "vchoir", "vocal"}, prog=1, intensity=0.95, motifs="shout"),
+        "vamp": _sec(_band | {"choir", "vchoir", "vocal"}, prog=0, intensity=1.0, groove="vamp", motifs="shout"),
         "outro": _sec({"drums", "comp", "lead", "bass"}, intensity=0.7, measures=4, groove="vamp"),
     }
     form = ("intro", "verse", "chorus", "verse", "chorus", "vamp", "outro")
@@ -83,6 +84,9 @@ class GospelShoutGenre(Genre):
         Part("lead", OrnamentedLead("organ", ScaleRules(leap_probability=0.15, leap_semitones=(3, 4, 5)), LEAD_MOTIFS,
                                     vol=44, gate=0.9, vibrato=0x35, scoop=0.5, grace=0.25), pan=172),
         Part("choir", Layer("choir", vol=28, chordal=True), follow="comp", pan=128, min_channels=6),
+        Part("vocal", Sing("voice", min_dur=2, vel_ratio=1.9), pan=128, depends=("lead",), min_channels=6,
+             requires=frozenset({"voice"}), ducks=("lead", "comp", "choir", "vchoir"), duck_ratio=0.25,
+             duck_ratios=(("lead", 0.1), ("vchoir", 0.3))),
         Part("vchoir", Choir("vchoir", vol=50), poly=3, pan=128, min_channels=10, requires=frozenset({"voice"}),
              ducks=("choir", "comp", "lead"), duck_ratio=0.4, duck_ratios=(("lead", 0.5),)),
     )

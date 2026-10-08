@@ -277,12 +277,12 @@ def test_preroll_places_the_vowel_exactly_on_the_beat(bank, swing, bpm):
         assert n.step + n.dur == o.step + o.dur                        # 音の終わりは変わらない
 
 
-def test_preroll_collision_at_section_start_keeps_one_note(bank):
+def test_preroll_collision_keeps_every_syllable_by_shortening_the_lead(bank):
     plan = VoicePlan(UtauBackend(bank), engine.get_genre("okinawan"), 84)
     syl = vowel_syllable("あ")
     by = {"s": ([lanesmod.Placement(s, 0, "note", "voice", 30.0, 40, 1, (), syl=syl) for s in (0, 1, 4)], [])}
     plan.prepare(by, {"s": (6, None)})
-    assert [p.step for p in by["s"][0]] == [0, 3]        # 0 と 1 は行 0 に重なるので後の音を捨てる
+    assert [p.step for p in by["s"][0]] == [0, 1, 3]    # 0 と 1 は行 0 に重なる: 後の音は捨てず、先行を縮めて元の row に置く
 
 
 # ---- 組込みの声の質（試聴で「楽器に聞こえる」と指摘されたため、揺れの焼き込みと母音の差を検査する） ----

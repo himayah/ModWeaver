@@ -242,6 +242,7 @@ class VoicePlan:
             out, seen = [], set()
             for p in ps:
                 if p.kind == "note" and p.syl is not None:
+                    orig_step = p.step
                     row, elapsed = p.step, 0
                     while elapsed < self.lead_ticks and row > 0:      # 母音の頭の L tick 前の row を探す（スウィングは row ごとの長さ）
                         row -= 1
@@ -252,6 +253,9 @@ class VoicePlan:
                     arts = p.arts + ((Delay(delay),) if delay else ())
                     p = dataclasses.replace(p, step=row, arts=arts,
                                             dur=None if p.dur is None else p.dur + (p.step - row))
+                    while (p.lane, p.step) in seen and p.step < orig_step:   # 前の音節と同じ row に重なる: 先行を縮めて後ろの row へ（音節を捨てない）
+                        p = dataclasses.replace(p, step=p.step + 1, dur=None if p.dur is None else max(1, p.dur - 1),
+                                                arts=tuple(a for a in p.arts if not isinstance(a, Delay)))
                     if (p.lane, p.step) in seen:
                         continue
                     seen.add((p.lane, p.step))
